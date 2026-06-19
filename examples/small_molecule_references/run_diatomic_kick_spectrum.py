@@ -79,6 +79,8 @@ def parse_args() -> argparse.Namespace:
         default=1.0e-3,
         help="Electric-field impulse magnitude integral E(t) dt in a.u.",
     )
+    parser.add_argument("--corrector-iterations", type=int, default=1)
+    parser.add_argument("--energy-stride", type=int, default=None)
     parser.add_argument("--damping", type=float, default=0.004)
     parser.add_argument("--max-energy-ev", type=float, default=25.0)
     parser.add_argument("--casida-path", type=Path, default=None)
@@ -162,10 +164,21 @@ def zero_field(_: float) -> np.ndarray:
     return np.zeros(3)
 
 
-def output_stem(spec: DiatomicSpec, *, t_final: float, dt: float, kick: float) -> str:
+def output_stem(
+    spec: DiatomicSpec,
+    *,
+    t_final: float,
+    dt: float,
+    kick: float,
+    corrector_iterations: int,
+) -> str:
+    corrector_label = (
+        "" if corrector_iterations == 0 else f"_corr{corrector_iterations}"
+    )
     return (
         f"{spec.slug}_kick_"
         f"t{label_float(t_final)}_dt{label_float(dt)}_k{label_float(kick)}"
+        f"{corrector_label}"
     )
 
 
@@ -183,6 +196,7 @@ def write_rows(path: Path, rows: list[list[float]]) -> None:
                 "mu_x_au",
                 "mu_y_au",
                 "mu_z_au",
+                "field_free_energy_ha",
             ]
         )
         writer.writerows(rows)
@@ -226,6 +240,17 @@ def nearest_strength(
     return float(omega[idx]), float(strength[idx])
 
 
+def energy_drift(data: np.ndarray) -> float:
+    if data.shape[1] <= 8:
+        return float("nan")
+    energy = data[:, 8]
+    finite = np.isfinite(energy)
+    if np.count_nonzero(finite) < 2:
+        return float("nan")
+    energy = energy[finite]
+    return float(energy[-1] - energy[0])
+
+
 def propagate_one(
     rt: LengthGaugeCNRTTDDFT,
     coeff0: np.ndarray,
@@ -234,11 +259,20 @@ def propagate_one(
     kick: float,
     dt: float,
     t_final: float,
+    corrector_iterations: int,
+    energy_stride: int | None,
 ) -> list[list[float]]:
     coeff = rt.apply_delta_kick(coeff0, kick * polarization)
     nsteps = int(np.ceil(t_final / dt))
     rows = []
-    for _, rec in rt.propagate(coeff, dt=dt, nsteps=nsteps, record_energy=False):
+    for _, rec in rt.propagate(
+        coeff,
+        dt=dt,
+        nsteps=nsteps,
+        corrector_iterations=corrector_iterations,
+        record_energy=energy_stride is not None,
+        energy_stride=energy_stride,
+    ):
         rows.append(
             [
                 rec.step,
@@ -247,6 +281,7 @@ def propagate_one(
                 rec.orthonormality_error,
                 rec.idempotency_error,
                 *rec.dipole.tolist(),
+                np.nan if rec.field_free_energy is None else rec.field_free_energy,
             ]
         )
     return rows
@@ -337,6 +372,8 @@ def main() -> None:
         f"dt={args.dt}",
         f"t_final={args.t_final}",
         f"kick={args.kick}",
+        f"corrector_iterations={args.corrector_iterations}",
+        f"energy_stride={args.energy_stride}",
         f"damping={args.damping}",
         flush=True,
     )
@@ -388,6 +425,8 @@ def main() -> None:
             kick=args.kick,
             dt=args.dt,
             t_final=t_final,
+            corrector_iterations=args.corrector_iterations,
+            energy_stride=args.energy_stride,
         )
         elapsed = time.perf_counter() - start
         omega, strength = compute_spectrum(
@@ -396,7 +435,13 @@ def main() -> None:
             kick=args.kick,
             damping=args.damping,
         )
-        stem = output_stem(spec, t_final=t_final, dt=args.dt, kick=args.kick)
+        stem = output_stem(
+            spec,
+            t_final=t_final,
+            dt=args.dt,
+            kick=args.kick,
+            corrector_iterations=args.corrector_iterations,
+        )
         rows_out = output_dir / f"{stem}.csv"
         spec_out = output_dir / f"{stem}_spectrum.csv"
         write_rows(rows_out, rows)
@@ -418,6 +463,7 @@ def main() -> None:
             f"N_max={np.max(data[:, 2]):.12f}",
             f"orth_max={np.max(data[:, 3]):.3e}",
             f"idem_max={np.max(data[:, 4]):.3e}",
+            f"energy_drift={energy_drift(data):.6e}",
             f"rows={rows_out}",
             f"spectrum={spec_out}",
             flush=True,
@@ -426,7 +472,9 @@ def main() -> None:
         rows_by_time.append((t_final, rows))
 
     plot_out = output_dir / (
-        f"{spec.slug}_kick_spectrum_dt{label_float(args.dt)}_k{label_float(args.kick)}.png"
+        f"{spec.slug}_kick_spectrum_"
+        f"dt{label_float(args.dt)}_k{label_float(args.kick)}"
+        f"{'' if args.corrector_iterations == 0 else f'_corr{args.corrector_iterations}'}.png"
     )
     plot_comparison(
         plot_out,
