@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""H2 cc-pVDZ Casida vs real-time delta-kick spectrum."""
+"""Diatomic cc-pVDZ Casida vs real-time delta-kick spectra."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import csv
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-aion")
@@ -30,23 +31,46 @@ from aion import (  # noqa: E402
 )
 
 
-H2_BOND_ANGSTROM = 0.7414
-DEFAULT_RESULTS_DIR = EXAMPLE_DIR / "results" / "h2_kick"
-DEFAULT_CASIDA_PATH = EXAMPLE_DIR / "h2_pbe_ccpvdz_casida.json"
+@dataclass(frozen=True)
+class DiatomicSpec:
+    label: str
+    atom_a: str
+    atom_b: str
+    bond_angstrom: float
+
+    @property
+    def slug(self) -> str:
+        return self.label.lower()
+
+    def atom_block(self) -> str:
+        half = 0.5 * self.bond_angstrom
+        return f"""
+{self.atom_a} 0.0 0.0 {-half:.10f}
+{self.atom_b} 0.0 0.0 {half:.10f}
+"""
+
+
+DIATOMICS = {
+    "h2": DiatomicSpec("H2", "H", "H", 0.7414),
+    "lih": DiatomicSpec("LiH", "Li", "H", 1.5956),
+    "co": DiatomicSpec("CO", "C", "O", 1.1282),
+    "n2": DiatomicSpec("N2", "N", "N", 1.0977),
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("molecule", choices=sorted(DIATOMICS))
     parser.add_argument("--basis", default="cc-pvdz")
     parser.add_argument("--xc", default="pbe")
     parser.add_argument("--grid-level", type=int, default=3)
-    parser.add_argument("--nstates", type=int, default=8)
+    parser.add_argument("--nstates", type=int, default=10)
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument(
         "--t-final",
         type=float,
         nargs="+",
-        default=[500.0, 1000.0, 2000.0],
+        default=[500.0, 1000.0],
         help="One or more total propagation times in atomic units.",
     )
     parser.add_argument(
@@ -55,29 +79,29 @@ def parse_args() -> argparse.Namespace:
         default=1.0e-3,
         help="Electric-field impulse magnitude integral E(t) dt in a.u.",
     )
-    parser.add_argument(
-        "--damping",
-        type=float,
-        default=0.004,
-        help="Exponential damping eta in Ha used before Fourier transform.",
-    )
+    parser.add_argument("--damping", type=float, default=0.004)
     parser.add_argument("--max-energy-ev", type=float, default=25.0)
-    parser.add_argument("--casida-path", type=Path, default=DEFAULT_CASIDA_PATH)
+    parser.add_argument("--casida-path", type=Path, default=None)
     parser.add_argument("--rerun-casida", action="store_true")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_RESULTS_DIR)
+    parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--verbose", type=int, default=3)
     return parser.parse_args()
 
 
-def h2_atom_block() -> str:
-    half = 0.5 * H2_BOND_ANGSTROM
-    return f"""
-H 0.0 0.0 {-half:.10f}
-H 0.0 0.0 {half:.10f}
-"""
+def basis_slug(basis: str) -> str:
+    return basis.lower().replace("-", "").replace("*", "star")
+
+
+def default_casida_path(spec: DiatomicSpec, basis: str, xc: str) -> Path:
+    return EXAMPLE_DIR / f"{spec.slug}_{xc.lower()}_{basis_slug(basis)}_casida.json"
+
+
+def default_output_dir(spec: DiatomicSpec) -> Path:
+    return EXAMPLE_DIR / "results" / f"{spec.slug}_kick"
 
 
 def build_ground_state(
+    spec: DiatomicSpec,
     *,
     basis: str,
     xc: str,
@@ -85,7 +109,7 @@ def build_ground_state(
     verbose: int,
 ):
     mol = gto.M(
-        atom=h2_atom_block(),
+        atom=spec.atom_block(),
         basis=basis,
         unit="Angstrom",
         charge=0,
@@ -99,14 +123,15 @@ def build_ground_state(
     mf.grids.level = grid_level
     mf.kernel()
     if not mf.converged:
-        raise RuntimeError("H2 ground-state SCF did not converge")
+        raise RuntimeError(f"{spec.label} ground-state SCF did not converge")
     return mf
 
 
-def load_or_run_casida(args: argparse.Namespace, mf):
-    if args.casida_path.exists() and not args.rerun_casida:
-        metadata, excitations = load_excitations(args.casida_path)
-        return metadata, excitations
+def load_or_run_casida(args: argparse.Namespace, spec: DiatomicSpec, mf):
+    casida_path = args.casida_path or default_casida_path(spec, args.basis, args.xc)
+    if casida_path.exists() and not args.rerun_casida:
+        metadata, excitations = load_excitations(casida_path)
+        return casida_path, metadata, excitations
 
     _, excitations = casida_excitations(mf, nstates=args.nstates, conv_tol=1.0e-9)
     driven = lowest_active_excitation(
@@ -114,8 +139,8 @@ def load_or_run_casida(args: argparse.Namespace, mf):
     )
     polarization = transition_polarization(driven)
     metadata = {
-        "molecule": "H2",
-        "bond_length_angstrom": H2_BOND_ANGSTROM,
+        "molecule": spec.label,
+        "bond_length_angstrom": spec.bond_angstrom,
         "basis": args.basis,
         "xc": args.xc,
         "grid_level": args.grid_level,
@@ -129,27 +154,19 @@ def load_or_run_casida(args: argparse.Namespace, mf):
         "selected_oscillator_strength": driven.oscillator_strength,
         "selected_polarization": polarization.tolist(),
     }
-    save_excitations(args.casida_path, excitations, metadata=metadata)
-    return metadata, excitations
+    save_excitations(casida_path, excitations, metadata=metadata)
+    return casida_path, metadata, excitations
 
 
 def zero_field(_: float) -> np.ndarray:
     return np.zeros(3)
 
 
-def rows_path(output_dir: Path, *, t_final: float, dt: float, kick: float) -> Path:
-    tag = f"t{label_float(t_final)}_dt{label_float(dt)}_k{label_float(kick)}"
-    return output_dir / f"h2_kick_{tag}.csv"
-
-
-def spectrum_path(output_dir: Path, *, t_final: float, dt: float, kick: float) -> Path:
-    tag = f"t{label_float(t_final)}_dt{label_float(dt)}_k{label_float(kick)}"
-    return output_dir / f"h2_spectrum_{tag}.csv"
-
-
-def plot_path(output_dir: Path, *, dt: float, kick: float) -> Path:
-    tag = f"dt{label_float(dt)}_k{label_float(kick)}"
-    return output_dir / f"h2_kick_spectrum_{tag}.png"
+def output_stem(spec: DiatomicSpec, *, t_final: float, dt: float, kick: float) -> str:
+    return (
+        f"{spec.slug}_kick_"
+        f"t{label_float(t_final)}_dt{label_float(dt)}_k{label_float(kick)}"
+    )
 
 
 def write_rows(path: Path, rows: list[list[float]]) -> None:
@@ -218,8 +235,7 @@ def propagate_one(
     dt: float,
     t_final: float,
 ) -> list[list[float]]:
-    impulse = kick * polarization
-    coeff = rt.apply_delta_kick(coeff0, impulse)
+    coeff = rt.apply_delta_kick(coeff0, kick * polarization)
     nsteps = int(np.ceil(t_final / dt))
     rows = []
     for _, rec in rt.propagate(coeff, dt=dt, nsteps=nsteps, record_energy=False):
@@ -245,6 +261,7 @@ def plot_comparison(
     selected_root: int,
     max_energy_ev: float,
     polarization: np.ndarray,
+    title: str,
 ) -> None:
     fig, axes = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
 
@@ -252,7 +269,12 @@ def plot_comparison(
         data = np.asarray(rows, dtype=float)
         time_au = data[:, 1]
         dipole_parallel = data[:, 5:8] @ polarization
-        axes[0].plot(time_au, dipole_parallel - dipole_parallel[0], label=f"T={t_final:g} au")
+        axes[0].plot(
+            time_au,
+            dipole_parallel - dipole_parallel[0],
+            label=f"T={t_final:g} au",
+        )
+    axes[0].set_title(title)
     axes[0].set_xlabel("time (a.u.)")
     axes[0].set_ylabel("Delta mu_parallel (a.u.)")
     axes[0].legend(loc="best")
@@ -302,13 +324,16 @@ def plot_comparison(
 
 def main() -> None:
     args = parse_args()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    spec = DIATOMICS[args.molecule]
+    output_dir = args.output_dir or default_output_dir(spec)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print(
-        "# H2 kick spectrum",
+        f"# {spec.label} kick spectrum",
         f"basis={args.basis}",
         f"xc={args.xc}",
         f"grid_level={args.grid_level}",
+        f"bond={spec.bond_angstrom}",
         f"dt={args.dt}",
         f"t_final={args.t_final}",
         f"kick={args.kick}",
@@ -317,18 +342,19 @@ def main() -> None:
     )
 
     mf = build_ground_state(
+        spec,
         basis=args.basis,
         xc=args.xc,
         grid_level=args.grid_level,
         verbose=args.verbose,
     )
-    metadata, excitations = load_or_run_casida(args, mf)
+    casida_path, metadata, excitations = load_or_run_casida(args, spec, mf)
     driven = lowest_active_excitation(
         excitations, oscillator_threshold=1.0e-7, dipole_threshold=1.0e-7
     )
     polarization = transition_polarization(driven)
 
-    print(f"# casida_path {args.casida_path}", flush=True)
+    print(f"# casida_path {casida_path}", flush=True)
     print("# root omega_Ha omega_eV osc_strength mux muy muz", flush=True)
     for exc in excitations:
         print(
@@ -370,14 +396,14 @@ def main() -> None:
             kick=args.kick,
             damping=args.damping,
         )
-        rows_out = rows_path(args.output_dir, t_final=t_final, dt=args.dt, kick=args.kick)
-        spec_out = spectrum_path(
-            args.output_dir, t_final=t_final, dt=args.dt, kick=args.kick
-        )
+        stem = output_stem(spec, t_final=t_final, dt=args.dt, kick=args.kick)
+        rows_out = output_dir / f"{stem}.csv"
+        spec_out = output_dir / f"{stem}_spectrum.csv"
         write_rows(rows_out, rows)
         write_spectrum(spec_out, omega, strength)
         nearest_omega, nearest_value = nearest_strength(omega, strength, driven.energy)
         resolution_ha = 2.0 * np.pi / (len(rows) * args.dt)
+        data = np.asarray(rows, dtype=float)
         print(
             "# rt",
             f"T={t_final:g}",
@@ -388,6 +414,10 @@ def main() -> None:
             f"nearest_selected_bin={nearest_omega:.10f} Ha",
             f"nearest_selected_bin_ev={nearest_omega * HARTREE_TO_EV:.6f}",
             f"nearest_strength={nearest_value:.6e}",
+            f"N_min={np.min(data[:, 2]):.12f}",
+            f"N_max={np.max(data[:, 2]):.12f}",
+            f"orth_max={np.max(data[:, 3]):.3e}",
+            f"idem_max={np.max(data[:, 4]):.3e}",
             f"rows={rows_out}",
             f"spectrum={spec_out}",
             flush=True,
@@ -395,17 +425,20 @@ def main() -> None:
         spectra.append((t_final, omega, strength))
         rows_by_time.append((t_final, rows))
 
-    comparison_plot = plot_path(args.output_dir, dt=args.dt, kick=args.kick)
+    plot_out = output_dir / (
+        f"{spec.slug}_kick_spectrum_dt{label_float(args.dt)}_k{label_float(args.kick)}.png"
+    )
     plot_comparison(
-        comparison_plot,
+        plot_out,
         spectra,
         rows_by_time,
         excitations,
         selected_root=int(metadata.get("selected_root", driven.index)),
         max_energy_ev=args.max_energy_ev,
         polarization=polarization,
+        title=f"{spec.label} {args.xc}/{args.basis} delta kick",
     )
-    print(f"# wrote {comparison_plot}", flush=True)
+    print(f"# wrote {plot_out}", flush=True)
 
 
 if __name__ == "__main__":
