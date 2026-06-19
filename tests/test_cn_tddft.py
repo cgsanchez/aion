@@ -32,3 +32,33 @@ def test_cn_step_preserves_s_metric_for_fixed_hamiltonian():
 
     err = np.linalg.norm(c.conj().T @ s @ c - np.eye(nocc))
     assert err < 1.0e-11
+
+
+def test_delta_kick_preserves_s_metric():
+    rng = np.random.default_rng(4321)
+    nao = 12
+    nocc = 4
+
+    a = rng.normal(size=(nao, nao))
+    s = a.T @ a + np.eye(nao)
+
+    rint = rng.normal(size=(3, nao, nao))
+    rint = 0.5 * (rint + np.swapaxes(rint, 1, 2))
+
+    c0 = rng.normal(size=(nao, nocc)) + 1j * rng.normal(size=(nao, nocc))
+    metric = c0.conj().T @ s @ c0
+    eig, vec = scipy.linalg.eigh(metric, check_finite=False)
+    c = c0 @ ((vec * eig**-0.5) @ vec.conj().T)
+
+    rt = LengthGaugeCNRTTDDFT.__new__(LengthGaugeCNRTTDDFT)
+    rt.s = s.astype(np.complex128)
+    rt._s_cho = scipy.linalg.cho_factor(rt.s, lower=True, check_finite=False)
+    rt.hbar = 1.0
+    rt.charge = -1.0
+    rt.nocc = nocc
+    rt.dipole_position = rint.astype(np.complex128)
+
+    kicked = rt.apply_delta_kick(c, np.array([1.0e-3, -2.0e-3, 1.5e-3]))
+
+    err = np.linalg.norm(kicked.conj().T @ s @ kicked - np.eye(nocc))
+    assert err < 1.0e-11

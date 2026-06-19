@@ -73,6 +73,7 @@ class LengthGaugeCNRTTDDFT:
         self.dipole_position = (
             self.rint - self.origin[:, None, None] * self.s[None, :, :]
         )
+        self._s_cho = scipy.linalg.cho_factor(self.s, lower=True, check_finite=False)
 
         mo_occ = np.asarray(self.mf.mo_occ, dtype=float)
         occ_mask = mo_occ > 0
@@ -103,6 +104,43 @@ class LengthGaugeCNRTTDDFT:
         """Return the ground-state AO density from occupied coefficients."""
 
         return self.density_from_coefficients(self.initial_coefficients())
+
+    def solve_s_left(self, a: np.ndarray) -> np.ndarray:
+        """Compute ``S^{-1} A`` by solving ``S X = A``."""
+
+        return scipy.linalg.cho_solve(self._s_cho, a, check_finite=False)
+
+    def apply_delta_kick(
+        self,
+        coeff: np.ndarray,
+        electric_field_impulse: np.ndarray,
+    ) -> np.ndarray:
+        """Apply an impulsive uniform electric field to occupied orbitals.
+
+        The impulse is ``K = integral E(t) dt`` in atomic units. With the
+        length-gauge convention used by :meth:`external_potential`, the
+        integrated potential is ``-q K.r`` and the occupied coefficients jump as
+
+            C(0+) = exp[-i S^{-1} (-q K.r)] C(0-).
+
+        The matrix ``S^{-1} (-q K.r)`` is self-adjoint in the AO metric, so the
+        transformation is ``S``-unitary up to numerical roundoff.
+        """
+
+        coeff = np.asarray(coeff, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
+
+        impulse = np.asarray(electric_field_impulse, dtype=float)
+        if impulse.shape != (3,):
+            raise ValueError("electric_field_impulse must have shape (3,)")
+
+        integrated_potential = -self.charge * np.einsum(
+            "x,xij->ij", impulse, self.dipole_position
+        )
+        generator = self.solve_s_left(integrated_potential)
+        kick = scipy.linalg.expm((-1j / self.hbar) * generator)
+        return kick @ coeff
 
     def density_from_coefficients(self, coeff: np.ndarray) -> np.ndarray:
         coeff = np.asarray(coeff, dtype=np.complex128)
