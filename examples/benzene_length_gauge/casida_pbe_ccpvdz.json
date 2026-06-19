@@ -1,0 +1,82 @@
+{
+  "excitations": [
+    {
+      "dipole_norm": 0.0002878242317,
+      "energy": 0.1954543917,
+      "energy_ev": 5.318585,
+      "index": 0,
+      "oscillator_strength": 1.079466e-08,
+      "transition_dipole": [
+        0.0002878242317,
+        1.1997255483e-12,
+        -3.5842903063e-13
+      ]
+    },
+    {
+      "dipole_norm": 0.0016068166167,
+      "energy": 0.2255895921,
+      "energy_ev": 6.138606,
+      "index": 1,
+      "oscillator_strength": 3.882938e-07,
+      "transition_dipole": [
+        -1.5331007015e-11,
+        -0.0016068166167,
+        1.3232673203e-11
+      ]
+    },
+    {
+      "dipole_norm": 1.5654322478e-10,
+      "energy": 0.2627473667,
+      "energy_ev": 7.14972,
+      "index": 2,
+      "oscillator_strength": 4.292669e-21,
+      "transition_dipole": [
+        -1.5551310375e-10,
+        1.7913906224e-11,
+        1.1010549029e-12
+      ]
+    },
+    {
+      "dipole_norm": 1.7405839224,
+      "energy": 0.2630787689,
+      "energy_ev": 7.158738,
+      "index": 3,
+      "oscillator_strength": 0.5313546,
+      "transition_dipole": [
+        -5.2495264314e-08,
+        1.7405839224,
+        4.6743147187e-12
+      ]
+    },
+    {
+      "dipole_norm": 1.7406013365,
+      "energy": 0.2630811518,
+      "energy_ev": 7.158803,
+      "index": 4,
+      "oscillator_strength": 0.5313701,
+      "transition_dipole": [
+        1.7406013365,
+        5.2475717096e-08,
+        -6.988366207e-12
+      ]
+    }
+  ],
+  "metadata": {
+    "basis": "cc-pvdz",
+    "charge": 0,
+    "molecule": "benzene",
+    "nstates": 5,
+    "selected_energy": 0.2630787689,
+    "selected_energy_ev": 7.158738,
+    "selected_oscillator_strength": 0.5313546,
+    "selected_polarization": [
+      -3.0159570957e-08,
+      1.0,
+      2.6854865534e-12
+    ],
+    "selected_root": 3,
+    "singlet": true,
+    "spin": 0,
+    "xc": "pbe"
+  }
+}

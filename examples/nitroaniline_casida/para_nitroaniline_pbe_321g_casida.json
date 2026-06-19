@@ -1,0 +1,122 @@
+{
+  "excitations": [
+    {
+      "dipole_norm": 4.6934976513014515e-06,
+      "energy": 0.12574676191340337,
+      "energy_ev": 3.421743707607912,
+      "index": 0,
+      "oscillator_strength": 1.846710255964908e-12,
+      "transition_dipole": [
+        -5.029517727704439e-13,
+        2.1247179264909836e-14,
+        -4.693497651301424e-06
+      ]
+    },
+    {
+      "dipole_norm": 1.6231447811065889,
+      "energy": 0.13511715200925697,
+      "energy_ev": 3.676725011781765,
+      "index": 1,
+      "oscillator_strength": 0.23731967394844955,
+      "transition_dipole": [
+        -1.6231447451785521,
+        0.00034151546060713254,
+        -5.327314866564397e-13
+      ]
+    },
+    {
+      "dipole_norm": 0.005797898100331135,
+      "energy": 0.14318088443734156,
+      "energy_ev": 3.8961503494666734,
+      "index": 2,
+      "oscillator_strength": 3.2087430290274443e-06,
+      "transition_dipole": [
+        -7.746043343445338e-12,
+        5.818483100495548e-12,
+        0.005797898100331135
+      ]
+    },
+    {
+      "dipole_norm": 0.0779381021016882,
+      "energy": 0.16085736842951354,
+      "energy_ev": 4.377151982848689,
+      "index": 3,
+      "oscillator_strength": 0.0006514023969818291,
+      "transition_dipole": [
+        6.558842790707782e-05,
+        0.07793807450387326,
+        -1.0062184316619622e-11
+      ]
+    },
+    {
+      "dipole_norm": 0.03960293251539167,
+      "energy": 0.16253295298603887,
+      "energy_ev": 4.422746961404112,
+      "index": 4,
+      "oscillator_strength": 0.0001699436173859376,
+      "transition_dipole": [
+        -2.2639386840479457e-12,
+        -2.2049203591675774e-11,
+        -0.03960293251539167
+      ]
+    },
+    {
+      "dipole_norm": 0.590114160243037,
+      "energy": 0.17313303781189673,
+      "energy_ev": 4.711189963840767,
+      "index": 5,
+      "oscillator_strength": 0.0401939568747359,
+      "transition_dipole": [
+        -0.00024046428747094865,
+        -0.59011411124991,
+        -7.431865728947075e-13
+      ]
+    },
+    {
+      "dipole_norm": 1.5918313993213933e-05,
+      "energy": 0.17913687328108266,
+      "energy_ev": 4.874562649750148,
+      "index": 6,
+      "oscillator_strength": 3.0261319761489534e-11,
+      "transition_dipole": [
+        -1.8790937070028024e-13,
+        4.1279986578845525e-11,
+        -1.5918313993160407e-05
+      ]
+    },
+    {
+      "dipole_norm": 0.307202138902273,
+      "energy": 0.19216824383347197,
+      "energy_ev": 5.229164307165807,
+      "index": 7,
+      "oscillator_strength": 0.012090348864858411,
+      "transition_dipole": [
+        -0.3072020930731287,
+        0.0001678023247722945,
+        4.795464924124561e-13
+      ]
+    }
+  ],
+  "metadata": {
+    "basis": "3-21g",
+    "charge": 0,
+    "dipole_threshold": 0.0001,
+    "geometry": "optimized geometry from para_nitroaniline_optimized.xyz",
+    "grid_level": 1,
+    "molecule": "para-nitroaniline",
+    "nstates": 8,
+    "oscillator_threshold": 0.001,
+    "selected_energy": 0.13511715200925697,
+    "selected_energy_ev": 3.676725011781765,
+    "selected_oscillator_strength": 0.23731967394844955,
+    "selected_polarization": [
+      -0.9999999778651681,
+      0.0002104035724861847,
+      -3.282094689626188e-13
+    ],
+    "selected_root": 1,
+    "singlet": true,
+    "spin": 0,
+    "xc": "pbe"
+  }
+}
