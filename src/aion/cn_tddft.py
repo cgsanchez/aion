@@ -30,6 +30,7 @@ class CNPropagationRecord:
     midpoint_converged: bool = True
     hamiltonian_residual: float | None = None
     density_residual: float | None = None
+    fock_builds: int = 0
 
 
 class LengthGaugeCNRTTDDFT:
@@ -326,6 +327,7 @@ class LengthGaugeCNRTTDDFT:
             coeff,
             rho,
             record_energy=self._should_record_energy(0, record_energy, energy_stride),
+            fock_builds=0,
         )
 
         for step in range(1, nsteps + 1):
@@ -399,6 +401,7 @@ class LengthGaugeCNRTTDDFT:
                 midpoint_converged=midpoint_converged,
                 hamiltonian_residual=h_residual,
                 density_residual=d_residual,
+                fock_builds=1 + midpoint_iterations,
             )
 
             rho_prev, rho = rho, rho_next
@@ -449,6 +452,7 @@ class LengthGaugeCNRTTDDFT:
             coeff,
             rho,
             record_energy=self._should_record_energy(0, record_energy, energy_stride),
+            fock_builds=1,
         )
 
         for step in range(1, nsteps + 1):
@@ -488,8 +492,10 @@ class LengthGaugeCNRTTDDFT:
             rho_next = self.density_from_coefficients(coeff_next)
             if strict_endpoint_hamiltonian or h_pred is None:
                 h_current, _ = self.hamiltonian_from_density(rho_next, t_next)
+                fock_builds = iterations + 1
             else:
                 h_current = h_pred
+                fock_builds = iterations
 
             yield coeff_next.copy(), self.record(
                 step,
@@ -502,6 +508,7 @@ class LengthGaugeCNRTTDDFT:
                 midpoint_iterations=iterations,
                 midpoint_converged=converged,
                 density_residual=residual,
+                fock_builds=fock_builds,
             )
 
             coeff = coeff_next
@@ -568,6 +575,7 @@ class LengthGaugeCNRTTDDFT:
         midpoint_converged: bool = True,
         hamiltonian_residual: float | None = None,
         density_residual: float | None = None,
+        fock_builds: int = 0,
     ) -> CNPropagationRecord:
         field_coupling_energy = self.field_coupling_energy(rho, time)
         field_free_energy = None
@@ -591,6 +599,7 @@ class LengthGaugeCNRTTDDFT:
             midpoint_converged=midpoint_converged,
             hamiltonian_residual=hamiltonian_residual,
             density_residual=density_residual,
+            fock_builds=fock_builds,
         )
 
     @staticmethod

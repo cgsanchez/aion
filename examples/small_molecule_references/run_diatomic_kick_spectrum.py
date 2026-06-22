@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--xc", default="pbe")
     parser.add_argument("--grid-level", type=int, default=3)
     parser.add_argument("--nstates", type=int, default=10)
+    parser.add_argument("--integrator", choices=["cn", "ep-pc1"], default="cn")
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument(
         "--t-final",
@@ -84,6 +85,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hamiltonian-tolerance", type=float, default=1.0e-7)
     parser.add_argument("--density-tolerance", type=float, default=None)
     parser.add_argument("--final-midpoint-solve", action="store_true")
+    parser.add_argument("--ep-tolerance", type=float, default=1.0e-7)
+    parser.add_argument("--ep-nonstrict-endpoint", action="store_true")
     parser.add_argument("--energy-stride", type=int, default=None)
     parser.add_argument("--damping", type=float, default=0.004)
     parser.add_argument("--max-energy-ev", type=float, default=25.0)
@@ -177,8 +180,12 @@ def output_stem(
     corrector_iterations: int,
     hamiltonian_tolerance: float | None,
     density_tolerance: float | None,
+    integrator: str,
+    ep_strict_endpoint: bool,
 ) -> str:
-    if hamiltonian_tolerance is not None or density_tolerance is not None:
+    if integrator == "ep-pc1":
+        corrector_label = "_epstrict" if ep_strict_endpoint else "_epreuse"
+    elif hamiltonian_tolerance is not None or density_tolerance is not None:
         corrector_label = "_scn"
     elif corrector_iterations == 0:
         corrector_label = ""
@@ -192,6 +199,8 @@ def output_stem(
 
 
 def propagation_label(args: argparse.Namespace) -> str:
+    if args.integrator == "ep-pc1":
+        return "_epstrict" if not args.ep_nonstrict_endpoint else "_epreuse"
     if args.hamiltonian_tolerance is not None or args.density_tolerance is not None:
         return "_scn"
     if args.corrector_iterations == 0:
@@ -218,6 +227,7 @@ def write_rows(path: Path, rows: list[list[float]]) -> None:
                 "midpoint_converged",
                 "hamiltonian_residual",
                 "density_residual",
+                "fock_builds",
             ]
         )
         writer.writerows(rows)
@@ -290,23 +300,42 @@ def propagate_one(
     hamiltonian_tolerance: float | None,
     density_tolerance: float | None,
     final_midpoint_solve: bool,
+    integrator: str,
+    ep_tolerance: float,
+    ep_strict_endpoint: bool,
     energy_stride: int | None,
 ) -> list[list[float]]:
     coeff = rt.apply_delta_kick(coeff0, kick * polarization)
     nsteps = int(np.ceil(t_final / dt))
     rows = []
-    for _, rec in rt.propagate(
-        coeff,
-        dt=dt,
-        nsteps=nsteps,
-        corrector_iterations=corrector_iterations,
-        max_corrector_iterations=max_corrector_iterations,
-        hamiltonian_tolerance=hamiltonian_tolerance,
-        density_tolerance=density_tolerance,
-        final_midpoint_solve=final_midpoint_solve,
-        record_energy=energy_stride is not None,
-        energy_stride=energy_stride,
-    ):
+    if integrator == "cn":
+        propagation = rt.propagate(
+            coeff,
+            dt=dt,
+            nsteps=nsteps,
+            corrector_iterations=corrector_iterations,
+            max_corrector_iterations=max_corrector_iterations,
+            hamiltonian_tolerance=hamiltonian_tolerance,
+            density_tolerance=density_tolerance,
+            final_midpoint_solve=final_midpoint_solve,
+            record_energy=energy_stride is not None,
+            energy_stride=energy_stride,
+        )
+    elif integrator == "ep-pc1":
+        propagation = rt.propagate_ep_pc1(
+            coeff,
+            dt=dt,
+            nsteps=nsteps,
+            tolerance=ep_tolerance,
+            max_corrector_iterations=max_corrector_iterations,
+            strict_endpoint_hamiltonian=ep_strict_endpoint,
+            record_energy=energy_stride is not None,
+            energy_stride=energy_stride,
+        )
+    else:
+        raise ValueError(f"unknown integrator {integrator}")
+
+    for _, rec in propagation:
         rows.append(
             [
                 rec.step,
@@ -324,6 +353,7 @@ def propagate_one(
                     else rec.hamiltonian_residual
                 ),
                 np.nan if rec.density_residual is None else rec.density_residual,
+                rec.fock_builds,
             ]
         )
     return rows
@@ -411,6 +441,7 @@ def main() -> None:
         f"xc={args.xc}",
         f"grid_level={args.grid_level}",
         f"bond={spec.bond_angstrom}",
+        f"integrator={args.integrator}",
         f"dt={args.dt}",
         f"t_final={args.t_final}",
         f"kick={args.kick}",
@@ -419,6 +450,8 @@ def main() -> None:
         f"hamiltonian_tolerance={args.hamiltonian_tolerance}",
         f"density_tolerance={args.density_tolerance}",
         f"final_midpoint_solve={args.final_midpoint_solve}",
+        f"ep_tolerance={args.ep_tolerance}",
+        f"ep_strict_endpoint={not args.ep_nonstrict_endpoint}",
         f"energy_stride={args.energy_stride}",
         f"damping={args.damping}",
         flush=True,
@@ -476,6 +509,9 @@ def main() -> None:
             hamiltonian_tolerance=args.hamiltonian_tolerance,
             density_tolerance=args.density_tolerance,
             final_midpoint_solve=args.final_midpoint_solve,
+            integrator=args.integrator,
+            ep_tolerance=args.ep_tolerance,
+            ep_strict_endpoint=not args.ep_nonstrict_endpoint,
             energy_stride=args.energy_stride,
         )
         elapsed = time.perf_counter() - start
@@ -493,6 +529,8 @@ def main() -> None:
             corrector_iterations=args.corrector_iterations,
             hamiltonian_tolerance=args.hamiltonian_tolerance,
             density_tolerance=args.density_tolerance,
+            integrator=args.integrator,
+            ep_strict_endpoint=not args.ep_nonstrict_endpoint,
         )
         rows_out = output_dir / f"{stem}.csv"
         spec_out = output_dir / f"{stem}_spectrum.csv"
@@ -503,6 +541,7 @@ def main() -> None:
         data = np.asarray(rows, dtype=float)
         h_res = data[:, 11]
         d_res = data[:, 12]
+        fock_builds = data[1:, 13] if data.shape[0] > 1 else data[:, 13]
         finite_h = h_res[np.isfinite(h_res)]
         finite_d = d_res[np.isfinite(d_res)]
         print(
@@ -523,6 +562,8 @@ def main() -> None:
             f"midpoint_iter_max={int(np.max(data[:, 9]))}",
             f"h_residual_max={np.max(finite_h) if finite_h.size else np.nan:.3e}",
             f"density_residual_max={np.max(finite_d) if finite_d.size else np.nan:.3e}",
+            f"fock_builds_avg={np.mean(fock_builds):.3f}",
+            f"fock_builds_max={int(np.max(fock_builds))}",
             f"rows={rows_out}",
             f"spectrum={spec_out}",
             flush=True,
