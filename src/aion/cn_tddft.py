@@ -26,6 +26,10 @@ class CNPropagationRecord:
     total_energy: float | None
     dipole: np.ndarray
     field: np.ndarray
+    midpoint_iterations: int = 0
+    midpoint_converged: bool = True
+    hamiltonian_residual: float | None = None
+    density_residual: float | None = None
 
 
 class LengthGaugeCNRTTDDFT:
@@ -74,6 +78,11 @@ class LengthGaugeCNRTTDDFT:
             self.rint - self.origin[:, None, None] * self.s[None, :, :]
         )
         self._s_cho = scipy.linalg.cho_factor(self.s, lower=True, check_finite=False)
+        self._s_eval, self._s_evec = scipy.linalg.eigh(self.s, check_finite=False)
+        if np.min(self._s_eval) <= 0:
+            raise np.linalg.LinAlgError("AO overlap matrix is not positive definite")
+        self.s_sqrt = (self._s_evec * self._s_eval**0.5) @ self._s_evec.conj().T
+        self.s_invsqrt = (self._s_evec * self._s_eval**-0.5) @ self._s_evec.conj().T
 
         mo_occ = np.asarray(self.mf.mo_occ, dtype=float)
         occ_mask = mo_occ > 0
@@ -110,6 +119,42 @@ class LengthGaugeCNRTTDDFT:
 
         return scipy.linalg.cho_solve(self._s_cho, a, check_finite=False)
 
+    def to_orthonormal_hamiltonian(self, h: np.ndarray) -> np.ndarray:
+        """Return ``S^{-1/2} H S^{-1/2}``."""
+
+        return self.s_invsqrt @ h @ self.s_invsqrt
+
+    def to_orthonormal_density(self, rho: np.ndarray) -> np.ndarray:
+        """Return ``S^{1/2} rho S^{1/2}``."""
+
+        return self.s_sqrt @ rho @ self.s_sqrt
+
+    def orthonormal_hamiltonian_residual(
+        self,
+        h_new: np.ndarray,
+        h_old: np.ndarray,
+    ) -> float:
+        """Relative midpoint-Hamiltonian residual in an orthonormal metric."""
+
+        h_new_tilde = self.to_orthonormal_hamiltonian(h_new)
+        h_old_tilde = self.to_orthonormal_hamiltonian(h_old)
+        numerator = np.linalg.norm(h_new_tilde - h_old_tilde)
+        denominator = max(1.0, float(np.linalg.norm(h_new_tilde)))
+        return float(numerator / denominator)
+
+    def orthonormal_density_residual(
+        self,
+        rho_new: np.ndarray,
+        rho_old: np.ndarray,
+    ) -> float:
+        """Relative endpoint-density residual in an orthonormal metric."""
+
+        rho_new_tilde = self.to_orthonormal_density(rho_new)
+        rho_old_tilde = self.to_orthonormal_density(rho_old)
+        numerator = np.linalg.norm(rho_new_tilde - rho_old_tilde)
+        denominator = max(1.0, float(np.linalg.norm(rho_new_tilde)))
+        return float(numerator / denominator)
+
     def apply_delta_kick(
         self,
         coeff: np.ndarray,
@@ -119,12 +164,13 @@ class LengthGaugeCNRTTDDFT:
 
         The impulse is ``K = integral E(t) dt`` in atomic units. With the
         length-gauge convention used by :meth:`external_potential`, the
-        integrated potential is ``-q K.r`` and the occupied coefficients jump as
+        integrated potential is ``V_K = -q K.r``. The kick is applied in the
+        orthonormal representation:
 
-            C(0+) = exp[-i S^{-1} (-q K.r)] C(0-).
+            C(0+) = S^{-1/2} exp[-i S^{-1/2} V_K S^{-1/2}] S^{1/2} C(0-).
 
-        The matrix ``S^{-1} (-q K.r)`` is self-adjoint in the AO metric, so the
-        transformation is ``S``-unitary up to numerical roundoff.
+        This is mathematically equivalent to ``exp[-i S^{-1} V_K] C`` but uses
+        an ordinary Hermitian eigensolver for the exponent.
         """
 
         coeff = np.asarray(coeff, dtype=np.complex128)
@@ -138,9 +184,29 @@ class LengthGaugeCNRTTDDFT:
         integrated_potential = -self.charge * np.einsum(
             "x,xij->ij", impulse, self.dipole_position
         )
-        generator = self.solve_s_left(integrated_potential)
-        kick = scipy.linalg.expm((-1j / self.hbar) * generator)
-        return kick @ coeff
+        v_tilde = self.hermitian_part(
+            self.to_orthonormal_hamiltonian(integrated_potential)
+        )
+        eig, vec = scipy.linalg.eigh(v_tilde, check_finite=False)
+        phase = (vec * np.exp((-1j / self.hbar) * eig)) @ vec.conj().T
+        coeff_tilde = self.s_sqrt @ coeff
+        return self.s_invsqrt @ (phase @ coeff_tilde)
+
+    def exponential_step(
+        self,
+        coeff: np.ndarray,
+        h_frozen: np.ndarray,
+        dt: float,
+    ) -> np.ndarray:
+        """Apply the exact frozen-Hamiltonian exponential in orthonormal form."""
+
+        coeff = np.asarray(coeff, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
+        h_tilde = self.hermitian_part(self.to_orthonormal_hamiltonian(h_frozen))
+        eig, vec = scipy.linalg.eigh(h_tilde, check_finite=False)
+        phase = (vec * np.exp((-1j * dt / self.hbar) * eig)) @ vec.conj().T
+        return self.s_invsqrt @ (phase @ (self.s_sqrt @ coeff))
 
     def density_from_coefficients(self, coeff: np.ndarray) -> np.ndarray:
         coeff = np.asarray(coeff, dtype=np.complex128)
@@ -202,13 +268,19 @@ class LengthGaugeCNRTTDDFT:
         nsteps: int,
         t0: float = 0.0,
         corrector_iterations: int = 0,
+        max_corrector_iterations: int | None = None,
+        hamiltonian_tolerance: float | None = None,
+        density_tolerance: float | None = None,
+        final_midpoint_solve: bool = False,
         record_energy: bool = False,
         energy_stride: int | None = None,
     ) -> Iterator[tuple[np.ndarray, CNPropagationRecord]]:
         """Propagate occupied coefficients with generalized CN.
 
         ``corrector_iterations=0`` uses the explicit midpoint density predictor.
-        Each corrector iteration adds one extra Hamiltonian build.
+        Each fixed corrector iteration adds one extra Hamiltonian build. If
+        either tolerance is supplied, the corrector becomes a convergence loop
+        capped by ``max_corrector_iterations``.
         """
 
         if dt <= 0:
@@ -217,6 +289,28 @@ class LengthGaugeCNRTTDDFT:
             raise ValueError("nsteps must be nonnegative")
         if corrector_iterations < 0:
             raise ValueError("corrector_iterations must be nonnegative")
+        if max_corrector_iterations is not None and max_corrector_iterations < 0:
+            raise ValueError("max_corrector_iterations must be nonnegative or None")
+        if hamiltonian_tolerance is not None and hamiltonian_tolerance <= 0:
+            raise ValueError("hamiltonian_tolerance must be positive or None")
+        if density_tolerance is not None and density_tolerance <= 0:
+            raise ValueError("density_tolerance must be positive or None")
+
+        use_residual_convergence = (
+            hamiltonian_tolerance is not None or density_tolerance is not None
+        )
+        if use_residual_convergence:
+            corrector_limit = (
+                corrector_iterations
+                if max_corrector_iterations is None
+                else max_corrector_iterations
+            )
+            if corrector_limit <= 0:
+                raise ValueError(
+                    "residual convergence requires at least one corrector iteration"
+                )
+        else:
+            corrector_limit = corrector_iterations
 
         coeff = np.asarray(coeff0, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
@@ -242,12 +336,53 @@ class LengthGaugeCNRTTDDFT:
             rho_mid = self.midpoint_density(rho, rho_prev)
             h_mid, _ = self.hamiltonian_from_density(rho_mid, t_mid)
             coeff_next = self.cn_step(coeff, h_mid, dt)
+            midpoint_iterations = 0
+            midpoint_converged = not use_residual_convergence
+            h_residual = None
+            d_residual = None
+            rho_next_previous = None
 
-            for _ in range(corrector_iterations):
+            for _ in range(corrector_limit):
                 rho_next_trial = self.density_from_coefficients(coeff_next)
                 rho_mid = self.hermitian_part(0.5 * (rho + rho_next_trial))
-                h_mid, _ = self.hamiltonian_from_density(rho_mid, t_mid)
-                coeff_next = self.cn_step(coeff, h_mid, dt)
+                h_new, _ = self.hamiltonian_from_density(rho_mid, t_mid)
+                midpoint_iterations += 1
+
+                if use_residual_convergence:
+                    h_residual = self.orthonormal_hamiltonian_residual(h_new, h_mid)
+                    if rho_next_previous is not None:
+                        d_residual = self.orthonormal_density_residual(
+                            rho_next_trial, rho_next_previous
+                        )
+                    h_ok = (
+                        hamiltonian_tolerance is None
+                        or h_residual < hamiltonian_tolerance
+                    )
+                    d_ok = (
+                        density_tolerance is None
+                        or (
+                            d_residual is not None
+                            and d_residual < density_tolerance
+                        )
+                    )
+                    h_mid = h_new
+                    if h_ok and d_ok:
+                        midpoint_converged = True
+                        if final_midpoint_solve:
+                            coeff_next = self.cn_step(coeff, h_mid, dt)
+                        break
+                    rho_next_previous = rho_next_trial
+                    coeff_next = self.cn_step(coeff, h_mid, dt)
+                else:
+                    h_mid = h_new
+                    coeff_next = self.cn_step(coeff, h_mid, dt)
+
+            if use_residual_convergence and not midpoint_converged:
+                raise RuntimeError(
+                    "CN midpoint did not converge: "
+                    f"step={step} h_residual={h_residual} "
+                    f"density_residual={d_residual}"
+                )
 
             coeff_next = self.maybe_reorthonormalize(coeff_next, step=step)
             rho_next = self.density_from_coefficients(coeff_next)
@@ -260,10 +395,117 @@ class LengthGaugeCNRTTDDFT:
                 record_energy=self._should_record_energy(
                     step, record_energy, energy_stride
                 ),
+                midpoint_iterations=midpoint_iterations,
+                midpoint_converged=midpoint_converged,
+                hamiltonian_residual=h_residual,
+                density_residual=d_residual,
             )
 
             rho_prev, rho = rho, rho_next
             coeff = coeff_next
+
+    def propagate_ep_pc1(
+        self,
+        coeff0: np.ndarray,
+        *,
+        dt: float,
+        nsteps: int,
+        t0: float = 0.0,
+        tolerance: float = 1.0e-7,
+        max_corrector_iterations: int = 6,
+        strict_endpoint_hamiltonian: bool = True,
+        record_energy: bool = False,
+        energy_stride: int | None = None,
+    ) -> Iterator[tuple[np.ndarray, CNPropagationRecord]]:
+        """Propagate occupied coefficients with orthonormal EP-PC1.
+
+        EP-PC1 predicts an endpoint density with ``exp(-i dt H_n)`` and then
+        corrects with the exponential of the trapezoidal Hamiltonian
+        ``0.5 * (H_n + H_{n+1}^{pred})``. The residual is the relative change
+        between predicted and corrected endpoint densities in the orthonormal
+        representation.
+        """
+
+        if dt <= 0:
+            raise ValueError("dt must be positive")
+        if nsteps < 0:
+            raise ValueError("nsteps must be nonnegative")
+        if tolerance <= 0:
+            raise ValueError("tolerance must be positive")
+        if max_corrector_iterations <= 0:
+            raise ValueError("max_corrector_iterations must be positive")
+
+        coeff = np.asarray(coeff0, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff0 must have shape {(self.s.shape[0], self.nocc)}")
+
+        coeff = self.maybe_reorthonormalize(coeff, step=0)
+        rho = self.density_from_coefficients(coeff)
+        h_current, _ = self.hamiltonian_from_density(rho, t0)
+
+        yield coeff.copy(), self.record(
+            0,
+            t0,
+            coeff,
+            rho,
+            record_energy=self._should_record_energy(0, record_energy, energy_stride),
+        )
+
+        for step in range(1, nsteps + 1):
+            t = t0 + (step - 1) * dt
+            t_next = t0 + step * dt
+
+            coeff_pred = self.exponential_step(coeff, h_current, dt)
+            rho_pred = self.density_from_coefficients(coeff_pred)
+            coeff_next = coeff_pred
+            rho_next = rho_pred
+            residual = None
+            h_pred = None
+            converged = False
+            iterations = 0
+
+            for _ in range(max_corrector_iterations):
+                h_pred, _ = self.hamiltonian_from_density(rho_pred, t_next)
+                h_trap = self.hermitian_part(0.5 * (h_current + h_pred))
+                coeff_corr = self.exponential_step(coeff, h_trap, dt)
+                rho_corr = self.density_from_coefficients(coeff_corr)
+                iterations += 1
+                residual = self.orthonormal_density_residual(rho_corr, rho_pred)
+                coeff_next = coeff_corr
+                rho_next = rho_corr
+                if residual < tolerance:
+                    converged = True
+                    break
+                rho_pred = rho_corr
+
+            if not converged:
+                raise RuntimeError(
+                    "EP-PC1 endpoint did not converge: "
+                    f"step={step} density_residual={residual}"
+                )
+
+            coeff_next = self.maybe_reorthonormalize(coeff_next, step=step)
+            rho_next = self.density_from_coefficients(coeff_next)
+            if strict_endpoint_hamiltonian or h_pred is None:
+                h_current, _ = self.hamiltonian_from_density(rho_next, t_next)
+            else:
+                h_current = h_pred
+
+            yield coeff_next.copy(), self.record(
+                step,
+                t_next,
+                coeff_next,
+                rho_next,
+                record_energy=self._should_record_energy(
+                    step, record_energy, energy_stride
+                ),
+                midpoint_iterations=iterations,
+                midpoint_converged=converged,
+                density_residual=residual,
+            )
+
+            coeff = coeff_next
+            rho = rho_next
 
     def maybe_reorthonormalize(self, coeff: np.ndarray, *, step: int) -> np.ndarray:
         do_reorth = False
@@ -322,6 +564,10 @@ class LengthGaugeCNRTTDDFT:
         rho: np.ndarray,
         *,
         record_energy: bool,
+        midpoint_iterations: int = 0,
+        midpoint_converged: bool = True,
+        hamiltonian_residual: float | None = None,
+        density_residual: float | None = None,
     ) -> CNPropagationRecord:
         field_coupling_energy = self.field_coupling_energy(rho, time)
         field_free_energy = None
@@ -341,6 +587,10 @@ class LengthGaugeCNRTTDDFT:
             total_energy=total_energy,
             dipole=self.electronic_dipole(rho),
             field=np.asarray(self.field(time), dtype=float),
+            midpoint_iterations=midpoint_iterations,
+            midpoint_converged=midpoint_converged,
+            hamiltonian_residual=hamiltonian_residual,
+            density_residual=density_residual,
         )
 
     @staticmethod

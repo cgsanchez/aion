@@ -80,6 +80,10 @@ def parse_args() -> argparse.Namespace:
         help="Electric-field impulse magnitude integral E(t) dt in a.u.",
     )
     parser.add_argument("--corrector-iterations", type=int, default=1)
+    parser.add_argument("--max-corrector-iterations", type=int, default=6)
+    parser.add_argument("--hamiltonian-tolerance", type=float, default=1.0e-7)
+    parser.add_argument("--density-tolerance", type=float, default=None)
+    parser.add_argument("--final-midpoint-solve", action="store_true")
     parser.add_argument("--energy-stride", type=int, default=None)
     parser.add_argument("--damping", type=float, default=0.004)
     parser.add_argument("--max-energy-ev", type=float, default=25.0)
@@ -171,15 +175,28 @@ def output_stem(
     dt: float,
     kick: float,
     corrector_iterations: int,
+    hamiltonian_tolerance: float | None,
+    density_tolerance: float | None,
 ) -> str:
-    corrector_label = (
-        "" if corrector_iterations == 0 else f"_corr{corrector_iterations}"
-    )
+    if hamiltonian_tolerance is not None or density_tolerance is not None:
+        corrector_label = "_scn"
+    elif corrector_iterations == 0:
+        corrector_label = ""
+    else:
+        corrector_label = f"_corr{corrector_iterations}"
     return (
         f"{spec.slug}_kick_"
         f"t{label_float(t_final)}_dt{label_float(dt)}_k{label_float(kick)}"
         f"{corrector_label}"
     )
+
+
+def propagation_label(args: argparse.Namespace) -> str:
+    if args.hamiltonian_tolerance is not None or args.density_tolerance is not None:
+        return "_scn"
+    if args.corrector_iterations == 0:
+        return ""
+    return f"_corr{args.corrector_iterations}"
 
 
 def write_rows(path: Path, rows: list[list[float]]) -> None:
@@ -197,6 +214,10 @@ def write_rows(path: Path, rows: list[list[float]]) -> None:
                 "mu_y_au",
                 "mu_z_au",
                 "field_free_energy_ha",
+                "midpoint_iterations",
+                "midpoint_converged",
+                "hamiltonian_residual",
+                "density_residual",
             ]
         )
         writer.writerows(rows)
@@ -241,9 +262,14 @@ def nearest_strength(
 
 
 def energy_drift(data: np.ndarray) -> float:
-    if data.shape[1] <= 8:
-        return float("nan")
-    energy = data[:, 8]
+    if data.dtype.names is None:
+        if data.shape[1] <= 8:
+            return float("nan")
+        energy = data[:, 8]
+    else:
+        if "field_free_energy_ha" not in data.dtype.names:
+            return float("nan")
+        energy = data["field_free_energy_ha"]
     finite = np.isfinite(energy)
     if np.count_nonzero(finite) < 2:
         return float("nan")
@@ -260,6 +286,10 @@ def propagate_one(
     dt: float,
     t_final: float,
     corrector_iterations: int,
+    max_corrector_iterations: int | None,
+    hamiltonian_tolerance: float | None,
+    density_tolerance: float | None,
+    final_midpoint_solve: bool,
     energy_stride: int | None,
 ) -> list[list[float]]:
     coeff = rt.apply_delta_kick(coeff0, kick * polarization)
@@ -270,6 +300,10 @@ def propagate_one(
         dt=dt,
         nsteps=nsteps,
         corrector_iterations=corrector_iterations,
+        max_corrector_iterations=max_corrector_iterations,
+        hamiltonian_tolerance=hamiltonian_tolerance,
+        density_tolerance=density_tolerance,
+        final_midpoint_solve=final_midpoint_solve,
         record_energy=energy_stride is not None,
         energy_stride=energy_stride,
     ):
@@ -282,6 +316,14 @@ def propagate_one(
                 rec.idempotency_error,
                 *rec.dipole.tolist(),
                 np.nan if rec.field_free_energy is None else rec.field_free_energy,
+                rec.midpoint_iterations,
+                1 if rec.midpoint_converged else 0,
+                (
+                    np.nan
+                    if rec.hamiltonian_residual is None
+                    else rec.hamiltonian_residual
+                ),
+                np.nan if rec.density_residual is None else rec.density_residual,
             ]
         )
     return rows
@@ -373,6 +415,10 @@ def main() -> None:
         f"t_final={args.t_final}",
         f"kick={args.kick}",
         f"corrector_iterations={args.corrector_iterations}",
+        f"max_corrector_iterations={args.max_corrector_iterations}",
+        f"hamiltonian_tolerance={args.hamiltonian_tolerance}",
+        f"density_tolerance={args.density_tolerance}",
+        f"final_midpoint_solve={args.final_midpoint_solve}",
         f"energy_stride={args.energy_stride}",
         f"damping={args.damping}",
         flush=True,
@@ -426,6 +472,10 @@ def main() -> None:
             dt=args.dt,
             t_final=t_final,
             corrector_iterations=args.corrector_iterations,
+            max_corrector_iterations=args.max_corrector_iterations,
+            hamiltonian_tolerance=args.hamiltonian_tolerance,
+            density_tolerance=args.density_tolerance,
+            final_midpoint_solve=args.final_midpoint_solve,
             energy_stride=args.energy_stride,
         )
         elapsed = time.perf_counter() - start
@@ -441,6 +491,8 @@ def main() -> None:
             dt=args.dt,
             kick=args.kick,
             corrector_iterations=args.corrector_iterations,
+            hamiltonian_tolerance=args.hamiltonian_tolerance,
+            density_tolerance=args.density_tolerance,
         )
         rows_out = output_dir / f"{stem}.csv"
         spec_out = output_dir / f"{stem}_spectrum.csv"
@@ -449,6 +501,10 @@ def main() -> None:
         nearest_omega, nearest_value = nearest_strength(omega, strength, driven.energy)
         resolution_ha = 2.0 * np.pi / (len(rows) * args.dt)
         data = np.asarray(rows, dtype=float)
+        h_res = data[:, 11]
+        d_res = data[:, 12]
+        finite_h = h_res[np.isfinite(h_res)]
+        finite_d = d_res[np.isfinite(d_res)]
         print(
             "# rt",
             f"T={t_final:g}",
@@ -464,6 +520,9 @@ def main() -> None:
             f"orth_max={np.max(data[:, 3]):.3e}",
             f"idem_max={np.max(data[:, 4]):.3e}",
             f"energy_drift={energy_drift(data):.6e}",
+            f"midpoint_iter_max={int(np.max(data[:, 9]))}",
+            f"h_residual_max={np.max(finite_h) if finite_h.size else np.nan:.3e}",
+            f"density_residual_max={np.max(finite_d) if finite_d.size else np.nan:.3e}",
             f"rows={rows_out}",
             f"spectrum={spec_out}",
             flush=True,
@@ -474,7 +533,7 @@ def main() -> None:
     plot_out = output_dir / (
         f"{spec.slug}_kick_spectrum_"
         f"dt{label_float(args.dt)}_k{label_float(args.kick)}"
-        f"{'' if args.corrector_iterations == 0 else f'_corr{args.corrector_iterations}'}.png"
+        f"{propagation_label(args)}.png"
     )
     plot_comparison(
         plot_out,
