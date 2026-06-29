@@ -12,6 +12,26 @@ dependencies = [
   "scipy",
 ]
 
+[project.optional-dependencies]
+pyscf = [
+  "pyscf",
+]
+gpu = [
+  "cupy-cuda12x",
+  "gpu4pyscf-cuda12x",
+]
+plot = [
+  "matplotlib",
+]
+test = [
+  "pytest",
+]
+dev = [
+  "matplotlib",
+  "pyscf",
+  "pytest",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

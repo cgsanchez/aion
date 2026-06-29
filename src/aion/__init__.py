@@ -20,6 +20,7 @@ from .linear_response import (
     transition_polarization,
 )
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
+from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
 
 __all__ = [
     "CPUBackend",
@@ -28,6 +29,7 @@ __all__ = [
     "ContinuousWave",
     "GaussianPulse",
     "HARTREE_TO_EV",
+    "KickSpectrum",
     "LengthGaugeCNRTTDDFT",
     "LengthGaugeRTTDDFT",
     "MidpointConvergenceError",
@@ -38,9 +40,11 @@ __all__ = [
     "Sin2Pulse",
     "casida_excitations",
     "excitation_by_index",
+    "kick_spectrum",
     "load_excitations",
     "lowest_active_excitation",
     "make_backend",
     "save_excitations",
     "transition_polarization",
+    "write_kick_spectrum_csv",
 ]
