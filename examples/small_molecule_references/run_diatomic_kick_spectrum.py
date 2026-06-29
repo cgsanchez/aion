@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--xc", default="pbe")
     parser.add_argument("--grid-level", type=int, default=3)
     parser.add_argument("--nstates", type=int, default=10)
-    parser.add_argument("--integrator", choices=["cn", "ep-pc1"], default="cn")
+    parser.add_argument("--integrator", choices=["cn", "ep-pc1", "scem"], default="cn")
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument(
         "--t-final",
@@ -87,7 +87,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--final-midpoint-solve", action="store_true")
     parser.add_argument("--ep-tolerance", type=float, default=1.0e-7)
     parser.add_argument("--ep-nonstrict-endpoint", action="store_true")
+    parser.add_argument("--scem-midpoint-tolerance", type=float, default=1.0e-10)
+    parser.add_argument("--scem-density-tolerance", type=float, default=1.0e-10)
+    parser.add_argument("--scem-max-iterations", type=int, default=50)
+    parser.add_argument("--scem-initial-mixing", type=float, default=1.0)
+    parser.add_argument("--scem-minimum-mixing", type=float, default=0.1)
     parser.add_argument("--energy-stride", type=int, default=None)
+    parser.add_argument(
+        "--density-stride",
+        type=int,
+        default=None,
+        help="If set, store orthonormal density checkpoints every N steps.",
+    )
     parser.add_argument("--damping", type=float, default=0.004)
     parser.add_argument("--max-energy-ev", type=float, default=25.0)
     parser.add_argument("--casida-path", type=Path, default=None)
@@ -185,6 +196,8 @@ def output_stem(
 ) -> str:
     if integrator == "ep-pc1":
         corrector_label = "_epstrict" if ep_strict_endpoint else "_epreuse"
+    elif integrator == "scem":
+        corrector_label = "_scem"
     elif hamiltonian_tolerance is not None or density_tolerance is not None:
         corrector_label = "_scn"
     elif corrector_iterations == 0:
@@ -201,6 +214,8 @@ def output_stem(
 def propagation_label(args: argparse.Namespace) -> str:
     if args.integrator == "ep-pc1":
         return "_epstrict" if not args.ep_nonstrict_endpoint else "_epreuse"
+    if args.integrator == "scem":
+        return "_scem"
     if args.hamiltonian_tolerance is not None or args.density_tolerance is not None:
         return "_scn"
     if args.corrector_iterations == 0:
@@ -240,6 +255,22 @@ def write_spectrum(path: Path, omega: np.ndarray, strength: np.ndarray) -> None:
         writer.writerow(["omega_ha", "energy_ev", "strength_arb"])
         for w, s in zip(omega, strength):
             writer.writerow([w, w * HARTREE_TO_EV, s])
+
+
+def write_density_checkpoints(
+    path: Path,
+    *,
+    time_au: list[float],
+    pbar: list[np.ndarray],
+    metadata: dict[str, str | float | int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        path,
+        time_au=np.asarray(time_au, dtype=float),
+        pbar=np.asarray(pbar, dtype=np.complex128),
+        metadata=np.asarray([metadata], dtype=object),
+    )
 
 
 def compute_spectrum(
@@ -303,8 +334,17 @@ def propagate_one(
     integrator: str,
     ep_tolerance: float,
     ep_strict_endpoint: bool,
+    scem_midpoint_tolerance: float,
+    scem_density_tolerance: float | None,
+    scem_max_iterations: int,
+    scem_initial_mixing: float,
+    scem_minimum_mixing: float,
     energy_stride: int | None,
-) -> list[list[float]]:
+    density_stride: int | None,
+) -> tuple[list[list[float]], list[float], list[np.ndarray]]:
+    if density_stride is not None and density_stride <= 0:
+        raise ValueError("density_stride must be positive or None")
+
     coeff = rt.apply_delta_kick(coeff0, kick * polarization)
     nsteps = int(np.ceil(t_final / dt))
     rows = []
@@ -332,10 +372,25 @@ def propagate_one(
             record_energy=energy_stride is not None,
             energy_stride=energy_stride,
         )
+    elif integrator == "scem":
+        propagation = rt.propagate_scem(
+            coeff,
+            dt=dt,
+            nsteps=nsteps,
+            midpoint_tolerance=scem_midpoint_tolerance,
+            density_tolerance=scem_density_tolerance,
+            max_iterations=scem_max_iterations,
+            initial_mixing=scem_initial_mixing,
+            minimum_mixing=scem_minimum_mixing,
+            record_energy=energy_stride is not None,
+            energy_stride=energy_stride,
+        )
     else:
         raise ValueError(f"unknown integrator {integrator}")
 
-    for _, rec in propagation:
+    density_times: list[float] = []
+    density_pbar: list[np.ndarray] = []
+    for coeff_step, rec in propagation:
         rows.append(
             [
                 rec.step,
@@ -356,7 +411,11 @@ def propagate_one(
                 rec.fock_builds,
             ]
         )
-    return rows
+        if density_stride is not None and rec.step % density_stride == 0:
+            rho_step = rt.density_from_coefficients(coeff_step)
+            density_times.append(rec.time)
+            density_pbar.append(rt.to_orthonormal_density(rho_step))
+    return rows, density_times, density_pbar
 
 
 def plot_comparison(
@@ -452,7 +511,13 @@ def main() -> None:
         f"final_midpoint_solve={args.final_midpoint_solve}",
         f"ep_tolerance={args.ep_tolerance}",
         f"ep_strict_endpoint={not args.ep_nonstrict_endpoint}",
+        f"scem_midpoint_tolerance={args.scem_midpoint_tolerance}",
+        f"scem_density_tolerance={args.scem_density_tolerance}",
+        f"scem_max_iterations={args.scem_max_iterations}",
+        f"scem_initial_mixing={args.scem_initial_mixing}",
+        f"scem_minimum_mixing={args.scem_minimum_mixing}",
         f"energy_stride={args.energy_stride}",
+        f"density_stride={args.density_stride}",
         f"damping={args.damping}",
         flush=True,
     )
@@ -496,8 +561,19 @@ def main() -> None:
     spectra = []
     rows_by_time = []
     for t_final in args.t_final:
+        stem = output_stem(
+            spec,
+            t_final=t_final,
+            dt=args.dt,
+            kick=args.kick,
+            corrector_iterations=args.corrector_iterations,
+            hamiltonian_tolerance=args.hamiltonian_tolerance,
+            density_tolerance=args.density_tolerance,
+            integrator=args.integrator,
+            ep_strict_endpoint=not args.ep_nonstrict_endpoint,
+        )
         start = time.perf_counter()
-        rows = propagate_one(
+        rows, density_times, density_pbar = propagate_one(
             rt,
             coeff0,
             polarization=polarization,
@@ -512,7 +588,13 @@ def main() -> None:
             integrator=args.integrator,
             ep_tolerance=args.ep_tolerance,
             ep_strict_endpoint=not args.ep_nonstrict_endpoint,
+            scem_midpoint_tolerance=args.scem_midpoint_tolerance,
+            scem_density_tolerance=args.scem_density_tolerance,
+            scem_max_iterations=args.scem_max_iterations,
+            scem_initial_mixing=args.scem_initial_mixing,
+            scem_minimum_mixing=args.scem_minimum_mixing,
             energy_stride=args.energy_stride,
+            density_stride=args.density_stride,
         )
         elapsed = time.perf_counter() - start
         omega, strength = compute_spectrum(
@@ -521,21 +603,27 @@ def main() -> None:
             kick=args.kick,
             damping=args.damping,
         )
-        stem = output_stem(
-            spec,
-            t_final=t_final,
-            dt=args.dt,
-            kick=args.kick,
-            corrector_iterations=args.corrector_iterations,
-            hamiltonian_tolerance=args.hamiltonian_tolerance,
-            density_tolerance=args.density_tolerance,
-            integrator=args.integrator,
-            ep_strict_endpoint=not args.ep_nonstrict_endpoint,
-        )
         rows_out = output_dir / f"{stem}.csv"
         spec_out = output_dir / f"{stem}_spectrum.csv"
+        density_out = output_dir / f"{stem}_density.npz"
         write_rows(rows_out, rows)
         write_spectrum(spec_out, omega, strength)
+        if args.density_stride is not None:
+            write_density_checkpoints(
+                density_out,
+                time_au=density_times,
+                pbar=density_pbar,
+                metadata={
+                    "molecule": spec.label,
+                    "basis": args.basis,
+                    "xc": args.xc,
+                    "integrator": args.integrator,
+                    "dt_au": args.dt,
+                    "t_final_au": t_final,
+                    "kick": args.kick,
+                    "density_stride": args.density_stride,
+                },
+            )
         nearest_omega, nearest_value = nearest_strength(omega, strength, driven.energy)
         resolution_ha = 2.0 * np.pi / (len(rows) * args.dt)
         data = np.asarray(rows, dtype=float)
@@ -566,6 +654,7 @@ def main() -> None:
             f"fock_builds_max={int(np.max(fock_builds))}",
             f"rows={rows_out}",
             f"spectrum={spec_out}",
+            f"density={density_out if args.density_stride is not None else None}",
             flush=True,
         )
         spectra.append((t_final, omega, strength))

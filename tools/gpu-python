@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+workspace_root="$(cd "$repo_root/.." && pwd)"
+python_bin="$workspace_root/miniconda3/bin/python"
+
+if [[ ! -x "$python_bin" ]]; then
+    echo "missing project Miniconda Python: $python_bin" >&2
+    exit 127
+fi
+
+export CUPY_CACHE_DIR="${CUPY_CACHE_DIR:-/tmp/aion-cupy-cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/aion-cache}"
+export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
+export AION_GPU_LAUNCHER=1
+
+nvidia_lib_root="$workspace_root/miniconda3/lib/python3.13/site-packages/nvidia"
+if [[ -d "$nvidia_lib_root" ]]; then
+    for libdir in "$nvidia_lib_root"/*/lib; do
+        if [[ -d "$libdir" ]]; then
+            export LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        fi
+    done
+    cusolver_lib="$nvidia_lib_root/cusolver/lib/libcusolver.so.11"
+    if [[ -f "$cusolver_lib" ]]; then
+        export LD_PRELOAD="$cusolver_lib${LD_PRELOAD:+:$LD_PRELOAD}"
+    fi
+fi
+
+cd "$repo_root"
+exec "$python_bin" "$@"

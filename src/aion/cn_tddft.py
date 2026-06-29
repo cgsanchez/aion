@@ -8,8 +8,18 @@ from typing import Callable, Iterator
 import numpy as np
 import scipy.linalg
 
+from .backends import CPUBackend, make_backend
+
 
 ElectricField = Callable[[float], np.ndarray]
+
+
+def _asarray_host(a, dtype=None) -> np.ndarray:
+    """Return a NumPy array, explicitly copying CuPy-like arrays to host."""
+
+    if hasattr(a, "get"):
+        a = a.get()
+    return np.asarray(a, dtype=dtype)
 
 
 @dataclass
@@ -33,6 +43,37 @@ class CNPropagationRecord:
     fock_builds: int = 0
 
 
+@dataclass
+class SCEMStepResult:
+    """Result of one strict self-consistent exponential midpoint step."""
+
+    coeff_next: np.ndarray
+    rho_next: np.ndarray
+    h_mid: np.ndarray
+    rho_mid: np.ndarray
+    iterations: int
+    fock_builds: int
+    hamiltonian_residual: float
+    density_residual: float | None
+    converged: bool
+
+
+@dataclass
+class SCEMRunSummary:
+    """Summary of a non-yielding SCEM propagation run."""
+
+    coeff_final: np.ndarray
+    rho_final: np.ndarray
+    record_final: CNPropagationRecord
+    steps: int
+    fock_builds: int
+    midpoint_iterations: int
+
+
+class MidpointConvergenceError(RuntimeError):
+    """Raised when a strict midpoint fixed-point solve fails."""
+
+
 class LengthGaugeCNRTTDDFT:
     """Fixed-basis length-gauge RT-TDDFT with generalized CN propagation.
 
@@ -52,17 +93,28 @@ class LengthGaugeCNRTTDDFT:
         real_density_for_veff: bool = True,
         reorthonormalize_every: int | None = None,
         reorthonormalize_tolerance: float | None = None,
+        backend: str = "cpu",
     ) -> None:
         self.mf = mf
         self.mol = mf.mol
         self.field = field
         self.charge = charge
         self.hbar = hbar
+        self.backend = make_backend(backend)
         self.real_density_for_veff = real_density_for_veff
         self.reorthonormalize_every = reorthonormalize_every
         self.reorthonormalize_tolerance = reorthonormalize_tolerance
+        self._veff_on_gpu = hasattr(getattr(self.mf, "mo_coeff", None), "get")
+        self._hybrid_coeff = self._reference_hybrid_coeff()
 
         self._validate_reference()
+        self._validate_density_backend()
+        if self.backend.is_gpu and not self._veff_on_gpu:
+            raise ValueError(
+                "GPU propagation backend requires a GPU4PySCF mean-field object; "
+                "call density_fit().to_gpu() or to_gpu() before constructing the "
+                "propagator."
+            )
 
         self.origin = (
             np.zeros(3, dtype=float)
@@ -72,22 +124,34 @@ class LengthGaugeCNRTTDDFT:
         if self.origin.shape != (3,):
             raise ValueError("origin must have shape (3,)")
 
-        self.s = np.asarray(self.mol.intor("int1e_ovlp"), dtype=np.complex128)
-        self.hcore = np.asarray(self.mf.get_hcore(), dtype=np.complex128)
-        self.rint = np.asarray(self.mol.intor("int1e_r", comp=3), dtype=np.complex128)
-        self.dipole_position = (
-            self.rint - self.origin[:, None, None] * self.s[None, :, :]
+        self.s = self.backend.asarray(self.mol.intor("int1e_ovlp"), dtype=np.complex128)
+        self.hcore = self.backend.asarray(
+            _asarray_host(self.mf.get_hcore(), dtype=np.complex128),
+            dtype=np.complex128,
         )
-        self._s_cho = scipy.linalg.cho_factor(self.s, lower=True, check_finite=False)
-        self._s_eval, self._s_evec = scipy.linalg.eigh(self.s, check_finite=False)
-        if np.min(self._s_eval) <= 0:
+        self.rint = self.backend.asarray(
+            self.mol.intor("int1e_r", comp=3),
+            dtype=np.complex128,
+        )
+        origin_backend = self.backend.asarray(self.origin, dtype=float)
+        self.dipole_position = (
+            self.rint - origin_backend[:, None, None] * self.s[None, :, :]
+        )
+        if self.backend.is_gpu:
+            self._s_cho = None
+            self._s_eval, self._s_evec = self.backend.eigh(self.s)
+        else:
+            self._s_cho = scipy.linalg.cho_factor(self.s, lower=True, check_finite=False)
+            self._s_eval, self._s_evec = scipy.linalg.eigh(self.s, check_finite=False)
+        if self.backend.min_float(self._s_eval) <= 0:
             raise np.linalg.LinAlgError("AO overlap matrix is not positive definite")
         self.s_sqrt = (self._s_evec * self._s_eval**0.5) @ self._s_evec.conj().T
         self.s_invsqrt = (self._s_evec * self._s_eval**-0.5) @ self._s_evec.conj().T
 
-        mo_occ = np.asarray(self.mf.mo_occ, dtype=float)
+        mo_occ = _asarray_host(self.mf.mo_occ, dtype=float)
         occ_mask = mo_occ > 0
         self.occ = mo_occ[occ_mask]
+        self.occ_backend = self.backend.asarray(self.occ, dtype=float)
         self.nocc = int(self.occ.size)
         self.idempotency_factor = float(np.max(self.occ))
 
@@ -103,12 +167,18 @@ class LengthGaugeCNRTTDDFT:
             raise ValueError("mean-field object is not converged")
         return cls(mf, field, origin, **kwargs)
 
+    def _array_backend(self):
+        if not hasattr(self, "backend"):
+            self.backend = CPUBackend()
+        return self.backend
+
     def initial_coefficients(self) -> np.ndarray:
         """Return occupied ground-state MO coefficients."""
 
-        mo_occ = np.asarray(self.mf.mo_occ, dtype=float)
-        coeff = np.asarray(self.mf.mo_coeff[:, mo_occ > 0], dtype=np.complex128)
-        return coeff.copy()
+        mo_occ = _asarray_host(self.mf.mo_occ, dtype=float)
+        mo_coeff = _asarray_host(self.mf.mo_coeff, dtype=np.complex128)
+        coeff = mo_coeff[:, mo_occ > 0]
+        return self._array_backend().asarray(coeff.copy(), dtype=np.complex128)
 
     def initial_density(self) -> np.ndarray:
         """Return the ground-state AO density from occupied coefficients."""
@@ -118,6 +188,8 @@ class LengthGaugeCNRTTDDFT:
     def solve_s_left(self, a: np.ndarray) -> np.ndarray:
         """Compute ``S^{-1} A`` by solving ``S X = A``."""
 
+        if self._array_backend().is_gpu:
+            return self._array_backend().solve(self.s, a)
         return scipy.linalg.cho_solve(self._s_cho, a, check_finite=False)
 
     def to_orthonormal_hamiltonian(self, h: np.ndarray) -> np.ndarray:
@@ -139,8 +211,9 @@ class LengthGaugeCNRTTDDFT:
 
         h_new_tilde = self.to_orthonormal_hamiltonian(h_new)
         h_old_tilde = self.to_orthonormal_hamiltonian(h_old)
-        numerator = np.linalg.norm(h_new_tilde - h_old_tilde)
-        denominator = max(1.0, float(np.linalg.norm(h_new_tilde)))
+        backend = self._array_backend()
+        numerator = backend.norm_float(h_new_tilde - h_old_tilde)
+        denominator = max(1.0, backend.norm_float(h_new_tilde))
         return float(numerator / denominator)
 
     def orthonormal_density_residual(
@@ -152,8 +225,9 @@ class LengthGaugeCNRTTDDFT:
 
         rho_new_tilde = self.to_orthonormal_density(rho_new)
         rho_old_tilde = self.to_orthonormal_density(rho_old)
-        numerator = np.linalg.norm(rho_new_tilde - rho_old_tilde)
-        denominator = max(1.0, float(np.linalg.norm(rho_new_tilde)))
+        backend = self._array_backend()
+        numerator = backend.norm_float(rho_new_tilde - rho_old_tilde)
+        denominator = max(1.0, backend.norm_float(rho_new_tilde))
         return float(numerator / denominator)
 
     def apply_delta_kick(
@@ -174,22 +248,24 @@ class LengthGaugeCNRTTDDFT:
         an ordinary Hermitian eigensolver for the exponent.
         """
 
-        coeff = np.asarray(coeff, dtype=np.complex128)
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
             raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
 
-        impulse = np.asarray(electric_field_impulse, dtype=float)
-        if impulse.shape != (3,):
+        impulse_host = np.asarray(electric_field_impulse, dtype=float)
+        if impulse_host.shape != (3,):
             raise ValueError("electric_field_impulse must have shape (3,)")
+        impulse = backend.asarray(impulse_host, dtype=float)
 
-        integrated_potential = -self.charge * np.einsum(
+        integrated_potential = -self.charge * backend.einsum(
             "x,xij->ij", impulse, self.dipole_position
         )
         v_tilde = self.hermitian_part(
             self.to_orthonormal_hamiltonian(integrated_potential)
         )
-        eig, vec = scipy.linalg.eigh(v_tilde, check_finite=False)
-        phase = (vec * np.exp((-1j / self.hbar) * eig)) @ vec.conj().T
+        eig, vec = backend.eigh(v_tilde)
+        phase = (vec * backend.exp((-1j / self.hbar) * eig)) @ vec.conj().T
         coeff_tilde = self.s_sqrt @ coeff
         return self.s_invsqrt @ (phase @ coeff_tilde)
 
@@ -201,33 +277,76 @@ class LengthGaugeCNRTTDDFT:
     ) -> np.ndarray:
         """Apply the exact frozen-Hamiltonian exponential in orthonormal form."""
 
-        coeff = np.asarray(coeff, dtype=np.complex128)
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
             raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
         h_tilde = self.hermitian_part(self.to_orthonormal_hamiltonian(h_frozen))
-        eig, vec = scipy.linalg.eigh(h_tilde, check_finite=False)
-        phase = (vec * np.exp((-1j * dt / self.hbar) * eig)) @ vec.conj().T
+        eig, vec = backend.eigh(h_tilde)
+        phase = (vec * backend.exp((-1j * dt / self.hbar) * eig)) @ vec.conj().T
         return self.s_invsqrt @ (phase @ (self.s_sqrt @ coeff))
 
+    def exponential_action_from_eigh(
+        self,
+        coeff_orth: np.ndarray,
+        eig: np.ndarray,
+        vec: np.ndarray,
+        dt: float,
+    ) -> np.ndarray:
+        """Apply a frozen orthonormal Hamiltonian eigendecomposition."""
+
+        backend = self._array_backend()
+        propagated_orth = vec @ (
+            backend.exp((-1j * dt / self.hbar) * eig)[:, None]
+            * (vec.conj().T @ coeff_orth)
+        )
+        return self.s_invsqrt @ propagated_orth
+
+    def exponent_hamiltonian_residual(
+        self,
+        h_new: np.ndarray,
+        h_old: np.ndarray,
+        dt: float,
+    ) -> float:
+        """Dimensionless residual for the frozen one-step exponent."""
+
+        h_new_tilde = self.to_orthonormal_hamiltonian(h_new)
+        h_old_tilde = self.to_orthonormal_hamiltonian(h_old)
+        backend = self._array_backend()
+        numerator = abs(dt) * backend.norm_float(h_new_tilde - h_old_tilde)
+        return float(numerator / np.sqrt(h_new.shape[0]))
+
     def density_from_coefficients(self, coeff: np.ndarray) -> np.ndarray:
-        coeff = np.asarray(coeff, dtype=np.complex128)
+        coeff = self._array_backend().asarray(coeff, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
             raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
-        return (coeff * self.occ[None, :]) @ coeff.conj().T
+        occ = getattr(self, "occ_backend", None)
+        if occ is None:
+            occ = self._array_backend().asarray(self.occ, dtype=float)
+        return (coeff * occ[None, :]) @ coeff.conj().T
 
     def external_potential(self, t: float) -> np.ndarray:
         """Length-gauge uniform-field potential matrix."""
 
-        e_t = np.asarray(self.field(t), dtype=float)
+        backend = self._array_backend()
+        e_t_host = np.asarray(self.field(t), dtype=float)
+        e_t = backend.asarray(e_t_host, dtype=float)
         if e_t.shape != (3,):
             raise ValueError("field(t) must return shape (3,)")
-        return -self.charge * np.einsum("x,xij->ij", e_t, self.dipole_position)
+        return -self.charge * backend.einsum("x,xij->ij", e_t, self.dipole_position)
 
     def density_for_veff(self, rho: np.ndarray) -> np.ndarray:
+        backend = self._array_backend()
         rho_h = self.hermitian_part(rho)
         if self.real_density_for_veff:
-            return np.asarray(rho_h.real, dtype=float)
-        return rho_h
+            density = backend.asarray(rho_h.real, dtype=float)
+        else:
+            density = backend.asarray(rho_h, dtype=np.complex128)
+        if self._veff_on_gpu:
+            import cupy
+
+            return cupy.asarray(density)
+        return backend.asnumpy(density)
 
     def hamiltonian_from_density(self, rho: np.ndarray, t: float):
         """Build H[rho,t] and return ``(H, veff)``.
@@ -236,19 +355,27 @@ class LengthGaugeCNRTTDDFT:
         reuse it when it corresponds to the same density.
         """
 
+        backend = self._array_backend()
         veff = self.mf.get_veff(self.mol, self.density_for_veff(rho))
-        h = self.hcore + np.asarray(veff, dtype=np.complex128) + self.external_potential(t)
+        h = (
+            self.hcore
+            + backend.asarray(veff, dtype=np.complex128)
+            + self.external_potential(t)
+        )
         return self.hermitian_part(h), veff
 
     def cn_step(self, coeff: np.ndarray, h_mid: np.ndarray, dt: float) -> np.ndarray:
         """Apply one generalized CN step with a frozen midpoint Hamiltonian."""
 
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff, dtype=np.complex128)
+        h_mid = backend.asarray(h_mid, dtype=np.complex128)
         alpha = 0.5j * dt / self.hbar
         a = self.s + alpha * h_mid
         b = self.s - alpha * h_mid
         rhs = b @ coeff
-        lu, piv = scipy.linalg.lu_factor(a, check_finite=False)
-        return scipy.linalg.lu_solve((lu, piv), rhs, check_finite=False)
+        lu, piv = backend.lu_factor(a)
+        return backend.lu_solve((lu, piv), rhs)
 
     def midpoint_density(
         self,
@@ -260,6 +387,123 @@ class LengthGaugeCNRTTDDFT:
         if rho_prev is None:
             return self.hermitian_part(rho)
         return self.hermitian_part(1.5 * rho - 0.5 * rho_prev)
+
+    def scem_step(
+        self,
+        coeff: np.ndarray,
+        *,
+        time: float,
+        dt: float,
+        h_guess: np.ndarray,
+        midpoint_tolerance: float = 1.0e-10,
+        density_tolerance: float | None = 1.0e-10,
+        max_iterations: int = 50,
+        initial_mixing: float = 1.0,
+        minimum_mixing: float = 0.1,
+        predictor_fock_builds: int = 0,
+    ) -> SCEMStepResult:
+        """Take one strict self-consistent exponential midpoint step.
+
+        The nonlinear fixed point is solved in Hamiltonian space.  Every trial
+        midpoint density is generated by an S-unitary exponential half-step
+        from ``coeff``; no chord-averaged density is used.
+        """
+
+        if dt <= 0:
+            raise ValueError("dt must be positive")
+        if midpoint_tolerance <= 0:
+            raise ValueError("midpoint_tolerance must be positive")
+        if density_tolerance is not None and density_tolerance <= 0:
+            raise ValueError("density_tolerance must be positive or None")
+        if max_iterations <= 0:
+            raise ValueError("max_iterations must be positive")
+        if not (0.0 < initial_mixing <= 1.0):
+            raise ValueError("initial_mixing must be in (0, 1]")
+        if not (0.0 < minimum_mixing <= initial_mixing):
+            raise ValueError("minimum_mixing must be in (0, initial_mixing]")
+        if predictor_fock_builds < 0:
+            raise ValueError("predictor_fock_builds must be nonnegative")
+
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff must have shape {(self.s.shape[0], self.nocc)}")
+
+        t_mid = time + 0.5 * dt
+        coeff_orth = self.s_sqrt @ coeff
+        h_iter = self.hermitian_part(backend.asarray(h_guess, dtype=np.complex128))
+        alpha = float(initial_mixing)
+        previous_rh = None
+        growth_count = 0
+        previous_pmid_orth = None
+        fock_builds = int(predictor_fock_builds)
+        h_residual = float("nan")
+        d_residual = None
+
+        for iteration in range(1, max_iterations + 1):
+            h_iter_orth = self.hermitian_part(
+                self.to_orthonormal_hamiltonian(h_iter)
+            )
+            eig, vec = backend.eigh(h_iter_orth)
+
+            c_mid = self.exponential_action_from_eigh(
+                coeff_orth, eig, vec, 0.5 * dt
+            )
+            rho_mid = self.hermitian_part(self.density_from_coefficients(c_mid))
+            rho_mid_orth = self.to_orthonormal_density(rho_mid)
+
+            h_built, _ = self.hamiltonian_from_density(rho_mid, t_mid)
+            h_built = self.hermitian_part(h_built)
+            fock_builds += 1
+            h_residual = self.exponent_hamiltonian_residual(
+                h_built, h_iter, dt
+            )
+
+            if previous_pmid_orth is not None:
+                numerator = backend.norm_float(rho_mid_orth - previous_pmid_orth)
+                denominator = max(1.0, backend.norm_float(rho_mid_orth))
+                d_residual = float(numerator / denominator)
+
+            converged = h_residual <= midpoint_tolerance
+            if density_tolerance is not None and d_residual is not None:
+                converged = converged and d_residual <= density_tolerance
+
+            if converged:
+                coeff_next = self.exponential_action_from_eigh(
+                    coeff_orth, eig, vec, dt
+                )
+                rho_next = self.hermitian_part(
+                    self.density_from_coefficients(coeff_next)
+                )
+                return SCEMStepResult(
+                    coeff_next=coeff_next,
+                    rho_next=rho_next,
+                    h_mid=h_iter,
+                    rho_mid=rho_mid,
+                    iterations=iteration,
+                    fock_builds=fock_builds,
+                    hamiltonian_residual=h_residual,
+                    density_residual=d_residual,
+                    converged=True,
+                )
+
+            if previous_rh is not None and h_residual > previous_rh:
+                growth_count += 1
+            else:
+                growth_count = 0
+            if growth_count >= 2:
+                alpha = max(0.5 * alpha, minimum_mixing)
+                growth_count = 0
+
+            h_iter = self.hermitian_part((1.0 - alpha) * h_iter + alpha * h_built)
+            previous_pmid_orth = rho_mid_orth
+            previous_rh = h_residual
+
+        raise MidpointConvergenceError(
+            "SCEM midpoint did not converge: "
+            f"time={time} dt={dt} iterations={max_iterations} "
+            f"h_residual={h_residual} density_residual={d_residual}"
+        )
 
     def propagate(
         self,
@@ -313,7 +557,8 @@ class LengthGaugeCNRTTDDFT:
         else:
             corrector_limit = corrector_iterations
 
-        coeff = np.asarray(coeff0, dtype=np.complex128)
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff0, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
             raise ValueError(f"coeff0 must have shape {(self.s.shape[0], self.nocc)}")
 
@@ -321,7 +566,7 @@ class LengthGaugeCNRTTDDFT:
         rho = self.density_from_coefficients(coeff)
         rho_prev = None
 
-        yield coeff.copy(), self.record(
+        yield backend.copy(coeff), self.record(
             0,
             t0,
             coeff,
@@ -389,7 +634,7 @@ class LengthGaugeCNRTTDDFT:
             coeff_next = self.maybe_reorthonormalize(coeff_next, step=step)
             rho_next = self.density_from_coefficients(coeff_next)
 
-            yield coeff_next.copy(), self.record(
+            yield backend.copy(coeff_next), self.record(
                 step,
                 t_next,
                 coeff_next,
@@ -406,6 +651,197 @@ class LengthGaugeCNRTTDDFT:
 
             rho_prev, rho = rho, rho_next
             coeff = coeff_next
+
+    def propagate_scem(
+        self,
+        coeff0: np.ndarray,
+        *,
+        dt: float,
+        nsteps: int,
+        t0: float = 0.0,
+        midpoint_tolerance: float = 1.0e-10,
+        density_tolerance: float | None = 1.0e-10,
+        max_iterations: int = 50,
+        initial_mixing: float = 1.0,
+        minimum_mixing: float = 0.1,
+        record_energy: bool = False,
+        energy_stride: int | None = None,
+    ) -> Iterator[tuple[np.ndarray, CNPropagationRecord]]:
+        """Propagate with strict self-consistent exponential midpoint."""
+
+        if dt <= 0:
+            raise ValueError("dt must be positive")
+        if nsteps < 0:
+            raise ValueError("nsteps must be nonnegative")
+
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff0, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff0 must have shape {(self.s.shape[0], self.nocc)}")
+
+        coeff = self.maybe_reorthonormalize(coeff, step=0)
+        rho = self.density_from_coefficients(coeff)
+        h_current, _ = self.hamiltonian_from_density(rho, t0)
+        midpoint_history: list[np.ndarray] = []
+
+        yield backend.copy(coeff), self.record(
+            0,
+            t0,
+            coeff,
+            rho,
+            record_energy=self._should_record_energy(0, record_energy, energy_stride),
+            fock_builds=1,
+        )
+
+        for step in range(1, nsteps + 1):
+            t = t0 + (step - 1) * dt
+            t_next = t0 + step * dt
+            if len(midpoint_history) >= 2:
+                h_guess = self.hermitian_part(
+                    2.0 * midpoint_history[-1] - midpoint_history[-2]
+                )
+                predictor_builds = 0
+            elif len(midpoint_history) == 1:
+                h_guess = midpoint_history[-1]
+                predictor_builds = 0
+            else:
+                h_guess = h_current
+                predictor_builds = 0
+
+            result = self.scem_step(
+                coeff,
+                time=t,
+                dt=dt,
+                h_guess=h_guess,
+                midpoint_tolerance=midpoint_tolerance,
+                density_tolerance=density_tolerance,
+                max_iterations=max_iterations,
+                initial_mixing=initial_mixing,
+                minimum_mixing=minimum_mixing,
+                predictor_fock_builds=predictor_builds,
+            )
+
+            coeff_next = self.maybe_reorthonormalize(result.coeff_next, step=step)
+            rho_next = self.density_from_coefficients(coeff_next)
+            midpoint_history.append(result.h_mid)
+            if len(midpoint_history) > 2:
+                midpoint_history.pop(0)
+
+            yield backend.copy(coeff_next), self.record(
+                step,
+                t_next,
+                coeff_next,
+                rho_next,
+                record_energy=self._should_record_energy(
+                    step, record_energy, energy_stride
+                ),
+                midpoint_iterations=result.iterations,
+                midpoint_converged=result.converged,
+                hamiltonian_residual=result.hamiltonian_residual,
+                density_residual=result.density_residual,
+                fock_builds=result.fock_builds,
+            )
+
+            coeff = coeff_next
+            rho = rho_next
+
+    def run_scem(
+        self,
+        coeff0: np.ndarray,
+        *,
+        dt: float,
+        nsteps: int,
+        t0: float = 0.0,
+        midpoint_tolerance: float = 1.0e-10,
+        density_tolerance: float | None = 1.0e-10,
+        max_iterations: int = 50,
+        initial_mixing: float = 1.0,
+        minimum_mixing: float = 0.1,
+        record_energy: bool = False,
+        energy_stride: int | None = None,
+    ) -> SCEMRunSummary:
+        """Run SCEM without per-step coefficient snapshots or records.
+
+        This is the preferred timing path for GPU benchmarking.  The nonlinear
+        midpoint solve is unchanged from :meth:`propagate_scem`, but diagnostics
+        are computed only at the final time, avoiding avoidable host transfers.
+        """
+
+        if dt <= 0:
+            raise ValueError("dt must be positive")
+        if nsteps < 0:
+            raise ValueError("nsteps must be nonnegative")
+
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff0, dtype=np.complex128)
+        if coeff.shape != (self.s.shape[0], self.nocc):
+            raise ValueError(f"coeff0 must have shape {(self.s.shape[0], self.nocc)}")
+
+        coeff = self.maybe_reorthonormalize(coeff, step=0)
+        rho = self.density_from_coefficients(coeff)
+        h_current, _ = self.hamiltonian_from_density(rho, t0)
+        midpoint_history: list[np.ndarray] = []
+        total_fock_builds = 1
+        total_midpoint_iterations = 0
+
+        for step in range(1, nsteps + 1):
+            t = t0 + (step - 1) * dt
+            if len(midpoint_history) >= 2:
+                h_guess = self.hermitian_part(
+                    2.0 * midpoint_history[-1] - midpoint_history[-2]
+                )
+                predictor_builds = 0
+            elif len(midpoint_history) == 1:
+                h_guess = midpoint_history[-1]
+                predictor_builds = 0
+            else:
+                h_guess = h_current
+                predictor_builds = 0
+
+            result = self.scem_step(
+                coeff,
+                time=t,
+                dt=dt,
+                h_guess=h_guess,
+                midpoint_tolerance=midpoint_tolerance,
+                density_tolerance=density_tolerance,
+                max_iterations=max_iterations,
+                initial_mixing=initial_mixing,
+                minimum_mixing=minimum_mixing,
+                predictor_fock_builds=predictor_builds,
+            )
+
+            coeff_next = self.maybe_reorthonormalize(result.coeff_next, step=step)
+            rho_next = self.density_from_coefficients(coeff_next)
+            midpoint_history.append(result.h_mid)
+            if len(midpoint_history) > 2:
+                midpoint_history.pop(0)
+
+            total_fock_builds += result.fock_builds
+            total_midpoint_iterations += result.iterations
+            coeff = coeff_next
+            rho = rho_next
+
+        final_step = nsteps
+        final_time = t0 + nsteps * dt
+        final_record = self.record(
+            final_step,
+            final_time,
+            coeff,
+            rho,
+            record_energy=self._should_record_energy(
+                final_step, record_energy, energy_stride
+            ),
+            fock_builds=total_fock_builds,
+        )
+        return SCEMRunSummary(
+            coeff_final=coeff,
+            rho_final=rho,
+            record_final=final_record,
+            steps=nsteps,
+            fock_builds=total_fock_builds,
+            midpoint_iterations=total_midpoint_iterations,
+        )
 
     def propagate_ep_pc1(
         self,
@@ -438,7 +874,8 @@ class LengthGaugeCNRTTDDFT:
         if max_corrector_iterations <= 0:
             raise ValueError("max_corrector_iterations must be positive")
 
-        coeff = np.asarray(coeff0, dtype=np.complex128)
+        backend = self._array_backend()
+        coeff = backend.asarray(coeff0, dtype=np.complex128)
         if coeff.shape != (self.s.shape[0], self.nocc):
             raise ValueError(f"coeff0 must have shape {(self.s.shape[0], self.nocc)}")
 
@@ -446,7 +883,7 @@ class LengthGaugeCNRTTDDFT:
         rho = self.density_from_coefficients(coeff)
         h_current, _ = self.hamiltonian_from_density(rho, t0)
 
-        yield coeff.copy(), self.record(
+        yield backend.copy(coeff), self.record(
             0,
             t0,
             coeff,
@@ -497,7 +934,7 @@ class LengthGaugeCNRTTDDFT:
                 h_current = h_pred
                 fock_builds = iterations
 
-            yield coeff_next.copy(), self.record(
+            yield backend.copy(coeff_next), self.record(
                 step,
                 t_next,
                 coeff_next,
@@ -530,35 +967,44 @@ class LengthGaugeCNRTTDDFT:
         return coeff
 
     def orthonormalize(self, coeff: np.ndarray) -> np.ndarray:
+        backend = self._array_backend()
         metric = self.hermitian_part(coeff.conj().T @ self.s @ coeff)
-        eig, vec = scipy.linalg.eigh(metric, check_finite=False)
-        if np.min(eig) <= 0:
+        eig, vec = backend.eigh(metric)
+        if backend.min_float(eig) <= 0:
             raise np.linalg.LinAlgError("occupied metric is not positive definite")
         metric_mhalf = (vec * eig**-0.5) @ vec.conj().T
         return coeff @ metric_mhalf
 
     def orthonormality_error(self, coeff: np.ndarray) -> float:
+        backend = self._array_backend()
         metric = coeff.conj().T @ self.s @ coeff
-        return float(np.linalg.norm(metric - np.eye(self.nocc)))
+        return backend.norm_float(metric - backend.eye(self.nocc, dtype=np.complex128))
 
     def electron_number(self, rho: np.ndarray) -> float:
-        return float(np.trace(rho @ self.s).real)
+        backend = self._array_backend()
+        return backend.real_float(backend.trace(rho @ self.s))
 
     def idempotency_error(self, rho: np.ndarray) -> float:
+        backend = self._array_backend()
         target = self.idempotency_factor * rho
-        return float(np.linalg.norm(rho @ self.s @ rho - target))
+        return backend.norm_float(rho @ self.s @ rho - target)
 
     def electronic_dipole(self, rho: np.ndarray) -> np.ndarray:
         """Return q Tr(rho d) as the electronic dipole vector."""
 
-        return self.charge * np.einsum("ij,xji->x", rho, self.dipole_position).real
+        backend = self._array_backend()
+        dipole = self.charge * backend.einsum("ij,xji->x", rho, self.dipole_position).real
+        return backend.asnumpy(dipole)
 
     def field_free_energy(self, rho: np.ndarray) -> float:
         rho_for_veff = self.density_for_veff(rho)
-        return float(self.mf.energy_tot(dm=rho_for_veff, h1e=self.hcore).real)
+        h1e = self._array_backend().asnumpy(self.hcore)
+        return float(self.mf.energy_tot(dm=rho_for_veff, h1e=h1e).real)
 
     def field_coupling_energy(self, rho: np.ndarray, time: float) -> float:
-        return float(np.einsum("ij,ji->", rho, self.external_potential(time)).real)
+        backend = self._array_backend()
+        coupling = backend.einsum("ij,ji->", rho, self.external_potential(time))
+        return backend.real_float(coupling)
 
     def total_energy(self, rho: np.ndarray, time: float) -> float:
         return self.field_free_energy(rho) + self.field_coupling_energy(rho, time)
@@ -627,7 +1073,7 @@ class LengthGaugeCNRTTDDFT:
             raise ValueError("mean-field object must have mo_occ and mo_coeff")
         if isinstance(mo_occ, (tuple, list)) or isinstance(mo_coeff, (tuple, list)):
             raise NotImplementedError("CN propagation currently supports RKS only")
-        occ = np.asarray(mo_occ, dtype=float)
+        occ = _asarray_host(mo_occ, dtype=float)
         occupied = occ[occ > 0]
         if occupied.size == 0:
             raise ValueError("no occupied orbitals found")
@@ -635,3 +1081,31 @@ class LengthGaugeCNRTTDDFT:
             raise NotImplementedError("fractional/nonuniform occupations are not supported")
         if not np.isclose(occupied[0], 2.0):
             raise NotImplementedError("CN propagation currently supports closed-shell RKS")
+
+    def _reference_hybrid_coeff(self) -> float:
+        xc = getattr(self.mf, "xc", None)
+        numint = getattr(self.mf, "_numint", None)
+        if xc is None or numint is None:
+            return 0.0
+        rsh_and_hybrid_coeff = getattr(numint, "rsh_and_hybrid_coeff", None)
+        if rsh_and_hybrid_coeff is None:
+            return 0.0
+        try:
+            _, alpha, hyb = rsh_and_hybrid_coeff(xc, spin=self.mol.spin)
+        except Exception:
+            return 0.0
+        return float(max(abs(alpha), abs(hyb)))
+
+    def _validate_density_backend(self) -> None:
+        if self._hybrid_coeff > 1.0e-14 and self.real_density_for_veff:
+            raise NotImplementedError(
+                "Hybrid/HF RT propagation requires the full complex density "
+                "matrix in get_veff. Set real_density_for_veff=False and use a "
+                "backend validated for complex density matrices."
+            )
+        if self._veff_on_gpu and not self.real_density_for_veff:
+            raise NotImplementedError(
+                "GPU4PySCF complex-density get_veff is not supported by this "
+                "propagator path yet. The current GPU path is limited to pure "
+                "local/semi-local DFT with real_density_for_veff=True."
+            )
