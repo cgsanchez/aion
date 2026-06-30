@@ -2,19 +2,23 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import scipy.linalg
 
 from aion import (
     P0SCEMSettings,
     PyscfP0LdaModel,
     PyscfP0Reference,
     UniformElectricGauge,
+    UniformMagneticGauge,
     VariableMetricSCEM,
     density_from_coefficients,
     p0_dipole_moment,
     p0_site_populations,
+    run_p0_scem_trajectory,
     record_p0_observables,
     run_p0_uniform_electric_gauge_comparison,
     summarize_p0_gauge_errors,
+    transform_p0_coefficients_between_gauges,
 )
 
 
@@ -66,6 +70,13 @@ def _lda_reference(atom: str) -> PyscfP0Reference:
 def _constant_vector(vector: np.ndarray):
     vector = np.asarray(vector, dtype=float)
     return lambda _t: vector
+
+
+def _metric_orthonormalize(coeff: np.ndarray, metric: np.ndarray) -> np.ndarray:
+    overlap = coeff.conj().T @ metric @ coeff
+    eig, vec = scipy.linalg.eigh(overlap, check_finite=False)
+    invsqrt = (vec * eig**-0.5) @ vec.conj().T
+    return coeff @ invsqrt
 
 
 def test_pyscf_p0_reference_extracts_ao_data_and_initial_state():
@@ -347,6 +358,74 @@ def test_pyscf_p0_lda_short_trajectory_is_gauge_covariant_for_nonlinear_molecule
     assert summary["velocity"]["max_population_norm_error"] < 1.0e-8
     assert summary["mixed"]["max_energy_abs_error"] < 1.0e-8
     assert summary["velocity"]["max_energy_abs_error"] < 1.0e-8
+
+
+def test_pyscf_p0_lda_static_magnetic_symmetric_and_landau_gauges_are_covariant():
+    reference = _lda_reference(
+        "O 0.000000 0.000000 0.000000; "
+        "H 0.758602 0.000000 0.504284; "
+        "H -0.758602 0.000000 0.504284"
+    )
+    model = PyscfP0LdaModel.from_reference(reference)
+    magnetic_field = np.array([0.0, 0.0, 0.05])
+    origin = np.array([0.1, -0.2, 0.0])
+    symmetric = reference.geometry(
+        magnetic=UniformMagneticGauge(
+            magnetic_field,
+            gauge="symmetric",
+            origin=origin,
+        )
+    )
+    landau = reference.geometry(
+        magnetic=UniformMagneticGauge(
+            magnetic_field,
+            gauge="landau",
+            origin=origin,
+            landau_u=np.array([1.0, 0.0, 0.0]),
+        )
+    )
+    coeff_symmetric = _metric_orthonormalize(
+        reference.initial_coefficients(),
+        symmetric.metric(0.0),
+    )
+    coeff_landau = transform_p0_coefficients_between_gauges(
+        coeff_symmetric,
+        symmetric,
+        landau,
+    )
+    settings = P0SCEMSettings(
+        dt=0.02,
+        nsteps=2,
+        midpoint_tolerance=1.0e-9,
+        density_tolerance=1.0e-9,
+        max_iterations=18,
+        mixing=0.7,
+    )
+
+    rows_by_gauge = {
+        "symmetric": run_p0_scem_trajectory(
+            label="symmetric",
+            geometry=symmetric,
+            model=model,
+            occupations=reference.occupations,
+            coeff0=coeff_symmetric,
+            settings=settings,
+        ),
+        "landau": run_p0_scem_trajectory(
+            label="landau",
+            geometry=landau,
+            model=model,
+            occupations=reference.occupations,
+            coeff0=coeff_landau,
+            settings=settings,
+        ),
+    }
+    summary = summarize_p0_gauge_errors(rows_by_gauge, reference_gauge="symmetric")
+
+    assert summary["landau"]["max_dipole_norm_error"] < 1.0e-8
+    assert summary["landau"]["max_population_norm_error"] < 1.0e-8
+    assert summary["landau"]["max_energy_abs_error"] < 1.0e-8
+    assert summary["landau"]["max_orthonormality_error"] < 1.0e-11
 
 
 def test_pyscf_p0_lda_rejects_non_lda_functional():
