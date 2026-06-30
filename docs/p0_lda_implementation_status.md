@@ -1,4 +1,4 @@
-# P0 LDA Implementation Status
+# P0 Pure-DFT Implementation Status
 
 This note records the current implementation state of the pure Peierls P0 layer
 in `aion`.  It should stay synchronized with
@@ -25,11 +25,13 @@ The sign convention is
 - `hbar = 1` by default,
 - Wilson factor `exp(i q integral A.dr / hbar)`.
 
-## PySCF LDA Model
+## PySCF Pure-DFT Model
 
-`PyscfP0LdaModel` is the current PySCF-backed adiabatic model.  It supports
-restricted closed-shell RKS references and pure LDA functionals.  GGA and
-hybrids are intentionally rejected for now.
+`PyscfP0DftModel` is the current PySCF-backed adiabatic model.  It supports
+restricted closed-shell RKS references and pure no-exact-exchange LDA/GGA
+functionals.  `PyscfP0LdaModel` remains as a backward-compatible strict LDA
+wrapper for the existing examples and tests.  Hybrids are intentionally
+rejected for now.
 
 For a gauge-specific P0 density `rho(t)`, PySCF must see the field-free AO
 density
@@ -38,18 +40,27 @@ density
 rho0_mu_nu = theta_mu_nu(t)^* rho_mu_nu(t)
 ```
 
-not `theta rho`.  This inverse dressing is essential: it is what makes LDA
+not `theta rho`.  This inverse dressing is essential: it is what makes pure-DFT
 energy and Fock builds gauge-covariant in length, mixed, velocity, symmetric,
 and Landau representations.
 
 The model builds
 
 ```text
-H_P0[rho,t] = theta(t) * (hcore0 + veff_LDA[rho0])
+H_P0[rho,t] = theta(t) * (hcore0 + veff_DFT[rho0])
 ```
 
 and evaluates the PySCF total energy from `rho0`.  This is a P0 Peierls-dressed
-LDA model, not yet a P0+E1 model and not a GIAO/London-orbital implementation.
+pure-DFT model, not yet a P0+E1 model and not a GIAO/London-orbital
+implementation.
+
+The GGA path is accepted only through PySCF's ordinary restricted DFT builders:
+the P0 layer inverse-dresses the density, PySCF evaluates the field-free GGA
+energy and `veff`, and the returned lower-index matrix is Peierls dressed.  The
+regression tests verify by central finite differences that the returned bare
+and P0-dressed PBE Hxc matrices are the functional derivatives of their
+corresponding energies along real symmetric and complex Hermitian density
+directions.
 
 ## Propagation
 
@@ -120,6 +131,7 @@ Current tests cover:
 - P0 graph-current continuity,
 - P0 power identities,
 - PySCF LDA zero-source agreement with ordinary PySCF Fock/energy,
+- PySCF PBE bare and P0-dressed Hxc derivative audits,
 - PySCF LDA trajectory gauge covariance for H2,
 - PySCF LDA trajectory gauge covariance for non-linear H2O and CH4,
 - PySCF LDA static-B symmetric vs Landau gauge covariance for H2O,
@@ -139,17 +151,18 @@ The main P0/PySCF examples are in `examples/pyscf_p0_bridge`:
 - `run_h2o_p0_lda_static_b_gauge_compare.py`
 
 The examples default to cheap `sto-3g` LDA runs so they are usable as smoke
-tests.  The basis and functional can be changed from the command line, but only
-LDA is currently accepted by the P0 PySCF model.
+tests.  The general P0 PySCF model accepts pure LDA/GGA references; the current
+examples still use the strict LDA wrapper.
 
 ## Current Limitations
 
-This is a coherent P0 LDA implementation, but it is not the full hierarchy.
+This is a coherent P0 pure-DFT implementation, but it is not the full hierarchy.
 
 - No P0+E1 electric multipole layer yet.
 - No B1-min or B1-full magnetic hierarchy yet.
-- No GGA support yet; GGA needs dressed density, density gradients, and grid
-  handling audited carefully.
+- GGA support currently relies on PySCF's field-free pure-GGA builders after
+  inverse Peierls density dressing.  Hybrids and custom dressed exchange are not
+  included.
 - No hybrid support yet; exact exchange needs two Peierls phases on the four
   AO indices.
 - No Peierls-dressed SCF solver for magnetic ground states yet.  Static-B
@@ -159,11 +172,11 @@ This is a coherent P0 LDA implementation, but it is not the full hierarchy.
 - The P0 dipole is the site/source dipole.  It is the correct observable for the
   P0 source hierarchy, but it is not the full AO dipole matrix used in ordinary
   length-gauge TDDFT.
-- The GPU backend has not yet been ported to this P0 LDA runner path.
+- The GPU backend has not yet been ported to this P0 pure-DFT runner path.
 
 ## Next Implementation Layer
 
-The next formal layer should be P0+E1 for LDA.  The first useful target is a
+The next formal layer should be P0+E1 for pure DFT.  The first useful target is a
 toy/PySCF-compatible electric hierarchy extension with atom-centered first
 moments, gauge transformation rules, source observables, and Ward checks.  Only
 after P0+E1 is stable should we move to B1-min and then B1-full.

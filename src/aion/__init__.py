@@ -75,7 +75,7 @@ from .p0_runner import (
     transform_p0_coefficients_between_gauges,
     velocity_delta_kick_electric_gauge,
 )
-from .pyscf_p0 import PyscfP0LdaModel, PyscfP0Reference
+from .pyscf_p0 import PyscfP0DftModel, PyscfP0LdaModel, PyscfP0Reference
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
 from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
 from .variable_metric import (
@@ -101,6 +101,7 @@ __all__ = [
     "CNPropagationRecord",
     "DEFAULT_GAUGE_LAMBDAS",
     "PropagationRecord",
+    "PyscfP0DftModel",
     "PyscfP0LdaModel",
     "PyscfP0Reference",
     "P0Row",

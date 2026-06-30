@@ -33,23 +33,33 @@ def _occupied_orbitals(mf) -> tuple[np.ndarray, np.ndarray]:
     return coeff_all[:, occ_mask].copy(), occ_all[occ_mask].copy()
 
 
-def _validate_rks_lda(mf) -> None:
+def _validate_rks_pure_dft(
+    mf,
+    *,
+    allowed_xc_types: tuple[str, ...],
+    model_name: str,
+) -> None:
     if not hasattr(mf, "xc") or not hasattr(mf, "_numint"):
-        raise TypeError("PyscfP0LdaModel requires a PySCF RKS-like object")
+        raise TypeError(f"{model_name} requires a PySCF RKS-like object")
     if isinstance(getattr(mf, "mo_occ", None), (tuple, list)):
         raise NotImplementedError(
-            "PyscfP0LdaModel currently supports restricted references only"
-        )
-
-    xc_type = mf._numint._xc_type(mf.xc).upper()
-    if xc_type != "LDA":
-        raise NotImplementedError(
-            f"PyscfP0LdaModel currently supports LDA only, got {xc_type}"
+            f"{model_name} currently supports restricted references only"
         )
 
     hybrid_coeff = mf._numint.hybrid_coeff(mf.xc, spin=mf.mol.spin)
     if abs(float(hybrid_coeff)) > 1.0e-14:
-        raise NotImplementedError("PyscfP0LdaModel does not support hybrid functionals")
+        raise NotImplementedError(f"{model_name} does not support hybrid functionals")
+
+    xc_type = mf._numint._xc_type(mf.xc).upper()
+    if xc_type not in allowed_xc_types:
+        allowed = "/".join(allowed_xc_types)
+        raise NotImplementedError(
+            f"{model_name} currently supports {allowed} only, got {xc_type}"
+        )
+
+    grids = getattr(mf, "grids", None)
+    if grids is not None and getattr(grids, "coords", None) is None:
+        mf.initialize_grids(mf.mol, mf.make_rdm1())
 
 
 @dataclass(frozen=True)
@@ -125,11 +135,11 @@ class PyscfP0Reference:
 
 
 @dataclass(frozen=True)
-class PyscfP0LdaModel:
-    """CPU P0 adiabatic LDA model backed by PySCF builders.
+class PyscfP0DftModel:
+    """CPU P0 adiabatic pure-DFT model backed by PySCF builders.
 
     The dressed density is mapped back to the field-free AO representation,
-    PySCF builds the ordinary LDA effective potential there, and the resulting
+    PySCF builds the ordinary DFT effective potential there, and the resulting
     one-body matrix is Peierls dressed on output.
     """
 
@@ -143,15 +153,22 @@ class PyscfP0LdaModel:
         reference: PyscfP0Reference,
         *,
         real_density_for_veff: bool = False,
-    ) -> "PyscfP0LdaModel":
+    ) -> "PyscfP0DftModel":
         return cls(
             reference.mf,
             reference.hcore0,
             real_density_for_veff=real_density_for_veff,
         )
 
+    def _allowed_xc_types(self) -> tuple[str, ...]:
+        return ("LDA", "GGA")
+
     def __post_init__(self) -> None:
-        _validate_rks_lda(self.mf)
+        _validate_rks_pure_dft(
+            self.mf,
+            allowed_xc_types=self._allowed_xc_types(),
+            model_name=type(self).__name__,
+        )
         hcore = _as_numpy(self.hcore0, dtype=np.complex128)
         if hcore.ndim != 2 or hcore.shape[0] != hcore.shape[1]:
             raise ValueError("hcore0 must be a square matrix")
@@ -204,3 +221,24 @@ class PyscfP0LdaModel:
         dm0 = self.dressed_density_for_pyscf(density, t, geometry)
         energy = self.mf.energy_tot(dm=dm0, h1e=self.hcore0)
         return float(np.real(energy))
+
+
+@dataclass(frozen=True)
+class PyscfP0LdaModel(PyscfP0DftModel):
+    """Backward-compatible P0 model restricted to LDA functionals."""
+
+    @classmethod
+    def from_reference(
+        cls,
+        reference: PyscfP0Reference,
+        *,
+        real_density_for_veff: bool = False,
+    ) -> "PyscfP0LdaModel":
+        return cls(
+            reference.mf,
+            reference.hcore0,
+            real_density_for_veff=real_density_for_veff,
+        )
+
+    def _allowed_xc_types(self) -> tuple[str, ...]:
+        return ("LDA",)

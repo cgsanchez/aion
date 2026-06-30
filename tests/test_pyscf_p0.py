@@ -6,6 +6,7 @@ import scipy.linalg
 
 from aion import (
     P0SCEMSettings,
+    PyscfP0DftModel,
     PyscfP0LdaModel,
     PyscfP0Reference,
     UniformElectricGauge,
@@ -50,6 +51,19 @@ def _lda_h2_reference() -> PyscfP0Reference:
     return PyscfP0Reference.from_mean_field(mf)
 
 
+def _pbe_h2_reference() -> PyscfP0Reference:
+    dft, _, _ = _pyscf_modules()
+    mf = dft.RKS(_h2_mol())
+    mf.xc = "pbe,pbe"
+    mf.grids.level = 0
+    mf.grids.prune = None
+    mf.small_rho_cutoff = 0.0
+    mf.conv_tol = 1.0e-11
+    mf.kernel()
+    assert mf.converged
+    return PyscfP0Reference.from_mean_field(mf)
+
+
 def _lda_reference(atom: str) -> PyscfP0Reference:
     dft, gto, _ = _pyscf_modules()
     mol = gto.M(
@@ -77,6 +91,50 @@ def _metric_orthonormalize(coeff: np.ndarray, metric: np.ndarray) -> np.ndarray:
     eig, vec = scipy.linalg.eigh(overlap, check_finite=False)
     invsqrt = (vec * eig**-0.5) @ vec.conj().T
     return coeff @ invsqrt
+
+
+def _matrix_trace_product(left: np.ndarray, right: np.ndarray) -> float:
+    return float(np.einsum("ij,ji->", left, right).real)
+
+
+def _real_symmetric_direction(size: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    raw = rng.normal(size=(size, size))
+    direction = 0.5 * (raw + raw.T)
+    return direction / np.linalg.norm(direction)
+
+
+def _complex_hermitian_direction(size: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    real = rng.normal(size=(size, size))
+    imag = rng.normal(size=(size, size))
+    direction = 0.5 * (real + real.T) + 0.5j * (imag - imag.T)
+    return direction / np.linalg.norm(direction)
+
+
+def _assert_matrix_is_functional_derivative(
+    *,
+    functional,
+    density: np.ndarray,
+    potential: np.ndarray,
+    direction: np.ndarray,
+    tolerance: float,
+) -> None:
+    expected = _matrix_trace_product(direction, potential)
+    eps_values = (1.0e-3, 3.0e-4, 1.0e-4, 3.0e-5, 1.0e-5)
+    errors = []
+    for eps in eps_values:
+        fd = (
+            functional(density + eps * direction)
+            - functional(density - eps * direction)
+        ) / (2.0 * eps)
+        errors.append(abs(fd - expected))
+
+    best_error = min(errors)
+    assert best_error < tolerance, (
+        f"functional derivative mismatch: expected {expected:.16e}, "
+        f"best error {best_error:.3e}, errors {errors}"
+    )
 
 
 def test_pyscf_p0_reference_extracts_ao_data_and_initial_state():
@@ -179,6 +237,86 @@ def test_pyscf_p0_lda_zero_source_matches_pyscf_fock_and_energy():
 
     assert np.linalg.norm(h - expected) < 1.0e-10
     assert abs(model.energy(density, 0.0, geometry) - expected_energy) < 1.0e-10
+
+
+def test_pyscf_p0_dft_accepts_pure_gga_and_rejects_hybrids():
+    reference = _pbe_h2_reference()
+    model = PyscfP0DftModel.from_reference(reference)
+    geometry = reference.geometry()
+    density = reference.initial_density()
+
+    assert np.isfinite(model.energy(density, 0.0, geometry))
+
+    reference.mf.xc = "pbe0"
+    with pytest.raises(NotImplementedError, match="hybrid"):
+        PyscfP0DftModel.from_reference(reference)
+
+
+def test_pyscf_pbe_veff_is_bare_hxc_energy_derivative():
+    reference = _pbe_h2_reference()
+    density = reference.initial_density()
+    veff = np.asarray(
+        reference.mf.get_veff(reference.mol, density),
+        dtype=np.complex128,
+    )
+
+    def hxc_energy(dm: np.ndarray) -> float:
+        total = reference.mf.energy_tot(dm=dm, h1e=reference.hcore0)
+        return float(np.real(total)) - _matrix_trace_product(dm, reference.hcore0)
+
+    for direction in (
+        _real_symmetric_direction(reference.nao, seed=1401),
+        _complex_hermitian_direction(reference.nao, seed=1402),
+    ):
+        _assert_matrix_is_functional_derivative(
+            functional=hxc_energy,
+            density=density,
+            potential=veff,
+            direction=direction,
+            tolerance=2.0e-7,
+        )
+
+
+def test_pyscf_p0_pbe_veff_is_dressed_hxc_energy_derivative():
+    reference = _pbe_h2_reference()
+    model = PyscfP0DftModel.from_reference(reference)
+    field = np.array([0.011, -0.017, 0.023])
+    electric = UniformElectricGauge(
+        field=_constant_vector(field),
+        field_integral=lambda t: field * t,
+        lambda_value=lambda _t: 0.65,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    magnetic = UniformMagneticGauge(
+        np.array([0.007, -0.011, 0.019]),
+        gauge="symmetric",
+        origin=np.array([0.13, -0.07, 0.05]),
+    )
+    geometry = reference.geometry(electric=electric, magnetic=magnetic)
+    time = 0.43
+    theta = geometry.theta(time)
+    density0 = reference.initial_density()
+    density = theta * density0
+    hcore_p0 = geometry.dress_matrix(reference.hcore0, time)
+    veff_p0 = model.hamiltonian(density, time, geometry) - hcore_p0
+
+    def hxc_energy(rho: np.ndarray) -> float:
+        return model.energy(rho, time, geometry) - _matrix_trace_product(
+            rho,
+            hcore_p0,
+        )
+
+    for direction in (
+        _real_symmetric_direction(reference.nao, seed=2401),
+        _complex_hermitian_direction(reference.nao, seed=2402),
+    ):
+        _assert_matrix_is_functional_derivative(
+            functional=hxc_energy,
+            density=density,
+            potential=veff_p0,
+            direction=direction,
+            tolerance=2.0e-7,
+        )
 
 
 def test_pyscf_p0_lda_scem_step_is_gauge_covariant_for_h2():

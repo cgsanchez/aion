@@ -18,7 +18,7 @@ The first implementation will stay within:
 - atom-centered PySCF Gaussian AO bases,
 - AO anchors at the parent atom,
 - closed-shell RKS initially,
-- LDA first, then GGA,
+- pure no-exact-exchange LDA/GGA at P0,
 - spatially uniform electric fields,
 - static spatially uniform magnetic fields,
 - site scalar potentials and bond vector-potential line integrals,
@@ -274,25 +274,26 @@ The plan is to determine whether PySCF/libcint can supply all needed moment and
 gradient integrals.  If not, we must either add custom integral code or
 reconsider how deeply `aion` can depend on PySCF for `B1-full`.
 
-## 4. LDA/GGA P0 Bridge To PySCF
+## 4. Pure-DFT P0 Bridge To PySCF
 
-The first electronic model should be PySCF LDA.  LDA is simpler than GGA
-because no density gradients are needed.  GGA follows once LDA is correct.
+The first electronic model is a PySCF-backed pure-DFT bridge for restricted
+LDA/GGA references.  LDA is still the cheapest smoke-test path, but GGA is
+accepted once the returned potential passes finite-difference derivative
+audits.
 
 At P0, define an effective bare-AO density matrix for grid and Coulomb
 contractions:
 
 ```text
-D_eff_ij = Theta_ij D_ij
+rho0_ij = Theta_ij^* rho_ij
 ```
 
-up to the final convention check against PySCF's AO density ordering.  The
-orientation must be tested so that `D_eff` is Hermitian when the physical
-density is Hermitian in the Peierls metric.
+where `rho` is the gauge-specific P0 density matrix.  This inverse orientation
+is required so that `rho0` is the field-free density seen by PySCF.
 
 For LDA:
 
-1. Compute density on the bare AO grid from `D_eff`.
+1. Compute density on the bare AO grid from `rho0`.
 2. Evaluate LDA `v_xc[n]` normally.
 3. Build the bare AO `vxc_bare` matrix from this scalar potential.
 4. Dress the lower-index result:
@@ -303,16 +304,16 @@ vxc_ij^P = Theta_ij vxc_bare_ij.
 
 For Hartree:
 
-1. Build `J_bare[D_eff]` using PySCF Coulomb routines.
+1. Build `J_bare[rho0]` using PySCF Coulomb routines.
 2. Dress the output:
 
 ```text
-J_ij^P = Theta_ij J_bare_ij[D_eff].
+J_ij^P = Theta_ij J_bare_ij[rho0].
 ```
 
 For GGA:
 
-1. Compute density and density gradients from `D_eff`.
+1. Compute density and density gradients from `rho0`.
 2. Let PySCF/libxc evaluate the GGA kernel.
 3. Dress the resulting lower-index matrix by `Theta_ij`.
 
@@ -470,9 +471,12 @@ with the source dipole from the same action.
 - Length/velocity/interpolating gauge equivalence for a model matrix system.
 - Static uniform `B` ground-state current sanity checks.
 
-### P0 LDA tests
+### P0 pure-DFT tests
 
 - Zero field reproduces ordinary PySCF LDA.
+- For PBE, the bare and P0-dressed Hxc matrices pass finite-difference
+  derivative checks against the corresponding energy functional along real and
+  complex Hermitian density directions.
 - Pure gauge changes leave observables invariant.
 - Length/velocity spectra agree at P0 when the same physical field is used.
 
@@ -501,14 +505,13 @@ with the source dipole from the same action.
 2. Add AO anchor mapping from PySCF molecules.
 3. Add P0 geometry: `Theta`, `S^P`, `sigma`, `D_site S`, `omega_t`.
 4. Add variable-metric SCEM for an abstract matrix functional.
-5. Add P0 LDA bridge to PySCF.
+5. Add P0 pure LDA/GGA bridge to PySCF.
 6. Add P0 charges, currents, dipole, and power diagnostics.
 7. Test length/velocity/interpolating gauge equivalence.
 8. Add E1 AO central dipole moments and `V_E1`.
 9. Compare P0 and P0+E1 spectra.
-10. Port P0/P0+E1 LDA path to GPU.
-11. Add GGA.
-12. Add B1-min uniform static `B`.
-13. Specify and then implement B1-full integral requirements.
-14. Revisit HF/hybrid exchange with fully dressed primitive two-electron
+10. Port P0/P0+E1 pure-DFT path to GPU.
+11. Add B1-min uniform static `B`.
+12. Specify and then implement B1-full integral requirements.
+13. Revisit HF/hybrid exchange with fully dressed primitive two-electron
     contractions.
