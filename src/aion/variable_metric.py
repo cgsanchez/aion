@@ -113,8 +113,8 @@ class VariableMetricSCEM:
     ) -> VariableMetricSCEMStepResult:
         """Advance one step with a midpoint fixed-point solve."""
 
-        if dt <= 0.0:
-            raise ValueError("dt must be positive")
+        if dt == 0.0:
+            raise ValueError("dt must be nonzero")
         if midpoint_tolerance <= 0.0:
             raise ValueError("midpoint_tolerance must be positive")
         if density_tolerance is not None and density_tolerance <= 0.0:
