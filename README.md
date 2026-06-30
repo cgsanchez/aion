@@ -88,7 +88,7 @@ main implementation.
 - `examples/gpu_backend/benchmark_scem_cpu_gpu.py`: CPU/GPU timing harness.
 - `examples/gauge_p0_toy/run_p0_toy_gauge_compare.py`: pure Peierls P0 toy
   propagation comparing length, mixed, and velocity gauges on source
-  observables, graph currents, and continuity diagnostics.  Use
+  observables, graph currents, continuity, and power diagnostics.  Use
   `--model hubbard` to exercise the nonlinear midpoint solve.
 - `examples/small_molecule_references/run_diatomic_kick_spectrum.py`: reference
   diatomic kick spectrum runner with CN, EP-PC1, and SCEM options.

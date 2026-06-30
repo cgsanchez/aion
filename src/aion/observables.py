@@ -31,6 +31,29 @@ def electronic_energy(density: np.ndarray, hamiltonian: np.ndarray) -> float:
     return matrix_expectation(density, hamiltonian)
 
 
+def energy_derivative(
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    hamiltonian: np.ndarray,
+    *,
+    hamiltonian_dot: np.ndarray | None = None,
+) -> float:
+    """Return ``d/dt Re Tr[rho H]`` for one-body energy diagnostics."""
+
+    rho = _square_matrix(density, name="density")
+    rho_dot = _square_matrix(density_dot, name="density_dot")
+    h = _square_matrix(hamiltonian, name="hamiltonian")
+    if rho.shape != rho_dot.shape or rho.shape != h.shape:
+        raise ValueError("density, density_dot, and hamiltonian must have the same shape")
+    value = np.trace(rho_dot @ h)
+    if hamiltonian_dot is not None:
+        h_dot = _square_matrix(hamiltonian_dot, name="hamiltonian_dot")
+        if h_dot.shape != rho.shape:
+            raise ValueError("hamiltonian_dot must have the same shape as density")
+        value = value + np.trace(rho @ h_dot)
+    return float(value.real)
+
+
 def electron_count(density: np.ndarray, metric: np.ndarray) -> float:
     """Return ``Tr[rho S]`` for a density matrix and metric/overlap matrix."""
 
@@ -135,6 +158,18 @@ def p0_dipole_moment(
     return q * np.einsum("a,ax->x", populations, geometry.atom_coords)
 
 
+def p0_dipole_derivative(
+    charge_derivative: np.ndarray,
+    geometry: PeierlsGeometry,
+) -> np.ndarray:
+    """Return ``sum_a dQ_a/dt R_a`` for the P0 source dipole."""
+
+    dqdt = np.asarray(charge_derivative, dtype=float)
+    if dqdt.shape != (geometry.anchors.natom,):
+        raise ValueError("charge_derivative must match geometry atom count")
+    return np.einsum("a,ax->x", dqdt, geometry.atom_coords)
+
+
 def p0_directed_block(
     matrix: np.ndarray,
     geometry: PeierlsGeometry,
@@ -228,3 +263,39 @@ def p0_continuity_residual(
     if dqdt.shape != (currents.shape[0],):
         raise ValueError("charge_derivative must match graph_currents dimension")
     return dqdt + np.sum(currents, axis=1)
+
+
+def p0_source_power(
+    graph_currents: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    *,
+    bond_electromotive_forces: np.ndarray | None = None,
+) -> float:
+    """Return ``-sum_{a<b} I_ab Ecal_ab`` for P0 graph sources."""
+
+    currents = np.asarray(graph_currents, dtype=float)
+    if currents.shape != (geometry.anchors.natom, geometry.anchors.natom):
+        raise ValueError("graph_currents must match geometry atom count")
+    emf = (
+        geometry.site_bond_electromotive_forces(t)
+        if bond_electromotive_forces is None
+        else np.asarray(bond_electromotive_forces, dtype=float)
+    )
+    if emf.shape != currents.shape:
+        raise ValueError("bond_electromotive_forces must match graph_currents")
+    upper = np.triu_indices(geometry.anchors.natom, k=1)
+    return float(-np.sum(currents[upper] * emf[upper]))
+
+
+def p0_dipole_power(
+    charge_derivative: np.ndarray,
+    geometry: PeierlsGeometry,
+    electric_field: np.ndarray,
+) -> float:
+    """Return ``E . dmu_P0/dt`` for a spatially uniform electric field."""
+
+    field = np.asarray(electric_field, dtype=float)
+    if field.shape != (3,):
+        raise ValueError("electric_field must have shape (3,)")
+    return float(np.dot(field, p0_dipole_derivative(charge_derivative, geometry)))

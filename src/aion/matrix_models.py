@@ -24,6 +24,10 @@ def hermitian_part(matrix: np.ndarray) -> np.ndarray:
     return 0.5 * (matrix + matrix.conj().T)
 
 
+def _matrix_expectation(density: np.ndarray, matrix: np.ndarray) -> float:
+    return float(np.trace(np.asarray(density, dtype=np.complex128) @ matrix).real)
+
+
 def site_population_operators(geometry: PeierlsGeometry, t: float) -> list[np.ndarray]:
     """Return ``0.5 * {M_a, S(t)}`` for every atom site."""
 
@@ -72,6 +76,14 @@ class LinearOneBodyModel:
     ) -> np.ndarray:
         return hermitian_part(geometry.dress_matrix(self.hcore0, t))
 
+    def energy(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> float:
+        return _matrix_expectation(density, self.hamiltonian(density, t, geometry))
+
 
 @dataclass(frozen=True)
 class SiteHubbardModel:
@@ -114,3 +126,18 @@ class SiteHubbardModel:
         ):
             h = h + coeff * op
         return hermitian_part(h)
+
+    def energy(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> float:
+        if self.reference_populations.shape != (geometry.anchors.natom,):
+            raise ValueError("reference_populations must match geometry atom count")
+        hcore = geometry.dress_matrix(self.hcore0, t)
+        populations = site_populations(density, geometry, t)
+        delta = populations - self.reference_populations
+        return _matrix_expectation(density, hcore) + 0.5 * float(
+            np.sum(self.hubbard_u * delta**2)
+        )

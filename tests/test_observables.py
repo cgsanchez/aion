@@ -3,19 +3,22 @@ from __future__ import annotations
 import numpy as np
 import scipy.linalg
 
-from aion.gauge import AOAnchors, PeierlsGeometry
-from aion.matrix_models import density_from_coefficients
+from aion.gauge import AOAnchors, PeierlsGeometry, UniformElectricGauge
+from aion.matrix_models import LinearOneBodyModel, SiteHubbardModel, density_from_coefficients
 from aion.observables import (
     coefficient_orthonormality_error,
     electron_count,
+    energy_derivative,
     electronic_energy,
     matrix_expectation,
     p0_continuity_residual,
+    p0_dipole_power,
     p0_dipole_moment,
     p0_graph_currents,
     p0_site_charge_derivative,
     p0_site_charges,
     p0_site_populations,
+    p0_source_power,
 )
 
 
@@ -53,6 +56,33 @@ def _constant_metric_step(
         np.exp(-1j * dt * eig_h)[:, None] * (vec_h.conj().T @ coeff_orth)
     )
     return s_invsqrt @ propagated
+
+
+def _coefficient_derivative(
+    coeff: np.ndarray,
+    hamiltonian: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+) -> np.ndarray:
+    metric = geometry.metric(t)
+    covariant_metric_dot = geometry.covariant_metric_dot(t)
+    sigma = geometry.ao_sigma(t)
+    return (
+        (-1j / geometry.hbar) * np.linalg.solve(metric, hamiltonian @ coeff)
+        - 0.5 * np.linalg.solve(metric, covariant_metric_dot @ coeff)
+        - sigma[:, None] * coeff
+    )
+
+
+def _density_derivative(
+    coeff: np.ndarray,
+    coeff_dot: np.ndarray,
+    occupations: np.ndarray,
+) -> np.ndarray:
+    return (
+        (coeff_dot * occupations[None, :]) @ coeff.conj().T
+        + (coeff * occupations[None, :]) @ coeff_dot.conj().T
+    )
 
 
 def test_p0_populations_sum_to_metric_trace_and_dipole_uses_charge_sign():
@@ -217,3 +247,97 @@ def test_p0_graph_currents_satisfy_nonorthogonal_continuity():
     assert np.linalg.norm(exact_residual) < 1.0e-14
     assert np.linalg.norm(charge_derivative - exact_charge_derivative) < 1.0e-9
     assert np.linalg.norm(residual) < 1.0e-9
+
+
+def test_p0_power_matches_energy_and_dipole_identities_for_linear_model():
+    anchors = AOAnchors(
+        atom_coords=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.2, 0.1, 0.0],
+                [-0.1, 0.8, 0.2],
+            ]
+        ),
+        ao_to_atom=np.array([0, 1, 2]),
+    )
+    s0 = np.array(
+        [
+            [1.0, 0.07, -0.03],
+            [0.07, 1.0, 0.05],
+            [-0.03, 0.05, 1.0],
+        ],
+        dtype=np.complex128,
+    )
+    h0 = np.array(
+        [
+            [-0.45, -0.18, 0.04],
+            [-0.18, -0.08, -0.11],
+            [0.04, -0.11, 0.13],
+        ],
+        dtype=np.complex128,
+    )
+    electric_field = np.array([0.025, -0.015, 0.01])
+    electric = UniformElectricGauge(
+        field=lambda _t: electric_field,
+        field_integral=lambda t: electric_field * t,
+        lambda_value=lambda _t: 0.4,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    geometry = PeierlsGeometry(anchors, s0, electric=electric)
+    model = LinearOneBodyModel(h0)
+    occupations = np.array([1.0, 0.8])
+    coeff = _orthonormal_coefficients(geometry.metric(0.0), occupations.size)
+    t = 0.37
+    rho = density_from_coefficients(coeff, occupations)
+    h = model.hamiltonian(rho, t, geometry)
+    coeff_dot = _coefficient_derivative(coeff, h, geometry, t)
+    rho_dot = _density_derivative(coeff, coeff_dot, occupations)
+    currents = p0_graph_currents(rho, h, geometry, t)
+    charge_derivative = p0_site_charge_derivative(rho, rho_dot, geometry, t)
+
+    eps = 1.0e-6
+    h_dot = (
+        model.hamiltonian(rho, t + eps, geometry)
+        - model.hamiltonian(rho, t - eps, geometry)
+    ) / (2.0 * eps)
+    u_dot = energy_derivative(rho, rho_dot, h, hamiltonian_dot=h_dot)
+    source_power = p0_source_power(currents, geometry, t)
+    dipole_power = p0_dipole_power(charge_derivative, geometry, electric_field)
+
+    assert np.isclose(source_power, u_dot, atol=2.0e-10)
+    assert np.isclose(source_power, dipole_power, atol=2.0e-14)
+
+
+def test_site_hubbard_energy_has_expected_double_counting():
+    anchors = AOAnchors(
+        atom_coords=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        ao_to_atom=np.array([0, 1, 1]),
+    )
+    s0 = np.array(
+        [
+            [1.0, 0.05, -0.02],
+            [0.05, 1.0, 0.03],
+            [-0.02, 0.03, 1.0],
+        ],
+        dtype=np.complex128,
+    )
+    geometry = PeierlsGeometry(anchors, s0)
+    h0 = np.diag([-0.5, -0.1, 0.2]).astype(np.complex128)
+    occupations = np.array([1.2])
+    coeff = _orthonormal_coefficients(s0, occupations.size)
+    rho = density_from_coefficients(coeff, occupations)
+    reference = p0_site_populations(rho, geometry, 0.0) - np.array([0.1, -0.05])
+    model = SiteHubbardModel(h0, hubbard_u=np.array([0.3, 0.4]), reference_populations=reference)
+
+    populations = p0_site_populations(rho, geometry, 0.0)
+    delta = populations - reference
+    expected_energy = matrix_expectation(rho, geometry.dress_matrix(h0, 0.0)) + 0.5 * np.sum(
+        model.hubbard_u * delta**2
+    )
+    hamiltonian_expectation = matrix_expectation(
+        rho,
+        model.hamiltonian(rho, 0.0, geometry),
+    )
+
+    assert np.isclose(model.energy(rho, 0.0, geometry), expected_energy, atol=1.0e-14)
+    assert not np.isclose(model.energy(rho, 0.0, geometry), hamiltonian_expectation)

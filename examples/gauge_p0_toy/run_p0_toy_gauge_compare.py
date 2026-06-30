@@ -42,9 +42,11 @@ from aion import (
     electronic_energy,
     p0_graph_currents,
     p0_dipole_moment,
+    p0_dipole_power,
     p0_site_charge_derivative,
     p0_site_charges,
     p0_site_populations,
+    p0_source_power,
 )
 
 
@@ -163,11 +165,24 @@ def record_observables(
     currents = p0_graph_currents(rho, hamiltonian, geometry, time)
     current_balance = np.sum(currents, axis=1)
     continuity_residual = charge_derivative + current_balance
+    energy = model_energy(model, rho, time, geometry, hamiltonian)
+    energy_dot = model_energy_derivative(model, rho, rho_dot, time, geometry)
+    source_power = p0_source_power(currents, geometry, time)
+    dipole_power = p0_dipole_power(
+        charge_derivative,
+        geometry,
+        electric_field_for_power(geometry, time),
+    )
 
     row: dict[str, float | str] = {
         "step": step,
         "time_au": time,
-        "energy": electronic_energy(rho, hamiltonian),
+        "energy": energy,
+        "energy_derivative": energy_dot,
+        "source_power": source_power,
+        "dipole_power": dipole_power,
+        "power_residual": energy_dot - source_power,
+        "dipole_power_residual": source_power - dipole_power,
         "electron_count": electron_count(rho, metric),
         "dipole_x": float(dipole[0]),
         "dipole_y": float(dipole[1]),
@@ -192,6 +207,40 @@ def record_observables(
         for col_atom in range(row_atom + 1, currents.shape[1]):
             row[f"current_{row_atom}_{col_atom}"] = float(currents[row_atom, col_atom])
     return row
+
+
+def model_energy(
+    model,
+    density: np.ndarray,
+    time: float,
+    geometry: PeierlsGeometry,
+    hamiltonian: np.ndarray,
+) -> float:
+    if hasattr(model, "energy"):
+        return float(model.energy(density, time, geometry))
+    return electronic_energy(density, hamiltonian)
+
+
+def model_energy_derivative(
+    model,
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    time: float,
+    geometry: PeierlsGeometry,
+    *,
+    eps: float = 1.0e-6,
+) -> float:
+    plus_density = density + eps * density_dot
+    minus_density = density - eps * density_dot
+    plus_energy = model.energy(plus_density, time + eps, geometry)
+    minus_energy = model.energy(minus_density, time - eps, geometry)
+    return float((plus_energy - minus_energy) / (2.0 * eps))
+
+
+def electric_field_for_power(geometry: PeierlsGeometry, time: float) -> np.ndarray:
+    if geometry.electric is None:
+        return np.zeros(3)
+    return geometry.electric.electric_field(time)
 
 
 def coefficient_derivative(
@@ -361,6 +410,10 @@ def summarize_gauge_errors(
             "max_instantaneous_continuity_residual": float(
                 np.max(_series(rows, "instantaneous_continuity_residual_norm"))
             ),
+            "max_power_residual": float(np.max(np.abs(_series(rows, "power_residual")))),
+            "max_dipole_power_residual": float(
+                np.max(np.abs(_series(rows, "dipole_power_residual")))
+            ),
             "max_abs_current": float(np.max(_series(rows, "max_abs_current"))),
         }
     return summary
@@ -505,6 +558,8 @@ def main() -> None:
             "max_orthonormality_error={max_orthonormality_error:.3e}".format(**values),
             "max_instantaneous_continuity_residual={max_instantaneous_continuity_residual:.3e}".format(**values),
             "max_sampled_continuity_residual={max_continuity_residual:.3e}".format(**values),
+            "max_power_residual={max_power_residual:.3e}".format(**values),
+            "max_dipole_power_residual={max_dipole_power_residual:.3e}".format(**values),
             "max_abs_current={max_abs_current:.3e}".format(**values),
         )
 
