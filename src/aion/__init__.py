@@ -31,6 +31,14 @@ from .matrix_models import (
     density_from_coefficients,
     site_populations,
 )
+from .observables import (
+    coefficient_orthonormality_error,
+    electron_count,
+    electronic_energy,
+    matrix_expectation,
+    p0_dipole_moment,
+    p0_site_populations,
+)
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
 from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
 from .variable_metric import (
@@ -65,12 +73,18 @@ __all__ = [
     "VariableMetricSCEM",
     "VariableMetricSCEMStepResult",
     "casida_excitations",
+    "coefficient_orthonormality_error",
     "density_from_coefficients",
+    "electron_count",
+    "electronic_energy",
     "excitation_by_index",
     "kick_spectrum",
     "load_excitations",
     "lowest_active_excitation",
     "make_backend",
+    "matrix_expectation",
+    "p0_dipole_moment",
+    "p0_site_populations",
     "save_excitations",
     "site_populations",
     "transition_polarization",
