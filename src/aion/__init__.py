@@ -36,7 +36,11 @@ from .observables import (
     electron_count,
     electronic_energy,
     matrix_expectation,
+    p0_continuity_residual,
+    p0_directed_block,
     p0_dipole_moment,
+    p0_graph_currents,
+    p0_site_charges,
     p0_site_populations,
 )
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
@@ -83,7 +87,11 @@ __all__ = [
     "lowest_active_excitation",
     "make_backend",
     "matrix_expectation",
+    "p0_continuity_residual",
+    "p0_directed_block",
     "p0_dipole_moment",
+    "p0_graph_currents",
+    "p0_site_charges",
     "p0_site_populations",
     "save_excitations",
     "site_populations",

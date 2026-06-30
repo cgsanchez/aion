@@ -14,4 +14,4 @@ dist/
 *.npz
 *.log
 results/
-
+results_*/

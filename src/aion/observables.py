@@ -8,12 +8,19 @@ from .gauge import PeierlsGeometry
 from .matrix_models import site_populations
 
 
+def _square_matrix(matrix: np.ndarray, *, name: str) -> np.ndarray:
+    array = np.asarray(matrix, dtype=np.complex128)
+    if array.ndim != 2 or array.shape[0] != array.shape[1]:
+        raise ValueError(f"{name} must be a square matrix")
+    return array
+
+
 def matrix_expectation(density: np.ndarray, matrix: np.ndarray) -> float:
     """Return ``Re Tr[rho matrix]`` for the current AO representation."""
 
-    rho = np.asarray(density, dtype=np.complex128)
-    op = np.asarray(matrix, dtype=np.complex128)
-    if rho.shape != op.shape or rho.ndim != 2 or rho.shape[0] != rho.shape[1]:
+    rho = _square_matrix(density, name="density")
+    op = _square_matrix(matrix, name="matrix")
+    if rho.shape != op.shape:
         raise ValueError("density and matrix must be square arrays with the same shape")
     return float(np.trace(rho @ op).real)
 
@@ -62,6 +69,19 @@ def p0_site_populations(
     return site_populations(density, geometry, t)
 
 
+def p0_site_charges(
+    density: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    *,
+    charge: float | None = None,
+) -> np.ndarray:
+    """Return source charges ``q N_a`` conjugate to P0 site scalar sources."""
+
+    q = geometry.charge if charge is None else float(charge)
+    return q * p0_site_populations(density, geometry, t)
+
+
 def p0_dipole_moment(
     density: np.ndarray,
     geometry: PeierlsGeometry,
@@ -80,3 +100,98 @@ def p0_dipole_moment(
     q = geometry.charge if charge is None else float(charge)
     populations = p0_site_populations(density, geometry, t)
     return q * np.einsum("a,ax->x", populations, geometry.atom_coords)
+
+
+def p0_directed_block(
+    matrix: np.ndarray,
+    geometry: PeierlsGeometry,
+    row_atom: int,
+    col_atom: int,
+) -> np.ndarray:
+    """Return the AO matrix containing only one directed atom-pair block."""
+
+    if row_atom < 0 or row_atom >= geometry.anchors.natom:
+        raise ValueError("row_atom out of range")
+    if col_atom < 0 or col_atom >= geometry.anchors.natom:
+        raise ValueError("col_atom out of range")
+    source = _square_matrix(matrix, name="matrix")
+    if source.shape != geometry.overlap0.shape:
+        raise ValueError(f"matrix must have shape {geometry.overlap0.shape}")
+    block = np.zeros_like(source)
+    rows = geometry.anchors.ao_to_atom == row_atom
+    cols = geometry.anchors.ao_to_atom == col_atom
+    block[np.ix_(rows, cols)] = source[np.ix_(rows, cols)]
+    return block
+
+
+def p0_graph_currents(
+    density: np.ndarray,
+    hamiltonian: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    *,
+    covariant_metric_dot: np.ndarray | None = None,
+) -> np.ndarray:
+    """Return the antisymmetric P0 source graph current matrix.
+
+    The current is the source derivative with respect to the oriented bond
+    source ``Acal_ab`` and satisfies the Ward identity
+    ``dQ_a/dt + sum_b I_ab = 0`` in the continuous P0 equations of motion.
+
+    For a pair of sites ``a != b`` the implemented density-matrix form is
+
+    ``I_ab = q/hbar Im Tr[rho(S_ab S^-1 K + K^dag S^-1 S_ab)]``
+    ``      + 2q/hbar Im Tr[rho H_ba]``,
+
+    with ``K = H - i hbar/2 D_t S``.  In an orthogonal basis the overlap-block
+    term vanishes and this reduces to the usual bond current
+    ``2q/hbar Im Tr[rho H_ba]``.
+    """
+
+    rho = _square_matrix(density, name="density")
+    h = _square_matrix(hamiltonian, name="hamiltonian")
+    if rho.shape != geometry.overlap0.shape or h.shape != geometry.overlap0.shape:
+        raise ValueError(f"density and hamiltonian must have shape {geometry.overlap0.shape}")
+
+    s = geometry.metric(t)
+    s_inv = np.linalg.inv(s)
+    ds_cov = (
+        geometry.covariant_metric_dot(t)
+        if covariant_metric_dot is None
+        else _square_matrix(covariant_metric_dot, name="covariant_metric_dot")
+    )
+    if ds_cov.shape != geometry.overlap0.shape:
+        raise ValueError(f"covariant_metric_dot must have shape {geometry.overlap0.shape}")
+    k = h - 0.5j * geometry.hbar * ds_cov
+
+    natom = geometry.anchors.natom
+    currents = np.zeros((natom, natom), dtype=float)
+    prefactor = geometry.charge / geometry.hbar
+    for a in range(natom):
+        for b in range(natom):
+            if a == b:
+                continue
+            s_ab = p0_directed_block(s, geometry, a, b)
+            h_ba = p0_directed_block(h, geometry, b, a)
+            overlap_term = np.trace(rho @ (s_ab @ s_inv @ k + k.conj().T @ s_inv @ s_ab))
+            hamiltonian_term = np.trace(rho @ h_ba)
+            currents[a, b] = (
+                prefactor * overlap_term.imag
+                + 2.0 * prefactor * hamiltonian_term.imag
+            )
+    return 0.5 * (currents - currents.T)
+
+
+def p0_continuity_residual(
+    charge_derivative: np.ndarray,
+    graph_currents: np.ndarray,
+) -> np.ndarray:
+    """Return ``dQ_a/dt + sum_b I_ab`` for P0 source charges/currents."""
+
+    dqdt = np.asarray(charge_derivative, dtype=float)
+    currents = np.asarray(graph_currents, dtype=float)
+    if currents.ndim != 2 or currents.shape[0] != currents.shape[1]:
+        raise ValueError("graph_currents must be a square matrix")
+    if dqdt.shape != (currents.shape[0],):
+        raise ValueError("charge_derivative must match graph_currents dimension")
+    return dqdt + np.sum(currents, axis=1)
