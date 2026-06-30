@@ -40,6 +40,7 @@ from .observables import (
     p0_directed_block,
     p0_dipole_moment,
     p0_graph_currents,
+    p0_site_charge_derivative,
     p0_site_charges,
     p0_site_populations,
 )
@@ -91,6 +92,7 @@ __all__ = [
     "p0_directed_block",
     "p0_dipole_moment",
     "p0_graph_currents",
+    "p0_site_charge_derivative",
     "p0_site_charges",
     "p0_site_populations",
     "save_excitations",

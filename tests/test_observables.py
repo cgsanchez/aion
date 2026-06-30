@@ -13,6 +13,7 @@ from aion.observables import (
     p0_continuity_residual,
     p0_dipole_moment,
     p0_graph_currents,
+    p0_site_charge_derivative,
     p0_site_charges,
     p0_site_populations,
 )
@@ -188,6 +189,19 @@ def test_p0_graph_currents_satisfy_nonorthogonal_continuity():
     rho = density_from_coefficients(coeff, occupations)
     currents = p0_graph_currents(rho, h, geometry, 0.0)
 
+    coeff_dot = -1j * np.linalg.solve(s0, h @ coeff)
+    rho_dot = (
+        (coeff_dot * occupations[None, :]) @ coeff.conj().T
+        + (coeff * occupations[None, :]) @ coeff_dot.conj().T
+    )
+    exact_charge_derivative = p0_site_charge_derivative(
+        rho,
+        rho_dot,
+        geometry,
+        0.0,
+    )
+    exact_residual = p0_continuity_residual(exact_charge_derivative, currents)
+
     dt = 1.0e-5
     coeff_plus = _constant_metric_step(coeff, s0, h, dt)
     coeff_minus = _constant_metric_step(coeff, s0, h, -dt)
@@ -200,4 +214,6 @@ def test_p0_graph_currents_satisfy_nonorthogonal_continuity():
     residual = p0_continuity_residual(charge_derivative, currents)
 
     assert np.linalg.norm(currents + currents.T) < 1.0e-14
+    assert np.linalg.norm(exact_residual) < 1.0e-14
+    assert np.linalg.norm(charge_derivative - exact_charge_derivative) < 1.0e-9
     assert np.linalg.norm(residual) < 1.0e-9

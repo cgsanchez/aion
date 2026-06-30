@@ -82,6 +82,39 @@ def p0_site_charges(
     return q * p0_site_populations(density, geometry, t)
 
 
+def p0_site_charge_derivative(
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    *,
+    metric_dot: np.ndarray | None = None,
+    charge: float | None = None,
+) -> np.ndarray:
+    """Return ``d/dt [q/2 Tr rho {M_a,S}]`` for P0 source charges."""
+
+    rho = _square_matrix(density, name="density")
+    rho_dot = _square_matrix(density_dot, name="density_dot")
+    if rho.shape != geometry.overlap0.shape or rho_dot.shape != geometry.overlap0.shape:
+        raise ValueError(f"density and density_dot must have shape {geometry.overlap0.shape}")
+    s_dot = (
+        geometry.ordinary_metric_dot(t)
+        if metric_dot is None
+        else _square_matrix(metric_dot, name="metric_dot")
+    )
+    if s_dot.shape != geometry.overlap0.shape:
+        raise ValueError(f"metric_dot must have shape {geometry.overlap0.shape}")
+
+    q = geometry.charge if charge is None else float(charge)
+    derivatives = []
+    for atom in range(geometry.anchors.natom):
+        diag = geometry.anchors.site_projector_diagonal(atom)
+        op = 0.5 * (diag[:, None] * geometry.metric(t) + geometry.metric(t) * diag[None, :])
+        op_dot = 0.5 * (diag[:, None] * s_dot + s_dot * diag[None, :])
+        derivatives.append(q * (np.trace(rho_dot @ op) + np.trace(rho @ op_dot)).real)
+    return np.asarray(derivatives)
+
+
 def p0_dipole_moment(
     density: np.ndarray,
     geometry: PeierlsGeometry,

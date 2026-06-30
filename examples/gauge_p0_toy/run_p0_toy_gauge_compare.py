@@ -42,6 +42,7 @@ from aion import (
     electronic_energy,
     p0_graph_currents,
     p0_dipole_moment,
+    p0_site_charge_derivative,
     p0_site_charges,
     p0_site_populations,
 )
@@ -147,12 +148,21 @@ def record_observables(
 ) -> dict[str, float | str]:
     rho = density_from_coefficients(coeff, occupations)
     hamiltonian = model.hamiltonian(rho, time, geometry)
+    coeff_dot = coefficient_derivative(coeff, hamiltonian, geometry, time)
+    rho_dot = density_dot_from_coefficients(coeff, coeff_dot, occupations)
     populations = p0_site_populations(rho, geometry, time)
     charges = p0_site_charges(rho, geometry, time)
+    charge_derivative = p0_site_charge_derivative(
+        rho,
+        rho_dot,
+        geometry,
+        time,
+    )
     dipole = p0_dipole_moment(rho, geometry, time)
     metric = geometry.metric(time)
     currents = p0_graph_currents(rho, hamiltonian, geometry, time)
     current_balance = np.sum(currents, axis=1)
+    continuity_residual = charge_derivative + current_balance
 
     row: dict[str, float | str] = {
         "step": step,
@@ -166,15 +176,51 @@ def record_observables(
         "midpoint_iterations": midpoint_iterations,
         "hamiltonian_residual": hamiltonian_residual,
         "max_abs_current": float(np.max(np.abs(currents))),
+        "instantaneous_continuity_residual_norm": float(
+            np.linalg.norm(continuity_residual)
+        ),
     }
     for atom_index, population in enumerate(populations):
         row[f"population_{atom_index}"] = float(population)
         row[f"charge_{atom_index}"] = float(charges[atom_index])
+        row[f"charge_derivative_{atom_index}"] = float(charge_derivative[atom_index])
         row[f"current_balance_{atom_index}"] = float(current_balance[atom_index])
+        row[f"continuity_residual_{atom_index}"] = float(
+            continuity_residual[atom_index]
+        )
     for row_atom in range(currents.shape[0]):
         for col_atom in range(row_atom + 1, currents.shape[1]):
             row[f"current_{row_atom}_{col_atom}"] = float(currents[row_atom, col_atom])
     return row
+
+
+def coefficient_derivative(
+    coeff: np.ndarray,
+    hamiltonian: np.ndarray,
+    geometry: PeierlsGeometry,
+    time: float,
+) -> np.ndarray:
+    """Instantaneous P0 EOM derivative for continuity diagnostics."""
+
+    metric = geometry.metric(time)
+    covariant_metric_dot = geometry.covariant_metric_dot(time)
+    sigma = geometry.ao_sigma(time)
+    return (
+        (-1j / geometry.hbar) * np.linalg.solve(metric, hamiltonian @ coeff)
+        - 0.5 * np.linalg.solve(metric, covariant_metric_dot @ coeff)
+        - sigma[:, None] * coeff
+    )
+
+
+def density_dot_from_coefficients(
+    coeff: np.ndarray,
+    coeff_dot: np.ndarray,
+    occupations: np.ndarray,
+) -> np.ndarray:
+    return (
+        (coeff_dot * occupations[None, :]) @ coeff.conj().T
+        + (coeff * occupations[None, :]) @ coeff_dot.conj().T
+    )
 
 
 def run_one_gauge(
@@ -311,6 +357,9 @@ def summarize_gauge_errors(
             ),
             "max_continuity_residual": float(
                 0.0 if continuity.size == 0 else np.max(np.linalg.norm(continuity, axis=1))
+            ),
+            "max_instantaneous_continuity_residual": float(
+                np.max(_series(rows, "instantaneous_continuity_residual_norm"))
             ),
             "max_abs_current": float(np.max(_series(rows, "max_abs_current"))),
         }
@@ -454,7 +503,8 @@ def main() -> None:
             "max_energy_abs_error={max_energy_abs_error:.3e}".format(**values),
             "max_population_norm_error={max_population_norm_error:.3e}".format(**values),
             "max_orthonormality_error={max_orthonormality_error:.3e}".format(**values),
-            "max_continuity_residual={max_continuity_residual:.3e}".format(**values),
+            "max_instantaneous_continuity_residual={max_instantaneous_continuity_residual:.3e}".format(**values),
+            "max_sampled_continuity_residual={max_continuity_residual:.3e}".format(**values),
             "max_abs_current={max_abs_current:.3e}".format(**values),
         )
 
