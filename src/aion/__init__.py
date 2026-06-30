@@ -48,6 +48,7 @@ from .observables import (
     p0_site_populations,
     p0_source_power,
 )
+from .pyscf_p0 import PyscfP0LdaModel, PyscfP0Reference
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
 from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
 from .variable_metric import (
@@ -72,6 +73,8 @@ __all__ = [
     "PeierlsGeometry",
     "CNPropagationRecord",
     "PropagationRecord",
+    "PyscfP0LdaModel",
+    "PyscfP0Reference",
     "SCEMStepResult",
     "SCEMRunSummary",
     "SiteHubbardModel",

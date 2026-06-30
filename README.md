@@ -90,6 +90,8 @@ main implementation.
   propagation comparing length, mixed, and velocity gauges on source
   observables, graph currents, continuity, and power diagnostics.  Use
   `--model hubbard` to exercise the nonlinear midpoint solve.
+- `examples/pyscf_p0_bridge/run_h2_p0_one_body.py`: H2 P0 one-body propagation
+  using real PySCF Gaussian AO overlap and core Hamiltonian matrices.
 - `examples/small_molecule_references/run_diatomic_kick_spectrum.py`: reference
   diatomic kick spectrum runner with CN, EP-PC1, and SCEM options.
 
