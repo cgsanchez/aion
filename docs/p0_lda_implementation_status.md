@@ -1,7 +1,7 @@
-# P0 Pure-DFT Implementation Status
+# P0/P0+E1 Pure-DFT Implementation Status
 
-This note records the current implementation state of the pure Peierls P0 layer
-in `aion`.  It should stay synchronized with
+This note records the current implementation state of the pure Peierls P0 and
+first electric finite-spread P0+E1 layers in `aion`.  It should stay synchronized with
 `docs/gauge_invariant_implementation_spec.md` when the design changes.
 
 ## Scope
@@ -51,8 +51,7 @@ H_P0[rho,t] = theta(t) * (hcore0 + veff_DFT[rho0])
 ```
 
 and evaluates the PySCF total energy from `rho0`.  This is a P0 Peierls-dressed
-pure-DFT model, not yet a P0+E1 model and not a GIAO/London-orbital
-implementation.
+pure-DFT model and not a GIAO/London-orbital implementation.
 
 The GGA path is accepted only through PySCF's ordinary restricted DFT builders:
 the P0 layer inverse-dresses the density, PySCF evaluates the field-free GGA
@@ -61,6 +60,41 @@ regression tests verify by central finite differences that the returned bare
 and P0-dressed PBE Hxc matrices are the functional derivatives of their
 corresponding energies along real symmetric and complex Hermitian density
 directions.
+
+## P0+E1 Electric Layer
+
+The first electric finite-spread layer is implemented in `src/aion/p0_e1.py`.
+The primitive object is the AO-pair central dipole
+
+```text
+d^alpha_mu_nu = q ( r^alpha_mu_nu - R^alpha_mu_nu S_mu_nu )
+R_mu_nu = 0.5 (R_anchor(mu) + R_anchor(nu))
+```
+
+These are the dressable E1 matrices:
+
+```text
+d_P^alpha(t) = theta(t) * d^alpha
+V_E1(t) = - sum_alpha E_alpha(t) d_P^alpha(t)
+```
+
+`P0E1Model` wraps any existing P0 model and adds `V_E1` to its Hamiltonian and
+`Tr rho V_E1` to its energy.  The PySCF helper
+`pyscf_central_dipole_matrices(reference)` builds the bare central dipoles from
+the analytic `int1e_r` AO position integrals.
+
+For length gauge, the diagnostic pair-center scalar matrix plus `V_E1`
+reconstructs the ordinary AO length-gauge matrix:
+
+```text
+q Phi(R_mu_nu) S_mu_nu + V_E1_mu_nu = q Phi(r)_mu_nu.
+```
+
+The P0+E1 electronic dipole observable is
+
+```text
+mu = q sum_a N_a R_a + sum_alpha e_alpha Tr[rho d_P^alpha].
+```
 
 ## Propagation
 
@@ -94,11 +128,13 @@ post-kick Peierls metric before propagation.
 
 ## Observables And Diagnostics
 
-The source observables are implemented for P0:
+The source observables are implemented for P0, with the first P0+E1 dipole
+helper available:
 
 - Mulliken/source site populations,
 - source charges `Q_a = q N_a`,
 - P0 electronic dipole `sum_a Q_a R_a`,
+- P0+E1 electronic dipole `q sum_a N_a R_a + Tr rho d_P`,
 - graph currents,
 - instantaneous continuity residual,
 - source power,
@@ -137,6 +173,12 @@ Current tests cover:
 - PySCF LDA static-B symmetric vs Landau gauge covariance for H2O,
 - analytic sin² impulse consistency,
 - velocity-kick metric transformation.
+- P0+E1 central dipole construction from PySCF `int1e_r`,
+- P0+E1 length-gauge reconstruction of ordinary AO dipole coupling,
+- P0+E1 dressed central-dipole Hermiticity,
+- P0+E1 zero-field reduction to the base P0 model,
+- P0+E1 total dipole reconstruction of the ordinary AO dipole,
+- P0+E1 short length/mixed/velocity gauge covariance for H2O.
 
 The small-molecule gauge suite includes H2, CO, N2, H2O, and CH4.
 
@@ -158,7 +200,8 @@ examples still use the strict LDA wrapper.
 
 This is a coherent P0 pure-DFT implementation, but it is not the full hierarchy.
 
-- No P0+E1 electric multipole layer yet.
+- P0+E1 currently covers uniform electric fields through central dipoles.  It
+  does not yet include higher electric gradients.
 - No B1-min or B1-full magnetic hierarchy yet.
 - GGA support currently relies on PySCF's field-free pure-GGA builders after
   inverse Peierls density dressing.  Hybrids and custom dressed exchange are not
@@ -171,12 +214,15 @@ This is a coherent P0 pure-DFT implementation, but it is not the full hierarchy.
   ground-state calculation.
 - The P0 dipole is the site/source dipole.  It is the correct observable for the
   P0 source hierarchy, but it is not the full AO dipole matrix used in ordinary
-  length-gauge TDDFT.
+  length-gauge TDDFT.  Use `p0_e1_dipole_moment` for the P0+E1 dipole.
+- Flat trajectory rows still record the P0 diagnostics.  The P0+E1 source
+  dipole is implemented, but E1 polarization charge/current rows and the full
+  E1 power theorem diagnostics are still pending.
 - The GPU backend has not yet been ported to this P0 pure-DFT runner path.
 
 ## Next Implementation Layer
 
-The next formal layer should be P0+E1 for pure DFT.  The first useful target is a
-toy/PySCF-compatible electric hierarchy extension with atom-centered first
-moments, gauge transformation rules, source observables, and Ward checks.  Only
-after P0+E1 is stable should we move to B1-min and then B1-full.
+The next work inside P0+E1 is to promote the E1 dipole and the corresponding
+polarization charge/current into the flat trajectory diagnostics and Ward
+checks, then run P0 vs P0+E1 spectra in length, velocity, and mixed gauges.
+After that the next formal layer is B1-min.

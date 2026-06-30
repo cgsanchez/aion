@@ -203,9 +203,10 @@ phase.
 Add the first electric finite-spread residual:
 
 ```text
-V_E1_ij = -Theta_ij E(R_ij,t).d_ij
-R_ij = (R_i + R_j)/2
-d_ij = q integral e_i*(r) e_j(r) (r - R_ij) dr
+d^alpha_ij = q integral e_i*(r) e_j(r) (r^alpha - R^alpha_ij) dr
+R_ij = (R_anchor(i) + R_anchor(j))/2
+d_P^alpha_ij(t) = Theta_ij(t) d^alpha_ij
+V_E1_ij(t) = - E_alpha(t) d_P^alpha_ij(t)
 ```
 
 For onsite blocks this is the ordinary AO dipole about the atom.
@@ -225,6 +226,12 @@ mixed gauge P0/P0+E1
 The length-gauge P0+E1 matrix should reproduce the usual full molecular dipole
 coupling when the P0 endpoint/Mulliken part and intrinsic E1 dipole part are
 combined.
+
+Current implementation status: `src/aion/p0_e1.py` implements the uniform-field
+central dipoles, Peierls dressing, `V_E1`, a `P0E1Model` wrapper, the P0+E1
+dipole observable, and PySCF construction from analytic `int1e_r` integrals.
+The P0+E1 polarization charge/current and full E1 power-theorem trajectory
+diagnostics are still pending.
 
 ### B1-min
 
@@ -483,6 +490,9 @@ with the source dipole from the same action.
 ### P0+E1 tests
 
 - Length-gauge P0+E1 external matrix equals the ordinary AO dipole coupling.
+- Dressed central dipoles are Hermitian.
+- P0+E1 total dipole reconstructs the ordinary AO dipole at zero field.
+- Short H2O trajectories agree in length, mixed, and velocity gauges.
 - P0 vs P0+E1 spectra can be compared in length and velocity gauges.
 - Source dipole and power theorem agree.
 
@@ -508,8 +518,10 @@ with the source dipole from the same action.
 5. Add P0 pure LDA/GGA bridge to PySCF.
 6. Add P0 charges, currents, dipole, and power diagnostics.
 7. Test length/velocity/interpolating gauge equivalence.
-8. Add E1 AO central dipole moments and `V_E1`.
-9. Compare P0 and P0+E1 spectra.
+8. Add E1 AO central dipole moments and `V_E1`. Done for uniform electric
+   fields.
+9. Add E1 polarization charge/current diagnostics and compare P0 and P0+E1
+   spectra.
 10. Port P0/P0+E1 pure-DFT path to GPU.
 11. Add B1-min uniform static `B`.
 12. Specify and then implement B1-full integral requirements.
