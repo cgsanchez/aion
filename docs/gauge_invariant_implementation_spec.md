@@ -146,6 +146,11 @@ Landau gauge with another perpendicular direction u'
 The total bond integral is the sum of the electric-gauge vector-potential
 contribution and the magnetic contribution.
 
+For the supported fields, both scalar-potential time integrals and
+vector-potential bond line integrals must be evaluated analytically from the
+source parametrization.  Numerical quadrature of source phases should not be
+part of the trusted P0 implementation.
+
 ## 3. Hierarchy
 
 Use the names from the formal note:
@@ -344,10 +349,24 @@ transport `G_sigma(t_a,t_b)` satisfying
 dG/dt = -sigma(t) G.
 ```
 
-For each AO, use the transport of its parent atom.  Pull endpoint and midpoint
-lower-index matrices into a common site-parallel frame, where the site
-connection is removed and `D_site S` becomes an ordinary time derivative of the
-transported metric.
+For each AO, use the transport of its parent atom.  For the analytic uniform
+fields in scope, evaluate
+
+```text
+G_sigma(t0,t1) = exp[- integral_t0^t1 sigma(t) dt]
+```
+
+from exact source primitives, not midpoint quadrature.  For the electric gauge
+family,
+
+```text
+integral Phi_a dt =
+[-(1-lambda(t)) K(t).R_a]_{t0}^{t1}.
+```
+
+Pull endpoint and midpoint lower-index matrices into a common site-parallel
+frame, where the site connection is removed and `D_site S` becomes an ordinary
+time derivative of the transported metric.
 
 ### Metric-sandwich exponential step
 

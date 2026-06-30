@@ -54,6 +54,42 @@ def test_peierls_metric_and_time_connection_are_metric_compatible():
     assert np.linalg.norm(omega + omega.conj().T - metric_dot) < 1.0e-12
 
 
+def test_site_transport_uses_exact_scalar_potential_integral():
+    anchors = AOAnchors(
+        atom_coords=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.4, -0.3, 0.2],
+                [-0.2, 0.8, 0.5],
+            ]
+        ),
+        ao_to_atom=np.array([0, 1, 2]),
+    )
+    s0 = np.eye(anchors.nao)
+    e = np.array([0.04, -0.02, 0.01])
+    electric = UniformElectricGauge(
+        field=_constant_vector(e),
+        field_integral=lambda t: e * t,
+        lambda_value=lambda t: 0.25 + 0.1 * t,
+        lambda_derivative=lambda _t: 0.1,
+    )
+    geometry = PeierlsGeometry(anchors, s0, electric=electric)
+
+    t0 = 0.3
+    t1 = 1.7
+    primitive0 = -(
+        1.0 - electric.lam(t0)
+    ) * np.einsum("x,ax->a", electric.impulse(t0), anchors.atom_coords)
+    primitive1 = -(
+        1.0 - electric.lam(t1)
+    ) * np.einsum("x,ax->a", electric.impulse(t1), anchors.atom_coords)
+    expected = np.exp(
+        -(1j * geometry.charge / geometry.hbar) * (primitive1 - primitive0)
+    )
+
+    assert np.linalg.norm(geometry.site_transport(t0, t1) - expected) < 1.0e-14
+
+
 def _site_phase_equivalence(
     reference: PeierlsGeometry,
     transformed: PeierlsGeometry,

@@ -33,9 +33,12 @@ class UniformElectricGauge:
     lambda_derivative: ScalarFunction = lambda _t: 0.0
 
     @classmethod
-    def length(cls, field: VectorFunction) -> "UniformElectricGauge":
-        zeros = lambda _t: np.zeros(3)
-        return cls(field=field, field_integral=zeros)
+    def length(
+        cls,
+        field: VectorFunction,
+        field_integral: VectorFunction,
+    ) -> "UniformElectricGauge":
+        return cls(field=field, field_integral=field_integral)
 
     @classmethod
     def velocity(
@@ -74,6 +77,24 @@ class UniformElectricGauge:
             + self.lam_dot(t) * self.impulse(t)
         )
         return np.asarray(coords, dtype=float) @ effective_field
+
+    def site_scalar_primitive(self, coords: np.ndarray, t: float) -> np.ndarray:
+        """Return an exact primitive whose time derivative is ``Phi_a(t)``."""
+
+        return np.asarray(coords, dtype=float) @ (
+            -(1.0 - self.lam(t)) * self.impulse(t)
+        )
+
+    def site_scalar_integral(
+        self,
+        coords: np.ndarray,
+        t0: float,
+        t1: float,
+    ) -> np.ndarray:
+        return self.site_scalar_primitive(coords, t1) - self.site_scalar_primitive(
+            coords,
+            t0,
+        )
 
     def bond_line_integrals(self, coords: np.ndarray, t: float) -> np.ndarray:
         displacements = _pair_displacements(np.asarray(coords, dtype=float))
@@ -139,6 +160,14 @@ class UniformMagneticGauge:
         return np.zeros((np.asarray(coords).shape[0], np.asarray(coords).shape[0]))
 
     def site_scalar_potential(self, coords: np.ndarray, _t: float | None = None) -> np.ndarray:
+        return np.zeros(np.asarray(coords).shape[0])
+
+    def site_scalar_integral(
+        self,
+        coords: np.ndarray,
+        _t0: float,
+        _t1: float,
+    ) -> np.ndarray:
         return np.zeros(np.asarray(coords).shape[0])
 
     def bond_electromotive_forces(self, coords: np.ndarray, _t: float | None = None) -> np.ndarray:

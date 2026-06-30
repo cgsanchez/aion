@@ -127,7 +127,10 @@ def test_length_and_velocity_gauge_site_populations_match_for_one_body_model():
     length = PeierlsGeometry(
         anchors,
         s0,
-        electric=UniformElectricGauge.length(_constant_vector(e)),
+        electric=UniformElectricGauge.length(
+            field=_constant_vector(e),
+            field_integral=lambda t: e * t,
+        ),
     )
     velocity = PeierlsGeometry(
         anchors,

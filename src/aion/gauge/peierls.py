@@ -41,6 +41,22 @@ class PeierlsGeometry:
             phi = phi + self.magnetic.site_scalar_potential(self.atom_coords, t)
         return phi
 
+    def site_scalar_integral(self, t0: float, t1: float) -> np.ndarray:
+        integral = np.zeros(self.anchors.natom, dtype=float)
+        if self.electric is not None:
+            integral = integral + self.electric.site_scalar_integral(
+                self.atom_coords,
+                t0,
+                t1,
+            )
+        if self.magnetic is not None:
+            integral = integral + self.magnetic.site_scalar_integral(
+                self.atom_coords,
+                t0,
+                t1,
+            )
+        return integral
+
     def site_sigma(self, t: float) -> np.ndarray:
         return (1j * self.charge / self.hbar) * self.site_scalar_potential(t)
 
@@ -105,12 +121,14 @@ class PeierlsGeometry:
         return metric * sigma[None, :] + 0.5 * self.covariant_metric_dot(t)
 
     def site_transport(self, t0: float, t1: float) -> np.ndarray:
-        """Midpoint site-parallel transport from ``t0`` to ``t1``."""
+        """Exact site-parallel transport for the analytic source family."""
 
         if t1 == t0:
             return np.ones(self.anchors.natom, dtype=np.complex128)
-        tm = 0.5 * (t0 + t1)
-        return np.exp(-self.site_sigma(tm) * (t1 - t0))
+        sigma_integral = (
+            1j * self.charge / self.hbar
+        ) * self.site_scalar_integral(t0, t1)
+        return np.exp(-sigma_integral)
 
     def ao_transport(self, t0: float, t1: float) -> np.ndarray:
         return self.anchors.lift_site_vector(self.site_transport(t0, t1))
