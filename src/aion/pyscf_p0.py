@@ -170,7 +170,9 @@ class PyscfP0LdaModel:
         rho = np.asarray(density, dtype=np.complex128)
         if rho.shape != geometry.overlap0.shape:
             raise ValueError(f"density must have shape {geometry.overlap0.shape}")
-        dressed = hermitian_part(geometry.theta(t) * rho)
+        # PySCF builds the field-free functional, so undo the Peierls dressing
+        # of the gauge-specific density before calling its AO builders.
+        dressed = hermitian_part(geometry.theta(t).conj() * rho)
         if self.real_density_for_veff:
             return np.asarray(dressed.real, dtype=float)
         return dressed

@@ -11,6 +11,8 @@ from aion import (
     density_from_coefficients,
     p0_dipole_moment,
     p0_site_populations,
+    record_p0_observables,
+    summarize_p0_gauge_errors,
 )
 
 
@@ -199,6 +201,81 @@ def test_pyscf_p0_lda_scem_step_is_gauge_covariant_for_h2():
         )
         < 1.0e-9
     )
+
+
+def test_pyscf_p0_lda_short_trajectory_diagnostics_are_gauge_covariant_for_h2():
+    reference = _lda_h2_reference()
+    model = PyscfP0LdaModel.from_reference(reference)
+    field = np.array([0.0, 0.0, 0.02])
+
+    def run(label: str, lambda_value: float):
+        electric = UniformElectricGauge(
+            field=_constant_vector(field),
+            field_integral=lambda t: field * t,
+            lambda_value=lambda _t: lambda_value,
+            lambda_derivative=lambda _t: 0.0,
+        )
+        geometry = reference.geometry(electric=electric)
+        rt = VariableMetricSCEM(geometry, model, reference.occupations)
+        coeff = reference.initial_coefficients()
+        rows = [
+            {
+                "gauge": label,
+                **record_p0_observables(
+                    step=0,
+                    time=0.0,
+                    coeff=coeff,
+                    geometry=geometry,
+                    model=model,
+                    occupations=reference.occupations,
+                ),
+            }
+        ]
+        dt = 0.02
+        for step in range(1, 4):
+            result = rt.step(
+                coeff,
+                time=(step - 1) * dt,
+                dt=dt,
+                midpoint_tolerance=1.0e-9,
+                density_tolerance=1.0e-9,
+                max_iterations=14,
+                mixing=0.7,
+            )
+            coeff = result.coeff_next
+            rows.append(
+                {
+                    "gauge": label,
+                    **record_p0_observables(
+                        step=step,
+                        time=step * dt,
+                        coeff=coeff,
+                        geometry=geometry,
+                        model=model,
+                        occupations=reference.occupations,
+                        midpoint_iterations=result.iterations,
+                        hamiltonian_residual=result.hamiltonian_residual,
+                        density_residual=result.density_residual,
+                    ),
+                }
+            )
+        return rows
+
+    rows_by_gauge = {
+        "length": run("length", 0.0),
+        "velocity": run("velocity", 1.0),
+    }
+    summary = summarize_p0_gauge_errors(rows_by_gauge)
+
+    assert summary["velocity"]["max_dipole_norm_error"] < 1.0e-8
+    assert summary["velocity"]["max_population_norm_error"] < 1.0e-8
+    assert summary["velocity"]["max_energy_abs_error"] < 1.0e-8
+    assert summary["length"]["max_orthonormality_error"] < 1.0e-11
+    assert summary["velocity"]["max_orthonormality_error"] < 1.0e-11
+    assert summary["length"]["max_instantaneous_continuity_residual"] < 1.0e-8
+    assert summary["velocity"]["max_instantaneous_continuity_residual"] < 1.0e-8
+    assert "source_power" in rows_by_gauge["length"][0]
+    assert "current_0_1" in rows_by_gauge["length"][0]
 
 
 def test_pyscf_p0_lda_rejects_non_lda_functional():

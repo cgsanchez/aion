@@ -36,17 +36,12 @@ from aion import (
     SiteHubbardModel,
     UniformElectricGauge,
     VariableMetricSCEM,
-    coefficient_orthonormality_error,
     density_from_coefficients,
-    electron_count,
-    electronic_energy,
-    p0_graph_currents,
-    p0_dipole_moment,
-    p0_dipole_power,
-    p0_site_charge_derivative,
-    p0_site_charges,
+    p0_natom_from_rows,
+    p0_row_series,
     p0_site_populations,
-    p0_source_power,
+    record_p0_observables,
+    summarize_p0_gauge_errors,
 )
 
 
@@ -137,141 +132,6 @@ def electric_source(
     )
 
 
-def record_observables(
-    *,
-    step: int,
-    time: float,
-    coeff: np.ndarray,
-    geometry: PeierlsGeometry,
-    model: LinearOneBodyModel,
-    occupations: np.ndarray,
-    midpoint_iterations: int,
-    hamiltonian_residual: float,
-) -> dict[str, float | str]:
-    rho = density_from_coefficients(coeff, occupations)
-    hamiltonian = model.hamiltonian(rho, time, geometry)
-    coeff_dot = coefficient_derivative(coeff, hamiltonian, geometry, time)
-    rho_dot = density_dot_from_coefficients(coeff, coeff_dot, occupations)
-    populations = p0_site_populations(rho, geometry, time)
-    charges = p0_site_charges(rho, geometry, time)
-    charge_derivative = p0_site_charge_derivative(
-        rho,
-        rho_dot,
-        geometry,
-        time,
-    )
-    dipole = p0_dipole_moment(rho, geometry, time)
-    metric = geometry.metric(time)
-    currents = p0_graph_currents(rho, hamiltonian, geometry, time)
-    current_balance = np.sum(currents, axis=1)
-    continuity_residual = charge_derivative + current_balance
-    energy = model_energy(model, rho, time, geometry, hamiltonian)
-    energy_dot = model_energy_derivative(model, rho, rho_dot, time, geometry)
-    source_power = p0_source_power(currents, geometry, time)
-    dipole_power = p0_dipole_power(
-        charge_derivative,
-        geometry,
-        electric_field_for_power(geometry, time),
-    )
-
-    row: dict[str, float | str] = {
-        "step": step,
-        "time_au": time,
-        "energy": energy,
-        "energy_derivative": energy_dot,
-        "source_power": source_power,
-        "dipole_power": dipole_power,
-        "power_residual": energy_dot - source_power,
-        "dipole_power_residual": source_power - dipole_power,
-        "electron_count": electron_count(rho, metric),
-        "dipole_x": float(dipole[0]),
-        "dipole_y": float(dipole[1]),
-        "dipole_z": float(dipole[2]),
-        "orthonormality_error": coefficient_orthonormality_error(coeff, metric),
-        "midpoint_iterations": midpoint_iterations,
-        "hamiltonian_residual": hamiltonian_residual,
-        "max_abs_current": float(np.max(np.abs(currents))),
-        "instantaneous_continuity_residual_norm": float(
-            np.linalg.norm(continuity_residual)
-        ),
-    }
-    for atom_index, population in enumerate(populations):
-        row[f"population_{atom_index}"] = float(population)
-        row[f"charge_{atom_index}"] = float(charges[atom_index])
-        row[f"charge_derivative_{atom_index}"] = float(charge_derivative[atom_index])
-        row[f"current_balance_{atom_index}"] = float(current_balance[atom_index])
-        row[f"continuity_residual_{atom_index}"] = float(
-            continuity_residual[atom_index]
-        )
-    for row_atom in range(currents.shape[0]):
-        for col_atom in range(row_atom + 1, currents.shape[1]):
-            row[f"current_{row_atom}_{col_atom}"] = float(currents[row_atom, col_atom])
-    return row
-
-
-def model_energy(
-    model,
-    density: np.ndarray,
-    time: float,
-    geometry: PeierlsGeometry,
-    hamiltonian: np.ndarray,
-) -> float:
-    if hasattr(model, "energy"):
-        return float(model.energy(density, time, geometry))
-    return electronic_energy(density, hamiltonian)
-
-
-def model_energy_derivative(
-    model,
-    density: np.ndarray,
-    density_dot: np.ndarray,
-    time: float,
-    geometry: PeierlsGeometry,
-    *,
-    eps: float = 1.0e-6,
-) -> float:
-    plus_density = density + eps * density_dot
-    minus_density = density - eps * density_dot
-    plus_energy = model.energy(plus_density, time + eps, geometry)
-    minus_energy = model.energy(minus_density, time - eps, geometry)
-    return float((plus_energy - minus_energy) / (2.0 * eps))
-
-
-def electric_field_for_power(geometry: PeierlsGeometry, time: float) -> np.ndarray:
-    if geometry.electric is None:
-        return np.zeros(3)
-    return geometry.electric.electric_field(time)
-
-
-def coefficient_derivative(
-    coeff: np.ndarray,
-    hamiltonian: np.ndarray,
-    geometry: PeierlsGeometry,
-    time: float,
-) -> np.ndarray:
-    """Instantaneous P0 EOM derivative for continuity diagnostics."""
-
-    metric = geometry.metric(time)
-    covariant_metric_dot = geometry.covariant_metric_dot(time)
-    sigma = geometry.ao_sigma(time)
-    return (
-        (-1j / geometry.hbar) * np.linalg.solve(metric, hamiltonian @ coeff)
-        - 0.5 * np.linalg.solve(metric, covariant_metric_dot @ coeff)
-        - sigma[:, None] * coeff
-    )
-
-
-def density_dot_from_coefficients(
-    coeff: np.ndarray,
-    coeff_dot: np.ndarray,
-    occupations: np.ndarray,
-) -> np.ndarray:
-    return (
-        (coeff_dot * occupations[None, :]) @ coeff.conj().T
-        + (coeff * occupations[None, :]) @ coeff_dot.conj().T
-    )
-
-
 def run_one_gauge(
     *,
     label: str,
@@ -316,7 +176,7 @@ def run_one_gauge(
     rows = [
         {
             "gauge": label,
-            **record_observables(
+            **record_p0_observables(
                 step=0,
                 time=0.0,
                 coeff=coeff,
@@ -343,7 +203,7 @@ def run_one_gauge(
         rows.append(
             {
                 "gauge": label,
-                **record_observables(
+                **record_p0_observables(
                     step=step,
                     time=step * dt,
                     coeff=coeff,
@@ -369,69 +229,11 @@ def write_rows(path: Path, rows_by_gauge: dict[str, list[dict[str, float | str]]
 
 
 def _series(rows: list[dict[str, float | str]], key: str) -> np.ndarray:
-    return np.asarray([float(row[key]) for row in rows], dtype=float)
+    return p0_row_series(rows, key)
 
 
 def _natom_from_rows(rows: list[dict[str, float | str]]) -> int:
-    return sum(1 for key in rows[0] if key.startswith("population_"))
-
-
-def summarize_gauge_errors(
-    rows_by_gauge: dict[str, list[dict[str, float | str]]],
-) -> dict[str, dict[str, float]]:
-    reference = rows_by_gauge["length"]
-    natom = _natom_from_rows(reference)
-    ref_energy = _series(reference, "energy")
-    ref_dipole = np.column_stack([_series(reference, f"dipole_{x}") for x in "xyz"])
-    ref_pop = np.column_stack(
-        [_series(reference, f"population_{i}") for i in range(natom)]
-    )
-
-    summary = {}
-    for label, rows in rows_by_gauge.items():
-        energy = _series(rows, "energy")
-        dipole = np.column_stack([_series(rows, f"dipole_{x}") for x in "xyz"])
-        pop = np.column_stack([_series(rows, f"population_{i}") for i in range(natom)])
-        continuity = trajectory_continuity_residual(rows)
-        summary[label] = {
-            "max_energy_abs_error": float(np.max(np.abs(energy - ref_energy))),
-            "max_dipole_norm_error": float(
-                np.max(np.linalg.norm(dipole - ref_dipole, axis=1))
-            ),
-            "max_population_norm_error": float(
-                np.max(np.linalg.norm(pop - ref_pop, axis=1))
-            ),
-            "max_orthonormality_error": float(
-                np.max(_series(rows, "orthonormality_error"))
-            ),
-            "max_continuity_residual": float(
-                0.0 if continuity.size == 0 else np.max(np.linalg.norm(continuity, axis=1))
-            ),
-            "max_instantaneous_continuity_residual": float(
-                np.max(_series(rows, "instantaneous_continuity_residual_norm"))
-            ),
-            "max_power_residual": float(np.max(np.abs(_series(rows, "power_residual")))),
-            "max_dipole_power_residual": float(
-                np.max(np.abs(_series(rows, "dipole_power_residual")))
-            ),
-            "max_abs_current": float(np.max(_series(rows, "max_abs_current"))),
-        }
-    return summary
-
-
-def trajectory_continuity_residual(rows: list[dict[str, float | str]]) -> np.ndarray:
-    """Central-difference ``dQ/dt + sum_b I_ab`` for recorded rows."""
-
-    if len(rows) < 3:
-        return np.empty((0, _natom_from_rows(rows)), dtype=float)
-    natom = _natom_from_rows(rows)
-    times = _series(rows, "time_au")
-    charges = np.column_stack([_series(rows, f"charge_{i}") for i in range(natom)])
-    balances = np.column_stack(
-        [_series(rows, f"current_balance_{i}") for i in range(natom)]
-    )
-    derivative = (charges[2:] - charges[:-2]) / (times[2:, None] - times[:-2, None])
-    return derivative + balances[1:-1]
+    return p0_natom_from_rows(rows)
 
 
 def plot_summary(
@@ -533,7 +335,7 @@ def main() -> None:
 
     csv_path = args.output_dir / "p0_toy_gauge_compare.csv"
     write_rows(csv_path, rows_by_gauge)
-    summary = summarize_gauge_errors(rows_by_gauge)
+    summary = summarize_p0_gauge_errors(rows_by_gauge)
 
     plot_path = args.output_dir / "p0_toy_gauge_compare.png"
     if not args.no_plot:
