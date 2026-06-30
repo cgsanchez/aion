@@ -22,23 +22,18 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from pyscf import dft, gto  # noqa: E402
 
 from aion import (  # noqa: E402
+    DEFAULT_GAUGE_LAMBDAS,
+    P0SCEMSettings,
     PyscfP0LdaModel,
     PyscfP0Reference,
-    UniformElectricGauge,
-    VariableMetricSCEM,
     p0_natom_from_rows,
     p0_row_series,
-    record_p0_observables,
+    run_p0_uniform_electric_gauge_comparison,
     summarize_p0_gauge_errors,
 )
 
 
 DEFAULT_OUTPUT_DIR = EXAMPLE_DIR / "results"
-GAUGES = {
-    "length": 0.0,
-    "mixed": 0.5,
-    "velocity": 1.0,
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,78 +68,6 @@ def build_reference(args: argparse.Namespace) -> PyscfP0Reference:
     if not mf.converged:
         raise RuntimeError("SCF did not converge")
     return PyscfP0Reference.from_mean_field(mf)
-
-
-def electric_source(lambda_value: float, field_z: float) -> UniformElectricGauge:
-    field = np.array([0.0, 0.0, field_z], dtype=float)
-    return UniformElectricGauge(
-        field=lambda _t: field,
-        field_integral=lambda t: field * t,
-        lambda_value=lambda _t: lambda_value,
-        lambda_derivative=lambda _t: 0.0,
-    )
-
-
-def run_one_gauge(
-    *,
-    label: str,
-    lambda_value: float,
-    reference: PyscfP0Reference,
-    model: PyscfP0LdaModel,
-    dt: float,
-    nsteps: int,
-    field_z: float,
-    mixing: float,
-    midpoint_tolerance: float,
-    density_tolerance: float,
-    max_iterations: int,
-) -> list[dict[str, float | int | str]]:
-    geometry = reference.geometry(electric=electric_source(lambda_value, field_z))
-    rt = VariableMetricSCEM(geometry, model, reference.occupations)
-
-    coeff = reference.initial_coefficients()
-    rows: list[dict[str, float | int | str]] = [
-        {
-            "gauge": label,
-            **record_p0_observables(
-                step=0,
-                time=0.0,
-                coeff=coeff,
-                geometry=geometry,
-                model=model,
-                occupations=reference.occupations,
-            ),
-        }
-    ]
-
-    for step in range(1, nsteps + 1):
-        result = rt.step(
-            coeff,
-            time=(step - 1) * dt,
-            dt=dt,
-            midpoint_tolerance=midpoint_tolerance,
-            density_tolerance=density_tolerance,
-            max_iterations=max_iterations,
-            mixing=mixing,
-        )
-        coeff = result.coeff_next
-        rows.append(
-            {
-                "gauge": label,
-                **record_p0_observables(
-                    step=step,
-                    time=step * dt,
-                    coeff=coeff,
-                    geometry=geometry,
-                    model=model,
-                    occupations=reference.occupations,
-                    midpoint_iterations=result.iterations,
-                    hamiltonian_residual=result.hamiltonian_residual,
-                    density_residual=result.density_residual,
-                ),
-            }
-        )
-    return rows
 
 
 def write_rows(
@@ -231,22 +154,23 @@ def main() -> None:
 
     reference = build_reference(args)
     model = PyscfP0LdaModel.from_reference(reference)
-    rows_by_gauge = {
-        label: run_one_gauge(
-            label=label,
-            lambda_value=lambda_value,
-            reference=reference,
-            model=model,
-            dt=args.dt,
-            nsteps=args.nsteps,
-            field_z=args.field_z,
-            mixing=args.mixing,
-            midpoint_tolerance=args.midpoint_tolerance,
-            density_tolerance=args.density_tolerance,
-            max_iterations=args.max_iterations,
-        )
-        for label, lambda_value in GAUGES.items()
-    }
+    settings = P0SCEMSettings(
+        dt=args.dt,
+        nsteps=args.nsteps,
+        midpoint_tolerance=args.midpoint_tolerance,
+        density_tolerance=args.density_tolerance,
+        max_iterations=args.max_iterations,
+        mixing=args.mixing,
+    )
+    rows_by_gauge = run_p0_uniform_electric_gauge_comparison(
+        geometry_factory=lambda electric: reference.geometry(electric=electric),
+        model=model,
+        occupations=reference.occupations,
+        coeff0=reference.initial_coefficients(),
+        field=np.array([0.0, 0.0, args.field_z], dtype=float),
+        settings=settings,
+        gauge_lambdas=DEFAULT_GAUGE_LAMBDAS,
+    )
 
     csv_path = args.output_dir / "h2_p0_lda_gauge_compare.csv"
     write_rows(csv_path, rows_by_gauge)

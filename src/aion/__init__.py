@@ -61,6 +61,13 @@ from .p0_diagnostics import (
     summarize_p0_gauge_errors,
     trajectory_continuity_residual,
 )
+from .p0_runner import (
+    DEFAULT_GAUGE_LAMBDAS,
+    P0SCEMSettings,
+    constant_uniform_electric_gauge,
+    run_p0_scem_trajectory,
+    run_p0_uniform_electric_gauge_comparison,
+)
 from .pyscf_p0 import PyscfP0LdaModel, PyscfP0Reference
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
 from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
@@ -85,10 +92,12 @@ __all__ = [
     "MidpointConvergenceError",
     "PeierlsGeometry",
     "CNPropagationRecord",
+    "DEFAULT_GAUGE_LAMBDAS",
     "PropagationRecord",
     "PyscfP0LdaModel",
     "PyscfP0Reference",
     "P0Row",
+    "P0SCEMSettings",
     "SCEMStepResult",
     "SCEMRunSummary",
     "SiteHubbardModel",
@@ -101,6 +110,7 @@ __all__ = [
     "casida_excitations",
     "coefficient_orthonormality_error",
     "coefficient_derivative",
+    "constant_uniform_electric_gauge",
     "density_from_coefficients",
     "density_derivative_from_coefficients",
     "electron_count",
@@ -128,6 +138,8 @@ __all__ = [
     "p0_site_populations",
     "p0_source_power",
     "record_p0_observables",
+    "run_p0_scem_trajectory",
+    "run_p0_uniform_electric_gauge_comparison",
     "save_excitations",
     "site_populations",
     "summarize_p0_gauge_errors",

@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from aion import (
+    P0SCEMSettings,
     PyscfP0LdaModel,
     PyscfP0Reference,
     UniformElectricGauge,
@@ -12,6 +13,7 @@ from aion import (
     p0_dipole_moment,
     p0_site_populations,
     record_p0_observables,
+    run_p0_uniform_electric_gauge_comparison,
     summarize_p0_gauge_errors,
 )
 
@@ -36,6 +38,23 @@ def _h2_mol():
 def _lda_h2_reference() -> PyscfP0Reference:
     dft, _, _ = _pyscf_modules()
     mf = dft.RKS(_h2_mol())
+    mf.xc = "lda,vwn"
+    mf.grids.level = 0
+    mf.conv_tol = 1.0e-11
+    mf.kernel()
+    assert mf.converged
+    return PyscfP0Reference.from_mean_field(mf)
+
+
+def _lda_reference(atom: str) -> PyscfP0Reference:
+    dft, gto, _ = _pyscf_modules()
+    mol = gto.M(
+        atom=atom,
+        basis="sto-3g",
+        unit="Angstrom",
+        verbose=0,
+    )
+    mf = dft.RKS(mol)
     mf.xc = "lda,vwn"
     mf.grids.level = 0
     mf.conv_tol = 1.0e-11
@@ -276,6 +295,58 @@ def test_pyscf_p0_lda_short_trajectory_diagnostics_are_gauge_covariant_for_h2():
     assert summary["velocity"]["max_instantaneous_continuity_residual"] < 1.0e-8
     assert "source_power" in rows_by_gauge["length"][0]
     assert "current_0_1" in rows_by_gauge["length"][0]
+
+
+@pytest.mark.parametrize(
+    ("atom", "field"),
+    [
+        (
+            "O 0.000000 0.000000 0.000000; "
+            "H 0.758602 0.000000 0.504284; "
+            "H -0.758602 0.000000 0.504284",
+            np.array([0.011, -0.017, 0.023]),
+        ),
+        (
+            "C 0.000000 0.000000 0.000000; "
+            "H 0.629118 0.629118 0.629118; "
+            "H -0.629118 -0.629118 0.629118; "
+            "H -0.629118 0.629118 -0.629118; "
+            "H 0.629118 -0.629118 -0.629118",
+            np.array([0.011, -0.017, 0.023]),
+        ),
+    ],
+)
+def test_pyscf_p0_lda_short_trajectory_is_gauge_covariant_for_nonlinear_molecules(
+    atom: str,
+    field: np.ndarray,
+):
+    reference = _lda_reference(atom)
+    model = PyscfP0LdaModel.from_reference(reference)
+    settings = P0SCEMSettings(
+        dt=0.02,
+        nsteps=2,
+        midpoint_tolerance=1.0e-9,
+        density_tolerance=1.0e-9,
+        max_iterations=18,
+        mixing=0.7,
+    )
+
+    rows_by_gauge = run_p0_uniform_electric_gauge_comparison(
+        geometry_factory=lambda electric: reference.geometry(electric=electric),
+        model=model,
+        occupations=reference.occupations,
+        coeff0=reference.initial_coefficients(),
+        field=field,
+        settings=settings,
+    )
+    summary = summarize_p0_gauge_errors(rows_by_gauge)
+
+    assert summary["mixed"]["max_dipole_norm_error"] < 1.0e-8
+    assert summary["velocity"]["max_dipole_norm_error"] < 1.0e-8
+    assert summary["mixed"]["max_population_norm_error"] < 1.0e-8
+    assert summary["velocity"]["max_population_norm_error"] < 1.0e-8
+    assert summary["mixed"]["max_energy_abs_error"] < 1.0e-8
+    assert summary["velocity"]["max_energy_abs_error"] < 1.0e-8
 
 
 def test_pyscf_p0_lda_rejects_non_lda_functional():
