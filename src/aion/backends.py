@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any
 
 import numpy as np
 import scipy.linalg
+
+
+os.environ.setdefault("CUPY_CACHE_DIR", "/tmp/aion-cupy-cache")
+os.environ.setdefault("CUDA_CACHE_PATH", "/tmp/aion-cuda-cache")
 
 
 @dataclass(frozen=True)
@@ -76,6 +81,10 @@ class CuPyBackend:
     is_gpu = True
 
     def __init__(self) -> None:
+        try:
+            import gpu4pyscf  # noqa: F401
+        except Exception:
+            pass
         import cupy
 
         self.cp = cupy

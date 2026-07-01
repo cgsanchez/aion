@@ -8,8 +8,9 @@ from typing import Iterator
 import numpy as np
 import scipy.linalg
 
+from .backends import CPUBackend, make_backend
 from .gauge import PeierlsGeometry
-from .matrix_models import density_from_coefficients, hermitian_part
+from .matrix_models import hermitian_part
 
 
 @dataclass(frozen=True)
@@ -30,18 +31,44 @@ class VariableMetricConvergenceError(RuntimeError):
     """Raised when the variable-metric midpoint fixed point fails."""
 
 
-def _metric_factors(metric: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    metric = hermitian_part(metric)
-    eig, vec = scipy.linalg.eigh(metric, check_finite=False)
-    if np.min(eig) <= 0.0:
+def _backend_hermitian_part(matrix, backend):
+    matrix = backend.asarray(matrix, dtype=np.complex128)
+    return 0.5 * (matrix + matrix.conj().T)
+
+
+def _transport_matrix_backend(matrix, transport, backend):
+    u = backend.asarray(transport, dtype=np.complex128)
+    m = backend.asarray(matrix, dtype=np.complex128)
+    return u.conj()[:, None] * m * u[None, :]
+
+
+def _transport_coefficients_backend(coeff, transport, backend):
+    u = backend.asarray(transport, dtype=np.complex128)
+    c = backend.asarray(coeff, dtype=np.complex128)
+    return u[:, None] * c
+
+
+def _metric_factors(metric: np.ndarray, backend=None) -> tuple[np.ndarray, np.ndarray]:
+    backend = CPUBackend() if backend is None else backend
+    metric = _backend_hermitian_part(metric, backend)
+    eig, vec = backend.eigh(metric)
+    if backend.min_float(eig) <= 0.0:
         raise np.linalg.LinAlgError("metric is not positive definite")
     sqrt = (vec * eig**0.5) @ vec.conj().T
     invsqrt = (vec * eig**-0.5) @ vec.conj().T
     return sqrt, invsqrt
 
 
-def _orthonormal_hamiltonian(hamiltonian: np.ndarray, metric_invsqrt: np.ndarray) -> np.ndarray:
-    return hermitian_part(metric_invsqrt @ hamiltonian @ metric_invsqrt)
+def _orthonormal_hamiltonian(
+    hamiltonian: np.ndarray,
+    metric_invsqrt: np.ndarray,
+    backend=None,
+) -> np.ndarray:
+    backend = CPUBackend() if backend is None else backend
+    return _backend_hermitian_part(
+        metric_invsqrt @ hamiltonian @ metric_invsqrt,
+        backend,
+    )
 
 
 def _exponential_action(
@@ -52,11 +79,14 @@ def _exponential_action(
     h_orth: np.ndarray,
     dt: float,
     hbar: float,
+    backend=None,
 ) -> np.ndarray:
-    eig, vec = scipy.linalg.eigh(hermitian_part(h_orth), check_finite=False)
+    backend = CPUBackend() if backend is None else backend
+    eig, vec = backend.eigh(_backend_hermitian_part(h_orth, backend))
     coeff_orth = start_metric_sqrt @ coeff
     propagated = vec @ (
-        np.exp((-1j * dt / hbar) * eig)[:, None] * (vec.conj().T @ coeff_orth)
+        backend.exp((-1j * dt / hbar) * eig)[:, None]
+        * (vec.conj().T @ coeff_orth)
     )
     return target_metric_invsqrt @ propagated
 
@@ -71,10 +101,13 @@ class VariableMetricSCEM:
         occupations: np.ndarray,
         *,
         hbar: float = 1.0,
+        backend: str | CPUBackend = "cpu",
     ) -> None:
         self.geometry = geometry
         self.model = model
+        self.backend = make_backend(backend)
         self.occupations = np.asarray(occupations, dtype=float)
+        self.occupations_backend = self.backend.asarray(self.occupations, dtype=float)
         if self.occupations.ndim != 1 or self.occupations.size == 0:
             raise ValueError("occupations must be a nonempty one-dimensional array")
         if hbar <= 0.0:
@@ -90,15 +123,17 @@ class VariableMetricSCEM:
         return self.geometry.anchors.nao
 
     def density_from_coefficients(self, coeff: np.ndarray) -> np.ndarray:
-        coeff = np.asarray(coeff, dtype=np.complex128)
+        coeff = self.backend.asarray(coeff, dtype=np.complex128)
         if coeff.shape != (self.nao, self.nocc):
             raise ValueError(f"coeff must have shape {(self.nao, self.nocc)}")
-        return density_from_coefficients(coeff, self.occupations)
+        return (coeff * self.occupations_backend[None, :]) @ coeff.conj().T
 
     def orthonormality_error(self, coeff: np.ndarray, t: float) -> float:
-        metric = self.geometry.metric(t)
+        metric = self.backend.asarray(self.geometry.metric(t), dtype=np.complex128)
+        coeff = self.backend.asarray(coeff, dtype=np.complex128)
         overlap = coeff.conj().T @ metric @ coeff
-        return float(np.linalg.norm(overlap - np.eye(self.nocc)))
+        eye = self.backend.eye(self.nocc, dtype=np.complex128)
+        return self.backend.norm_float(overlap - eye)
 
     def step(
         self,
@@ -124,32 +159,39 @@ class VariableMetricSCEM:
         if not (0.0 < mixing <= 1.0):
             raise ValueError("mixing must be in (0, 1]")
 
-        coeff = np.asarray(coeff, dtype=np.complex128)
+        backend = self.backend
+        coeff = backend.asarray(coeff, dtype=np.complex128)
         if coeff.shape != (self.nao, self.nocc):
             raise ValueError(f"coeff must have shape {(self.nao, self.nocc)}")
 
         t_mid = time + 0.5 * dt
         t_next = time + dt
-        u_mid = self.geometry.ao_transport(time, t_mid)
-        u_next = self.geometry.ao_transport(time, t_next)
+        u_mid = backend.asarray(
+            self.geometry.ao_transport(time, t_mid),
+            dtype=np.complex128,
+        )
+        u_next = backend.asarray(
+            self.geometry.ao_transport(time, t_next),
+            dtype=np.complex128,
+        )
 
-        s_start = self.geometry.metric(time)
-        s_mid = self.geometry.transport_matrix(self.geometry.metric(t_mid), u_mid)
-        s_next = self.geometry.transport_matrix(self.geometry.metric(t_next), u_next)
+        s_start = backend.asarray(self.geometry.metric(time), dtype=np.complex128)
+        s_mid = _transport_matrix_backend(self.geometry.metric(t_mid), u_mid, backend)
+        s_next = _transport_matrix_backend(self.geometry.metric(t_next), u_next, backend)
 
-        s_start_sqrt, _ = _metric_factors(s_start)
-        _, s_mid_invsqrt = _metric_factors(s_mid)
-        _, s_next_invsqrt = _metric_factors(s_next)
+        s_start_sqrt, _ = _metric_factors(s_start, backend)
+        _, s_mid_invsqrt = _metric_factors(s_mid, backend)
+        _, s_next_invsqrt = _metric_factors(s_next, backend)
 
         rho_start = self.density_from_coefficients(coeff)
         h_iter_original = self.model.hamiltonian(rho_start, t_mid, self.geometry)
-        h_iter = self.geometry.transport_matrix(h_iter_original, u_mid)
+        h_iter = _transport_matrix_backend(h_iter_original, u_mid, backend)
         previous_rho_mid = None
         h_residual = float("nan")
         d_residual = None
 
         for iteration in range(1, max_iterations + 1):
-            h_orth = _orthonormal_hamiltonian(h_iter, s_mid_invsqrt)
+            h_orth = _orthonormal_hamiltonian(h_iter, s_mid_invsqrt, backend)
             coeff_mid_parallel = _exponential_action(
                 coeff,
                 start_metric_sqrt=s_start_sqrt,
@@ -157,19 +199,31 @@ class VariableMetricSCEM:
                 h_orth=h_orth,
                 dt=0.5 * dt,
                 hbar=self.hbar,
+                backend=backend,
             )
-            coeff_mid = self.geometry.transport_coefficients(coeff_mid_parallel, u_mid)
-            rho_mid = hermitian_part(self.density_from_coefficients(coeff_mid))
+            coeff_mid = _transport_coefficients_backend(
+                coeff_mid_parallel,
+                u_mid,
+                backend,
+            )
+            rho_mid = _backend_hermitian_part(
+                self.density_from_coefficients(coeff_mid),
+                backend,
+            )
             h_built_original = self.model.hamiltonian(rho_mid, t_mid, self.geometry)
-            h_built = self.geometry.transport_matrix(h_built_original, u_mid)
-            h_built_orth = _orthonormal_hamiltonian(h_built, s_mid_invsqrt)
+            h_built = _transport_matrix_backend(h_built_original, u_mid, backend)
+            h_built_orth = _orthonormal_hamiltonian(
+                h_built,
+                s_mid_invsqrt,
+                backend,
+            )
 
-            numerator = np.linalg.norm(h_built_orth - h_orth)
-            denominator = max(1.0, float(np.linalg.norm(h_built_orth)))
+            numerator = backend.norm_float(h_built_orth - h_orth)
+            denominator = max(1.0, backend.norm_float(h_built_orth))
             h_residual = float(numerator / denominator)
             if previous_rho_mid is not None:
-                dnum = np.linalg.norm(rho_mid - previous_rho_mid)
-                dden = max(1.0, float(np.linalg.norm(rho_mid)))
+                dnum = backend.norm_float(rho_mid - previous_rho_mid)
+                dden = max(1.0, backend.norm_float(rho_mid))
                 d_residual = float(dnum / dden)
 
             converged = h_residual <= midpoint_tolerance
@@ -185,12 +239,17 @@ class VariableMetricSCEM:
                     h_orth=h_accept_orth,
                     dt=dt,
                     hbar=self.hbar,
+                    backend=backend,
                 )
-                coeff_next = self.geometry.transport_coefficients(
+                coeff_next = _transport_coefficients_backend(
                     coeff_next_parallel,
                     u_next,
+                    backend,
                 )
-                rho_next = hermitian_part(self.density_from_coefficients(coeff_next))
+                rho_next = _backend_hermitian_part(
+                    self.density_from_coefficients(coeff_next),
+                    backend,
+                )
                 return VariableMetricSCEMStepResult(
                     coeff_next=coeff_next,
                     rho_next=rho_next,
@@ -203,7 +262,10 @@ class VariableMetricSCEM:
                 )
 
             previous_rho_mid = rho_mid
-            h_iter = hermitian_part((1.0 - mixing) * h_iter + mixing * h_built)
+            h_iter = _backend_hermitian_part(
+                (1.0 - mixing) * h_iter + mixing * h_built,
+                backend,
+            )
 
         raise VariableMetricConvergenceError(
             "variable-metric SCEM midpoint did not converge: "

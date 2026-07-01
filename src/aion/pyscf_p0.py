@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .backends import CuPyBackend
 from .gauge import AOAnchors, PeierlsGeometry, UniformElectricGauge, UniformMagneticGauge
 from .matrix_models import LinearOneBodyModel, density_from_coefficients, hermitian_part
 
@@ -242,3 +243,102 @@ class PyscfP0LdaModel(PyscfP0DftModel):
 
     def _allowed_xc_types(self) -> tuple[str, ...]:
         return ("LDA",)
+
+
+@dataclass(frozen=True)
+class PyscfP0DftGpuModel:
+    """GPU P0 adiabatic pure-DFT model backed by GPU4PySCF builders.
+
+    The model keeps the propagated density, Fock/effective potential, and
+    dressed Hamiltonian on CuPy arrays.  It is currently restricted to pure
+    local/semi-local DFT with ``real_density_for_veff=True``; hybrids and
+    complex-density GPU ``get_veff`` need separate validation before use.
+    """
+
+    mf: object
+    hcore0: np.ndarray
+    real_density_for_veff: bool = True
+
+    @classmethod
+    def from_reference(
+        cls,
+        reference: PyscfP0Reference,
+        *,
+        real_density_for_veff: bool = True,
+    ) -> "PyscfP0DftGpuModel":
+        return cls(
+            reference.mf,
+            reference.hcore0,
+            real_density_for_veff=real_density_for_veff,
+        )
+
+    def __post_init__(self) -> None:
+        if not self.real_density_for_veff:
+            raise NotImplementedError(
+                "PyscfP0DftGpuModel currently requires real_density_for_veff=True"
+            )
+        _validate_rks_pure_dft(
+            self.mf,
+            allowed_xc_types=("LDA", "GGA"),
+            model_name=type(self).__name__,
+        )
+        if not hasattr(getattr(self.mf, "mo_coeff", None), "get"):
+            raise ValueError(
+                "PyscfP0DftGpuModel requires a GPU4PySCF mean-field object; "
+                "call to_gpu() before constructing the model"
+            )
+        backend = CuPyBackend()
+        hcore = backend.asarray(self.hcore0, dtype=np.complex128)
+        if hcore.ndim != 2 or hcore.shape[0] != hcore.shape[1]:
+            raise ValueError("hcore0 must be a square matrix")
+        object.__setattr__(self, "backend", backend)
+        object.__setattr__(self, "hcore0", hermitian_part(hcore))
+
+    @property
+    def mol(self):
+        return self.mf.mol
+
+    def dressed_density_for_pyscf(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ):
+        rho = self.backend.asarray(density, dtype=np.complex128)
+        if rho.shape != geometry.overlap0.shape:
+            raise ValueError(f"density must have shape {geometry.overlap0.shape}")
+        theta = self.backend.asarray(geometry.theta(t), dtype=np.complex128)
+        dressed = hermitian_part(theta.conj() * rho)
+        return self.backend.asarray(dressed.real, dtype=float)
+
+    def veff0(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ):
+        dm0 = self.dressed_density_for_pyscf(density, t, geometry)
+        return self.backend.asarray(
+            self.mf.get_veff(self.mol, dm0),
+            dtype=np.complex128,
+        )
+
+    def hamiltonian(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ):
+        h0 = self.hcore0 + self.veff0(density, t, geometry)
+        theta = self.backend.asarray(geometry.theta(t), dtype=np.complex128)
+        return hermitian_part(theta * h0)
+
+    def energy(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> float:
+        dm0 = self.dressed_density_for_pyscf(density, t, geometry)
+        energy = self.mf.energy_tot(dm=dm0, h1e=self.hcore0)
+        return self.backend.real_float(energy)

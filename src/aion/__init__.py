@@ -74,6 +74,16 @@ from .p0_e1 import (
     p0_pair_scalar_potential_matrix,
     pyscf_central_dipole_matrices,
 )
+from .p0_e2 import (
+    central_second_moment_matrices,
+    dressed_central_second_moment_matrices,
+    p0_e2_full_second_moment_matrices,
+    p0_e2_second_moment,
+    pair_center_second_moment_matrices,
+    pyscf_central_second_moment_matrices,
+    pyscf_e2_primitives,
+    traceless_quadrupole_from_second_moment,
+)
 from .p0_runner import (
     DEFAULT_GAUGE_LAMBDAS,
     P0SCEMSettings,
@@ -88,7 +98,12 @@ from .p0_runner import (
     transform_p0_coefficients_between_gauges,
     velocity_delta_kick_electric_gauge,
 )
-from .pyscf_p0 import PyscfP0DftModel, PyscfP0LdaModel, PyscfP0Reference
+from .pyscf_p0 import (
+    PyscfP0DftGpuModel,
+    PyscfP0DftModel,
+    PyscfP0LdaModel,
+    PyscfP0Reference,
+)
 from .rt_tddft import LengthGaugeRTTDDFT, PropagationRecord
 from .spectrum import KickSpectrum, kick_spectrum, write_kick_spectrum_csv
 from .variable_metric import (
@@ -116,6 +131,7 @@ __all__ = [
     "PropagationRecord",
     "P0E1Model",
     "PyscfP0DftModel",
+    "PyscfP0DftGpuModel",
     "PyscfP0LdaModel",
     "PyscfP0Reference",
     "P0Row",
@@ -133,6 +149,7 @@ __all__ = [
     "ao_pair_anchor_centers",
     "casida_excitations",
     "central_dipole_matrices",
+    "central_second_moment_matrices",
     "coefficient_orthonormality_error",
     "coefficient_derivative",
     "constant_uniform_electric_gauge",
@@ -140,6 +157,7 @@ __all__ = [
     "density_derivative_from_coefficients",
     "dressed_central_dipole_matrices",
     "dressed_central_dipole_matrix_dots",
+    "dressed_central_second_moment_matrices",
     "electron_count",
     "electric_field_for_power",
     "energy_derivative",
@@ -161,6 +179,8 @@ __all__ = [
     "p0_e1_dipole_moment",
     "p0_e1_dipole_power",
     "p0_e1_uniform_electric_potential",
+    "p0_e2_full_second_moment_matrices",
+    "p0_e2_second_moment",
     "p0_graph_currents",
     "p0_natom_from_rows",
     "p0_row_series",
@@ -170,7 +190,10 @@ __all__ = [
     "p0_site_populations",
     "p0_source_power",
     "p0_pair_scalar_potential_matrix",
+    "pair_center_second_moment_matrices",
     "pyscf_central_dipole_matrices",
+    "pyscf_central_second_moment_matrices",
+    "pyscf_e2_primitives",
     "record_p0_observables",
     "run_p0_electric_gauge_comparison",
     "run_p0_scem_trajectory",
@@ -183,6 +206,7 @@ __all__ = [
     "transition_polarization",
     "trajectory_continuity_residual",
     "transform_p0_coefficients_between_gauges",
+    "traceless_quadrupole_from_second_moment",
     "velocity_delta_kick_electric_gauge",
     "write_kick_spectrum_csv",
 ]

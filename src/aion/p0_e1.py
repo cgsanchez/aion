@@ -17,8 +17,17 @@ from .observables import (
 )
 
 
+def _array_module(value):
+    try:
+        import cupy
+    except Exception:
+        return np
+    return cupy.get_array_module(value)
+
+
 def _central_dipole_array(central_dipoles0: np.ndarray) -> np.ndarray:
-    array = np.asarray(central_dipoles0, dtype=np.complex128)
+    xp = _array_module(central_dipoles0)
+    array = xp.asarray(central_dipoles0, dtype=xp.complex128)
     if array.ndim != 3 or array.shape[0] != 3 or array.shape[1] != array.shape[2]:
         raise ValueError("central_dipoles0 must have shape (3, nao, nao)")
     return array
@@ -92,12 +101,13 @@ def dressed_central_dipole_matrices(
     """Return ``d_P^alpha(t) = Theta(t) * d^alpha``."""
 
     dipoles0 = _central_dipole_array(central_dipoles0)
+    xp = _array_module(dipoles0)
     if dipoles0.shape[1:] != geometry.overlap0.shape:
         raise ValueError(
             f"central_dipoles0 must have AO shape {geometry.overlap0.shape}"
         )
-    theta = geometry.theta(t)
-    dressed = np.empty_like(dipoles0)
+    theta = xp.asarray(geometry.theta(t), dtype=xp.complex128)
+    dressed = xp.empty_like(dipoles0)
     for axis in range(3):
         dressed[axis] = hermitian_part(theta * dipoles0[axis])
     return dressed
@@ -111,15 +121,18 @@ def dressed_central_dipole_matrix_dots(
     """Return the ordinary time derivative of ``d_P^alpha(t)``."""
 
     dipoles0 = _central_dipole_array(central_dipoles0)
+    xp = _array_module(dipoles0)
     if dipoles0.shape[1:] != geometry.overlap0.shape:
         raise ValueError(
             f"central_dipoles0 must have AO shape {geometry.overlap0.shape}"
         )
-    acal_dot = geometry.anchors.lift_site_matrix(
-        geometry.site_bond_line_integral_dots(t)
+    acal_dot = xp.asarray(
+        geometry.anchors.lift_site_matrix(geometry.site_bond_line_integral_dots(t)),
+        dtype=float,
     )
-    theta_dot = (1j * geometry.charge / geometry.hbar) * acal_dot * geometry.theta(t)
-    dots = np.empty_like(dipoles0)
+    theta = xp.asarray(geometry.theta(t), dtype=xp.complex128)
+    theta_dot = (1j * geometry.charge / geometry.hbar) * acal_dot * theta
+    dots = xp.empty_like(dipoles0)
     for axis in range(3):
         dots[axis] = hermitian_part(theta_dot * dipoles0[axis])
     return dots
@@ -145,7 +158,9 @@ def p0_e1_uniform_electric_potential(
     if electric_field.shape != (3,):
         raise ValueError("field must have shape (3,)")
     dressed = dressed_central_dipole_matrices(central_dipoles0, geometry, t)
-    return hermitian_part(-np.einsum("x,xij->ij", electric_field, dressed))
+    xp = _array_module(dressed)
+    field_backend = xp.asarray(electric_field, dtype=float)
+    return hermitian_part(-xp.einsum("x,xij->ij", field_backend, dressed))
 
 
 def p0_pair_scalar_potential_matrix(

@@ -6,6 +6,15 @@ import numpy as np
 import pytest
 import scipy.linalg
 
+from aion import (
+    P0E1Model,
+    PyscfP0DftGpuModel,
+    PyscfP0DftModel,
+    PyscfP0Reference,
+    UniformElectricGauge,
+    VariableMetricSCEM,
+    pyscf_central_dipole_matrices,
+)
 from aion.backends import make_backend
 from aion.cn_tddft import LengthGaugeCNRTTDDFT
 
@@ -244,3 +253,79 @@ def test_gpu4pyscf_run_scem_matches_propagate_scem_final_record():
     assert np.linalg.norm(summary.record_final.dipole - final_rec.dipole) < 1.0e-8
     assert abs(summary.record_final.electron_number - final_rec.electron_number) < 1.0e-8
     assert summary.record_final.orthonormality_error < 1.0e-8
+
+
+def test_gpu4pyscf_p0_e1_scem_matches_cpu_h2_short_step():
+    cupy = _require_cupy()
+    pytest.importorskip("gpu4pyscf")
+    from pyscf import dft, gto
+
+    mol = gto.M(
+        atom="H 0 0 -0.37; H 0 0 0.37",
+        basis="sto-3g",
+        unit="Angstrom",
+        verbose=0,
+    )
+    mf_cpu = dft.RKS(mol, xc="pbe").density_fit()
+    mf_cpu.grids.level = 0
+    mf_cpu.kernel()
+    assert mf_cpu.converged
+    mf_gpu = mf_cpu.to_gpu()
+    assert mf_gpu.converged
+
+    reference_cpu = PyscfP0Reference.from_mean_field(mf_cpu)
+    reference_gpu = PyscfP0Reference.from_mean_field(mf_gpu)
+    base_cpu = PyscfP0DftModel.from_reference(
+        reference_cpu,
+        real_density_for_veff=True,
+    )
+    base_gpu = PyscfP0DftGpuModel.from_reference(reference_gpu)
+    central_cpu = pyscf_central_dipole_matrices(reference_cpu)
+    central_gpu = cupy.asarray(central_cpu)
+    model_cpu = P0E1Model(base_cpu, central_cpu)
+    model_gpu = P0E1Model(base_gpu, central_gpu)
+
+    field = np.array([0.003, -0.001, 0.002])
+    electric = UniformElectricGauge(
+        field=lambda _t: field,
+        field_integral=lambda t: field * t,
+        lambda_value=lambda _t: 0.4,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    rt_cpu = VariableMetricSCEM(
+        reference_cpu.geometry(electric=electric),
+        model_cpu,
+        reference_cpu.occupations,
+        backend="cpu",
+    )
+    rt_gpu = VariableMetricSCEM(
+        reference_gpu.geometry(electric=electric),
+        model_gpu,
+        reference_gpu.occupations,
+        backend="gpu",
+    )
+
+    result_cpu = rt_cpu.step(
+        reference_cpu.initial_coefficients(),
+        time=0.0,
+        dt=0.02,
+        midpoint_tolerance=1.0e-9,
+        density_tolerance=1.0e-9,
+        max_iterations=8,
+        mixing=0.7,
+    )
+    result_gpu = rt_gpu.step(
+        cupy.asarray(reference_gpu.initial_coefficients(), dtype=cupy.complex128),
+        time=0.0,
+        dt=0.02,
+        midpoint_tolerance=1.0e-9,
+        density_tolerance=1.0e-9,
+        max_iterations=8,
+        mixing=0.7,
+    )
+    rt_gpu.backend.synchronize()
+
+    assert result_cpu.converged
+    assert result_gpu.converged
+    assert np.linalg.norm(cupy.asnumpy(result_gpu.rho_next) - result_cpu.rho_next) < 1.0e-7
+    assert rt_gpu.orthonormality_error(result_gpu.coeff_next, 0.02) < 1.0e-8

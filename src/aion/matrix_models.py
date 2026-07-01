@@ -9,18 +9,29 @@ import numpy as np
 from .gauge import PeierlsGeometry
 
 
+def _array_module(value):
+    try:
+        import cupy
+    except Exception:
+        return np
+    return cupy.get_array_module(value)
+
+
 def density_from_coefficients(coeff: np.ndarray, occupations: np.ndarray) -> np.ndarray:
-    coeff = np.asarray(coeff, dtype=np.complex128)
+    xp = _array_module(coeff)
+    coeff = xp.asarray(coeff, dtype=xp.complex128)
     occ = np.asarray(occupations, dtype=float)
     if coeff.ndim != 2:
         raise ValueError("coeff must be a two-dimensional array")
     if occ.shape != (coeff.shape[1],):
         raise ValueError("occupations must have one entry per occupied column")
-    return (coeff * occ[None, :]) @ coeff.conj().T
+    occ_backend = xp.asarray(occ, dtype=float)
+    return (coeff * occ_backend[None, :]) @ coeff.conj().T
 
 
 def hermitian_part(matrix: np.ndarray) -> np.ndarray:
-    matrix = np.asarray(matrix, dtype=np.complex128)
+    xp = _array_module(matrix)
+    matrix = xp.asarray(matrix, dtype=xp.complex128)
     return 0.5 * (matrix + matrix.conj().T)
 
 
