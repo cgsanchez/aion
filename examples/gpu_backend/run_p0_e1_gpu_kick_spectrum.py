@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GPU P0/P0+E1 velocity-gauge delta-kick trajectory and spectra."""
+"""GPU P0/P0+E1 delta-kick trajectory and spectra."""
 
 from __future__ import annotations
 
@@ -32,9 +32,8 @@ from aion import (  # noqa: E402
     PyscfP0DftGpuModel,
     PyscfP0Reference,
     VariableMetricSCEM,
-    apply_e1_central_delta_kick,
-    apply_p0_velocity_delta_kick,
     kick_spectrum,
+    metric_unitary_transform,
     operator_expectations,
     p0_dipole_operator_matrices,
     p0_e1_dipole_operator_matrices,
@@ -42,6 +41,7 @@ from aion import (  # noqa: E402
     pyscf_central_dipole_matrices,
     pyscf_central_second_moment_matrices,
     traceless_quadrupole_from_second_moment,
+    transform_p0_coefficients_between_gauges,
     velocity_delta_kick_electric_gauge,
     write_kick_spectrum_csv,
 )
@@ -80,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dt", type=float, default=0.05)
     parser.add_argument("--t-final", type=float, default=1000.0)
     parser.add_argument("--kick", type=float, default=1.0e-3)
+    parser.add_argument("--gauge", choices=("length", "velocity"), default="velocity")
     parser.add_argument("--level", choices=("p0", "p0-e1"), default="p0-e1")
     parser.add_argument(
         "--kick-level",
@@ -306,7 +307,7 @@ def main() -> None:
     )
 
     stem = (
-        f"p0_e1_kick_{args.level}_{kick_level}"
+        f"p0_e1_kick_{args.gauge}_{args.level}_{kick_level}"
         f"_t{label_float(args.t_final)}_dt{label_float(args.dt)}"
         f"_k{label_float(args.kick)}"
     )
@@ -325,40 +326,66 @@ def main() -> None:
     model: Any = base_model if args.level == "p0" else P0E1Model(base_model, central_dipoles)
 
     free_geometry = reference.geometry()
-    kicked_geometry = reference.geometry(
-        electric=velocity_delta_kick_electric_gauge(impulse)
-    )
-    coeff0 = apply_p0_velocity_delta_kick(
-        reference.initial_coefficients(),
+    p0_kick_ops = p0_dipole_operator_matrices(
         free_geometry,
-        kicked_geometry,
+        0.0,
+        backend="gpu",
     )
-    coeff = cupy.asarray(coeff0, dtype=cupy.complex128)
     if kick_level == "p0-e1":
-        coeff = apply_e1_central_delta_kick(
-            coeff,
-            impulse=impulse,
-            central_dipoles0=central_dipoles,
-            geometry=kicked_geometry,
+        kick_ops = p0_e1_dipole_operator_matrices(
+            central_dipoles,
+            free_geometry,
+            0.0,
             backend="gpu",
         )
+    else:
+        kick_ops = p0_kick_ops
+    kick_hamiltonian_integral = -cupy.einsum(
+        "x,xij->ij",
+        cupy.asarray(impulse, dtype=float),
+        kick_ops,
+    )
+    length_coeff = metric_unitary_transform(
+        cupy.asarray(reference.initial_coefficients(), dtype=cupy.complex128),
+        metric=free_geometry.metric(0.0),
+        integrated_hamiltonian=kick_hamiltonian_integral,
+        backend="gpu",
+    )
 
-    p0_dipole_ops = p0_dipole_operator_matrices(kicked_geometry, 0.0, backend="gpu")
+    if args.gauge == "velocity":
+        propagation_geometry = reference.geometry(
+            electric=velocity_delta_kick_electric_gauge(impulse)
+        )
+        coeff0 = transform_p0_coefficients_between_gauges(
+            cupy.asnumpy(length_coeff),
+            free_geometry,
+            propagation_geometry,
+        )
+        coeff = cupy.asarray(coeff0, dtype=cupy.complex128)
+    else:
+        propagation_geometry = free_geometry
+        coeff = length_coeff
+
+    p0_dipole_ops = p0_dipole_operator_matrices(
+        propagation_geometry,
+        0.0,
+        backend="gpu",
+    )
     e1_dipole_ops = p0_e1_dipole_operator_matrices(
         central_dipoles,
-        kicked_geometry,
+        propagation_geometry,
         0.0,
         backend="gpu",
     )
     e2_second_ops = p0_e2_second_moment_operator_matrices(
         central_dipoles0=central_dipoles,
         central_second_moments0=central_second,
-        geometry=kicked_geometry,
+        geometry=propagation_geometry,
         t=0.0,
         backend="gpu",
     )
     rt = VariableMetricSCEM(
-        kicked_geometry,
+        propagation_geometry,
         model,
         reference.occupations,
         backend="gpu",
@@ -368,6 +395,7 @@ def main() -> None:
     metadata: dict[str, object] = {
         "backend": "gpu",
         "integrator": "variable-metric SCEM",
+        "gauge": args.gauge,
         "level": args.level,
         "kick_level": kick_level,
         "chkfile": str(args.chkfile),
@@ -407,7 +435,7 @@ def main() -> None:
         time_au=0.0,
         rho=rho,
         coeff=coeff,
-        geometry=kicked_geometry,
+        geometry=propagation_geometry,
         backend=rt.backend,
         p0_dipole_ops=p0_dipole_ops,
         e1_dipole_ops=e1_dipole_ops,
@@ -447,7 +475,7 @@ def main() -> None:
             time_au=t_next,
             rho=rho,
             coeff=coeff,
-            geometry=kicked_geometry,
+            geometry=propagation_geometry,
             backend=rt.backend,
             p0_dipole_ops=p0_dipole_ops,
             e1_dipole_ops=e1_dipole_ops,
