@@ -9,7 +9,12 @@ import numpy as np
 
 from .gauge import AOAnchors, PeierlsGeometry
 from .matrix_models import hermitian_part
-from .observables import electronic_energy, matrix_expectation, p0_dipole_moment
+from .observables import (
+    electronic_energy,
+    matrix_expectation,
+    p0_dipole_derivative,
+    p0_dipole_moment,
+)
 
 
 def _central_dipole_array(central_dipoles0: np.ndarray) -> np.ndarray:
@@ -98,6 +103,28 @@ def dressed_central_dipole_matrices(
     return dressed
 
 
+def dressed_central_dipole_matrix_dots(
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+) -> np.ndarray:
+    """Return the ordinary time derivative of ``d_P^alpha(t)``."""
+
+    dipoles0 = _central_dipole_array(central_dipoles0)
+    if dipoles0.shape[1:] != geometry.overlap0.shape:
+        raise ValueError(
+            f"central_dipoles0 must have AO shape {geometry.overlap0.shape}"
+        )
+    acal_dot = geometry.anchors.lift_site_matrix(
+        geometry.site_bond_line_integral_dots(t)
+    )
+    theta_dot = (1j * geometry.charge / geometry.hbar) * acal_dot * geometry.theta(t)
+    dots = np.empty_like(dipoles0)
+    for axis in range(3):
+        dots[axis] = hermitian_part(theta_dot * dipoles0[axis])
+    return dots
+
+
 def p0_e1_uniform_electric_potential(
     central_dipoles0: np.ndarray,
     geometry: PeierlsGeometry,
@@ -155,6 +182,62 @@ def p0_e1_dipole_moment(
     return p0_dipole_moment(rho, geometry, t) + spread
 
 
+def p0_e1_dipole_derivative(
+    *,
+    charge_derivative: np.ndarray,
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    include_site: bool = True,
+) -> np.ndarray:
+    """Return ``d/dt [q sum_a N_a R_a + Tr(rho d_P)]``."""
+
+    rho = np.asarray(density, dtype=np.complex128)
+    rho_dot = np.asarray(density_dot, dtype=np.complex128)
+    dressed = dressed_central_dipole_matrices(central_dipoles0, geometry, t)
+    dressed_dot = dressed_central_dipole_matrix_dots(central_dipoles0, geometry, t)
+    spread_dot = np.asarray(
+        [
+            (
+                np.trace(rho_dot @ dressed[axis])
+                + np.trace(rho @ dressed_dot[axis])
+            ).real
+            for axis in range(3)
+        ]
+    )
+    if not include_site:
+        return spread_dot
+    return p0_dipole_derivative(charge_derivative, geometry) + spread_dot
+
+
+def p0_e1_dipole_power(
+    *,
+    charge_derivative: np.ndarray,
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    electric_field: np.ndarray,
+) -> float:
+    """Return ``E . dmu_E1/dt`` for a spatially uniform electric field."""
+
+    field = np.asarray(electric_field, dtype=float)
+    if field.shape != (3,):
+        raise ValueError("electric_field must have shape (3,)")
+    dipole_dot = p0_e1_dipole_derivative(
+        charge_derivative=charge_derivative,
+        density=density,
+        density_dot=density_dot,
+        central_dipoles0=central_dipoles0,
+        geometry=geometry,
+        t=t,
+    )
+    return float(np.dot(field, dipole_dot))
+
+
 @dataclass(frozen=True)
 class P0E1Model:
     """Add the first electric finite-spread residual to a P0 model."""
@@ -198,12 +281,22 @@ class P0E1Model:
         t: float,
         geometry: PeierlsGeometry,
     ) -> float:
+        """Return the internal/base material energy, excluding source coupling."""
+
         if hasattr(self.base_model, "energy"):
-            base_energy = float(self.base_model.energy(density, t, geometry))
-        else:
-            base_h = self.base_model.hamiltonian(density, t, geometry)
-            base_energy = electronic_energy(density, base_h)
-        return base_energy + matrix_expectation(
+            return float(self.base_model.energy(density, t, geometry))
+        base_h = self.base_model.hamiltonian(density, t, geometry)
+        return electronic_energy(density, base_h)
+
+    def coupling_energy(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> float:
+        """Return the instantaneous external E1 source coupling expectation."""
+
+        return matrix_expectation(
             density,
             self.e1_hamiltonian(t, geometry),
         )

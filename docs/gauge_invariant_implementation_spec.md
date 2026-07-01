@@ -230,8 +230,10 @@ combined.
 Current implementation status: `src/aion/p0_e1.py` implements the uniform-field
 central dipoles, Peierls dressing, `V_E1`, a `P0E1Model` wrapper, the P0+E1
 dipole observable, and PySCF construction from analytic `int1e_r` integrals.
-The P0+E1 polarization charge/current and full E1 power-theorem trajectory
-diagnostics are still pending.
+Flat trajectory diagnostics include the total P0+E1 dipole, its analytic time
+derivative, and the uniform-field internal-energy power residual.  A local
+atomic polarization charge/current decomposition still requires an explicit
+choice of partition functions `w_a`.
 
 ### B1-min
 
@@ -492,9 +494,12 @@ with the source dipole from the same action.
 - Length-gauge P0+E1 external matrix equals the ordinary AO dipole coupling.
 - Dressed central dipoles are Hermitian.
 - P0+E1 total dipole reconstructs the ordinary AO dipole at zero field.
+- P0+E1 total dipole derivative agrees with finite differences.
 - Short H2O trajectories agree in length, mixed, and velocity gauges.
+- The uniform-field internal-energy power residual is small when the P0+E1
+  source dipole from the same action is used.
 - P0 vs P0+E1 spectra can be compared in length and velocity gauges.
-- Source dipole and power theorem agree.
+- Local polarization charges/currents require a documented partition `w_a`.
 
 ### B1-min tests
 
@@ -520,8 +525,7 @@ with the source dipole from the same action.
 7. Test length/velocity/interpolating gauge equivalence.
 8. Add E1 AO central dipole moments and `V_E1`. Done for uniform electric
    fields.
-9. Add E1 polarization charge/current diagnostics and compare P0 and P0+E1
-   spectra.
+9. Compare P0 and P0+E1 spectra.
 10. Port P0/P0+E1 pure-DFT path to GPU.
 11. Add B1-min uniform static `B`.
 12. Specify and then implement B1-full integral requirements.

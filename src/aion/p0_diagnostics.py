@@ -22,6 +22,11 @@ from .observables import (
     p0_site_populations,
     p0_source_power,
 )
+from .p0_e1 import (
+    p0_e1_dipole_derivative,
+    p0_e1_dipole_moment,
+    p0_e1_dipole_power,
+)
 
 
 P0Row = dict[str, float | int | str]
@@ -199,6 +204,42 @@ def record_p0_observables(
             np.linalg.norm(continuity_residual)
         ),
     }
+    central_dipoles0 = getattr(model, "central_dipoles0", None)
+    if central_dipoles0 is not None:
+        e1_dipole = p0_e1_dipole_moment(rho, central_dipoles0, geometry, time)
+        e1_dipole_derivative = p0_e1_dipole_derivative(
+            charge_derivative=charge_derivative,
+            density=rho,
+            density_dot=rho_dot,
+            central_dipoles0=central_dipoles0,
+            geometry=geometry,
+            t=time,
+        )
+        e1_dipole_power = p0_e1_dipole_power(
+            charge_derivative=charge_derivative,
+            density=rho,
+            density_dot=rho_dot,
+            central_dipoles0=central_dipoles0,
+            geometry=geometry,
+            t=time,
+            electric_field=electric_field_for_power(geometry, time),
+        )
+        row.update(
+            {
+                "e1_dipole_x": float(e1_dipole[0]),
+                "e1_dipole_y": float(e1_dipole[1]),
+                "e1_dipole_z": float(e1_dipole[2]),
+                "e1_dipole_derivative_x": float(e1_dipole_derivative[0]),
+                "e1_dipole_derivative_y": float(e1_dipole_derivative[1]),
+                "e1_dipole_derivative_z": float(e1_dipole_derivative[2]),
+                "e1_dipole_power": e1_dipole_power,
+                "e1_power_residual": energy_dot - e1_dipole_power,
+            }
+        )
+        if hasattr(model, "coupling_energy"):
+            row["e1_coupling_energy"] = float(
+                model.coupling_energy(rho, time, geometry)
+            )
     for atom_index, population in enumerate(populations):
         row[f"population_{atom_index}"] = float(population)
         row[f"charge_{atom_index}"] = float(charges[atom_index])
@@ -264,6 +305,12 @@ def summarize_p0_gauge_errors(
     ref_pop = np.column_stack(
         [p0_row_series(reference, f"population_{atom}") for atom in range(natom)]
     )
+    has_e1 = all(f"e1_dipole_{axis}" in reference[0] for axis in "xyz")
+    ref_e1_dipole = None
+    if has_e1:
+        ref_e1_dipole = np.column_stack(
+            [p0_row_series(reference, f"e1_dipole_{axis}") for axis in "xyz"]
+        )
 
     summary = {}
     for label, rows in rows_by_gauge.items():
@@ -275,7 +322,7 @@ def summarize_p0_gauge_errors(
             [p0_row_series(rows, f"population_{atom}") for atom in range(natom)]
         )
         continuity = trajectory_continuity_residual(rows)
-        summary[label] = {
+        label_summary = {
             "max_energy_abs_error": float(np.max(np.abs(energy - ref_energy))),
             "max_dipole_norm_error": float(
                 np.max(np.linalg.norm(dipole - ref_dipole, axis=1))
@@ -302,4 +349,16 @@ def summarize_p0_gauge_errors(
             ),
             "max_abs_current": float(np.max(p0_row_series(rows, "max_abs_current"))),
         }
+        if has_e1 and all(f"e1_dipole_{axis}" in rows[0] for axis in "xyz"):
+            assert ref_e1_dipole is not None
+            e1_dipole = np.column_stack(
+                [p0_row_series(rows, f"e1_dipole_{axis}") for axis in "xyz"]
+            )
+            label_summary["max_e1_dipole_norm_error"] = float(
+                np.max(np.linalg.norm(e1_dipole - ref_e1_dipole, axis=1))
+            )
+            label_summary["max_e1_power_residual"] = float(
+                np.max(np.abs(p0_row_series(rows, "e1_power_residual")))
+            )
+        summary[label] = label_summary
     return summary

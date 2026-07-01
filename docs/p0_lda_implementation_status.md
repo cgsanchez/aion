@@ -78,8 +78,9 @@ d_P^alpha(t) = theta(t) * d^alpha
 V_E1(t) = - sum_alpha E_alpha(t) d_P^alpha(t)
 ```
 
-`P0E1Model` wraps any existing P0 model and adds `V_E1` to its Hamiltonian and
-`Tr rho V_E1` to its energy.  The PySCF helper
+`P0E1Model` wraps any existing P0 model and adds `V_E1` to its Hamiltonian.
+Its `energy()` method returns the internal/base material energy for power
+diagnostics; `coupling_energy()` returns `Tr rho V_E1`.  The PySCF helper
 `pyscf_central_dipole_matrices(reference)` builds the bare central dipoles from
 the analytic `int1e_r` AO position integrals.
 
@@ -135,6 +136,7 @@ helper available:
 - source charges `Q_a = q N_a`,
 - P0 electronic dipole `sum_a Q_a R_a`,
 - P0+E1 electronic dipole `q sum_a N_a R_a + Tr rho d_P`,
+- P0+E1 electronic dipole derivative and uniform-field `E . dmu/dt` power,
 - graph currents,
 - instantaneous continuity residual,
 - source power,
@@ -178,7 +180,9 @@ Current tests cover:
 - P0+E1 dressed central-dipole Hermiticity,
 - P0+E1 zero-field reduction to the base P0 model,
 - P0+E1 total dipole reconstruction of the ordinary AO dipole,
-- P0+E1 short length/mixed/velocity gauge covariance for H2O.
+- P0+E1 analytic dipole derivative against finite differences,
+- P0+E1 short length/mixed/velocity gauge covariance for H2O,
+- P0+E1 uniform-field internal-energy power residuals.
 
 The small-molecule gauge suite includes H2, CO, N2, H2O, and CH4.
 
@@ -215,14 +219,16 @@ This is a coherent P0 pure-DFT implementation, but it is not the full hierarchy.
 - The P0 dipole is the site/source dipole.  It is the correct observable for the
   P0 source hierarchy, but it is not the full AO dipole matrix used in ordinary
   length-gauge TDDFT.  Use `p0_e1_dipole_moment` for the P0+E1 dipole.
-- Flat trajectory rows still record the P0 diagnostics.  The P0+E1 source
-  dipole is implemented, but E1 polarization charge/current rows and the full
-  E1 power theorem diagnostics are still pending.
+- Flat trajectory rows record the total P0+E1 dipole, its analytic derivative,
+  and the uniform-field E1 power residual when the model exposes
+  `central_dipoles0`.  Local E1 polarization charge/current rows are still not
+  implemented because they require an explicit choice of atom partition
+  functions `w_a`.
 - The GPU backend has not yet been ported to this P0 pure-DFT runner path.
 
 ## Next Implementation Layer
 
-The next work inside P0+E1 is to promote the E1 dipole and the corresponding
-polarization charge/current into the flat trajectory diagnostics and Ward
-checks, then run P0 vs P0+E1 spectra in length, velocity, and mixed gauges.
-After that the next formal layer is B1-min.
+The next work inside P0+E1 is to choose and document an atom partition if local
+polarization charges/currents are needed.  For the current uniform-field scope,
+the practical next step is to run P0 vs P0+E1 spectra in length, velocity, and
+mixed gauges.  After that the next formal layer is B1-min.
