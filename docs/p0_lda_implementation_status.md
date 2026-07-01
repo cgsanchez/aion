@@ -174,7 +174,7 @@ Current tests cover:
 - PySCF LDA trajectory gauge covariance for non-linear H2O and CH4,
 - PySCF LDA static-B symmetric vs Landau gauge covariance for H2O,
 - analytic sin² impulse consistency,
-- velocity-kick metric transformation.
+- velocity-kick metric transformation,
 - P0+E1 central dipole construction from PySCF `int1e_r`,
 - P0+E1 length-gauge reconstruction of ordinary AO dipole coupling,
 - P0+E1 dressed central-dipole Hermiticity,
@@ -192,13 +192,14 @@ The main P0/PySCF examples are in `examples/pyscf_p0_bridge`:
 
 - `run_h2_p0_lda_gauge_compare.py`
 - `run_small_molecule_p0_lda_gauge_suite.py`
+- `run_small_molecule_p0_e1_gauge_suite.py`
 - `run_h2_p0_lda_kick_spectrum.py`
 - `run_h2_p0_lda_sin2_pulse.py`
 - `run_h2o_p0_lda_static_b_gauge_compare.py`
 
 The examples default to cheap `sto-3g` LDA runs so they are usable as smoke
-tests.  The general P0 PySCF model accepts pure LDA/GGA references; the current
-examples still use the strict LDA wrapper.
+tests.  The general P0 PySCF model accepts pure LDA/GGA references.  The E1
+small-molecule suite uses the general pure-DFT wrapper and can be run with PBE.
 
 ## Current Limitations
 
@@ -221,14 +222,13 @@ This is a coherent P0 pure-DFT implementation, but it is not the full hierarchy.
   length-gauge TDDFT.  Use `p0_e1_dipole_moment` for the P0+E1 dipole.
 - Flat trajectory rows record the total P0+E1 dipole, its analytic derivative,
   and the uniform-field E1 power residual when the model exposes
-  `central_dipoles0`.  Local E1 polarization charge/current rows are still not
-  implemented because they require an explicit choice of atom partition
-  functions `w_a`.
+  `central_dipoles0`.  Local E1 polarization charge/current rows are not part
+  of the current uniform-field test target; adding an atom-resolved local
+  decomposition would require an extra projection choice.
 - The GPU backend has not yet been ported to this P0 pure-DFT runner path.
 
 ## Next Implementation Layer
 
-The next work inside P0+E1 is to choose and document an atom partition if local
-polarization charges/currents are needed.  For the current uniform-field scope,
-the practical next step is to run P0 vs P0+E1 spectra in length, velocity, and
-mixed gauges.  After that the next formal layer is B1-min.
+For the current uniform-field scope, the practical next step is to run P0 vs
+P0+E1 spectra in length, velocity, and mixed gauges for more realistic
+molecules and bases.  After that the next formal layer is B1-min.

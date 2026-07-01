@@ -232,8 +232,8 @@ central dipoles, Peierls dressing, `V_E1`, a `P0E1Model` wrapper, the P0+E1
 dipole observable, and PySCF construction from analytic `int1e_r` integrals.
 Flat trajectory diagnostics include the total P0+E1 dipole, its analytic time
 derivative, and the uniform-field internal-energy power residual.  A local
-atomic polarization charge/current decomposition still requires an explicit
-choice of partition functions `w_a`.
+atomic polarization charge/current decomposition is outside the current
+uniform-field test target and would require an additional projection choice.
 
 ### B1-min
 
@@ -499,7 +499,8 @@ with the source dipole from the same action.
 - The uniform-field internal-energy power residual is small when the P0+E1
   source dipole from the same action is used.
 - P0 vs P0+E1 spectra can be compared in length and velocity gauges.
-- Local polarization charges/currents require a documented partition `w_a`.
+- Atom-resolved local polarization charges/currents are optional extra
+  projection diagnostics, not required for uniform-field total-dipole tests.
 
 ### B1-min tests
 
