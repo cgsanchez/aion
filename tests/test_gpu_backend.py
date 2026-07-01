@@ -12,6 +12,7 @@ from aion import (
     PyscfP0DftModel,
     PyscfP0Reference,
     UniformElectricGauge,
+    UniformMagneticGauge,
     VariableMetricSCEM,
     pyscf_central_dipole_matrices,
 )
@@ -33,6 +34,86 @@ def _require_cupy():
     except cupy.cuda.runtime.CUDARuntimeError as exc:
         pytest.skip(f"CUDA device is not usable: {exc}")
     return cupy
+
+
+def _h2_mol():
+    from pyscf import gto
+
+    return gto.M(
+        atom="H 0 0 -0.37; H 0 0 0.37",
+        basis="sto-3g",
+        unit="Angstrom",
+        verbose=0,
+    )
+
+
+def _pbe_h2_references_for_gpu():
+    from pyscf import dft
+
+    mf_cpu = dft.RKS(_h2_mol()).density_fit()
+    mf_cpu.xc = "pbe,pbe"
+    mf_cpu.grids.level = 0
+    mf_cpu.grids.prune = None
+    mf_cpu.small_rho_cutoff = 0.0
+    mf_cpu.conv_tol = 1.0e-11
+    mf_cpu.kernel()
+    assert mf_cpu.converged
+    mf_gpu = mf_cpu.to_gpu()
+    assert mf_gpu.converged
+    return (
+        PyscfP0Reference.from_mean_field(mf_cpu),
+        PyscfP0Reference.from_mean_field(mf_gpu),
+    )
+
+
+def _asnumpy(value) -> np.ndarray:
+    if hasattr(value, "get"):
+        value = value.get()
+    return np.asarray(value)
+
+
+def _matrix_trace_product(left: np.ndarray, right: np.ndarray) -> float:
+    return float(np.einsum("ij,ji->", left, _asnumpy(right)).real)
+
+
+def _real_symmetric_direction(size: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    raw = rng.normal(size=(size, size))
+    direction = 0.5 * (raw + raw.T)
+    return direction / np.linalg.norm(direction)
+
+
+def _complex_hermitian_direction(size: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    real = rng.normal(size=(size, size))
+    imag = rng.normal(size=(size, size))
+    direction = 0.5 * (real + real.T) + 0.5j * (imag - imag.T)
+    return direction / np.linalg.norm(direction)
+
+
+def _assert_matrix_is_functional_derivative(
+    *,
+    functional,
+    density: np.ndarray,
+    potential: np.ndarray,
+    direction: np.ndarray,
+    tolerance: float,
+) -> None:
+    expected = _matrix_trace_product(direction, potential)
+    eps_values = (1.0e-3, 3.0e-4, 1.0e-4, 3.0e-5, 1.0e-5)
+    errors = []
+    for eps in eps_values:
+        fd = (
+            functional(density + eps * direction)
+            - functional(density - eps * direction)
+        ) / (2.0 * eps)
+        errors.append(abs(fd - expected))
+
+    best_error = min(errors)
+    assert best_error < tolerance, (
+        f"functional derivative mismatch: expected {expected:.16e}, "
+        f"best error {best_error:.3e}, errors {errors}"
+    )
 
 
 def test_gpu_scem_constant_hamiltonian_matches_cpu_reference():
@@ -329,3 +410,93 @@ def test_gpu4pyscf_p0_e1_scem_matches_cpu_h2_short_step():
     assert result_gpu.converged
     assert np.linalg.norm(cupy.asnumpy(result_gpu.rho_next) - result_cpu.rho_next) < 1.0e-7
     assert rt_gpu.orthonormality_error(result_gpu.coeff_next, 0.02) < 1.0e-8
+
+
+def test_gpu4pyscf_pbe_veff_is_bare_hxc_energy_derivative():
+    cupy = _require_cupy()
+    pytest.importorskip("gpu4pyscf")
+    reference_cpu, reference_gpu = _pbe_h2_references_for_gpu()
+    model_cpu = PyscfP0DftModel.from_reference(
+        reference_cpu,
+        real_density_for_veff=True,
+    )
+    model_gpu = PyscfP0DftGpuModel.from_reference(reference_gpu)
+    geometry_cpu = reference_cpu.geometry()
+    geometry_gpu = reference_gpu.geometry()
+    density = reference_cpu.initial_density()
+    veff_cpu = model_cpu.veff0(density, 0.0, geometry_cpu)
+    veff_gpu = cupy.asnumpy(model_gpu.veff0(density, 0.0, geometry_gpu))
+
+    assert np.linalg.norm(veff_gpu - veff_cpu) < 1.0e-8
+
+    def hxc_energy(dm: np.ndarray) -> float:
+        return model_gpu.energy(dm, 0.0, geometry_gpu) - _matrix_trace_product(
+            dm,
+            reference_cpu.hcore0,
+        )
+
+    for direction in (
+        _real_symmetric_direction(reference_cpu.nao, seed=3401),
+        _complex_hermitian_direction(reference_cpu.nao, seed=3402),
+    ):
+        _assert_matrix_is_functional_derivative(
+            functional=hxc_energy,
+            density=density,
+            potential=veff_gpu,
+            direction=direction,
+            tolerance=1.0e-6,
+        )
+
+
+def test_gpu4pyscf_p0_pbe_veff_is_dressed_hxc_energy_derivative():
+    cupy = _require_cupy()
+    pytest.importorskip("gpu4pyscf")
+    reference_cpu, reference_gpu = _pbe_h2_references_for_gpu()
+    model_cpu = PyscfP0DftModel.from_reference(
+        reference_cpu,
+        real_density_for_veff=True,
+    )
+    model_gpu = PyscfP0DftGpuModel.from_reference(reference_gpu)
+    field = np.array([0.011, -0.017, 0.023])
+    electric = UniformElectricGauge(
+        field=lambda _t: field,
+        field_integral=lambda t: field * t,
+        lambda_value=lambda _t: 0.65,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    magnetic = UniformMagneticGauge(
+        np.array([0.007, -0.011, 0.019]),
+        gauge="symmetric",
+        origin=np.array([0.13, -0.07, 0.05]),
+    )
+    geometry_cpu = reference_cpu.geometry(electric=electric, magnetic=magnetic)
+    geometry_gpu = reference_gpu.geometry(electric=electric, magnetic=magnetic)
+    time = 0.43
+    density0 = reference_cpu.initial_density()
+    density = geometry_cpu.theta(time) * density0
+    hcore_p0 = geometry_cpu.dress_matrix(reference_cpu.hcore0, time)
+    veff_cpu = model_cpu.hamiltonian(density, time, geometry_cpu) - hcore_p0
+    veff_gpu = (
+        cupy.asnumpy(model_gpu.hamiltonian(density, time, geometry_gpu))
+        - hcore_p0
+    )
+
+    assert np.linalg.norm(veff_gpu - veff_cpu) < 1.0e-8
+
+    def hxc_energy(rho: np.ndarray) -> float:
+        return model_gpu.energy(rho, time, geometry_gpu) - _matrix_trace_product(
+            rho,
+            hcore_p0,
+        )
+
+    for direction in (
+        _real_symmetric_direction(reference_cpu.nao, seed=4401),
+        _complex_hermitian_direction(reference_cpu.nao, seed=4402),
+    ):
+        _assert_matrix_is_functional_derivative(
+            functional=hxc_energy,
+            density=density,
+            potential=veff_gpu,
+            direction=direction,
+            tolerance=1.0e-6,
+        )
