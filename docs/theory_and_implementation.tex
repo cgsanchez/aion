@@ -1,0 +1,1392 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=25mm]{geometry}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs,longtable,tabularx,array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={Theory and implementation of reusable real-time TDDFT in Aion},
+  pdfauthor={Aion project}
+}
+
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\ee}{\mathrm{e}}
+\newcommand{\hH}{H_{\mathrm{eom}}}
+\newcommand{\Pzero}{\mathrm{P0}}
+\newcommand{\Eone}{\mathrm{E1}}
+\newcommand{\ReTr}{\operatorname{Re}\operatorname{Tr}}
+\newcommand{\ImTr}{\operatorname{Im}\operatorname{Tr}}
+\newcommand{\Herm}{\operatorname{Herm}}
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\newenvironment{statusbox}[1]
+  {\begin{quote}\small\textbf{Status --- #1.}\ }
+  {\end{quote}}
+
+\title{Theory and implementation of reusable real-time TDDFT in Aion\\
+\large Bare length and velocity gauges, covariant P0/P0+E1 dynamics,\\
+currents, energies, and connection-aware propagation}
+\author{Aion project}
+\date{8 September 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This note fixes the physical definitions, sign and orientation conventions,
+equations of motion, observables, numerical algorithms, and software boundaries
+for the proposed Aion 0.2 real-time time-dependent density-functional theory
+(RT-TDDFT) implementation. It treats four formulations on one common
+finite-basis electronic reference: bare length gauge, bare velocity gauge,
+covariant P0, and covariant P0+E1. Particular attention is paid to quantities
+that cannot be transferred uncritically between formulations: the primary
+current, the mechanical-current diagnostic, matter and generator energies,
+source work, and the evolving-metric connection. The production propagation
+algorithm is self-consistent exponential midpoint (SCEM), with a
+connection-aware transport for the covariant formulations and no
+time-dependent L\"owdin frame. The final sections map these definitions to a
+reusable API, storage schema, and validation hierarchy. This is a normative
+design document; it does not claim that the refactor described here has already
+been implemented.
+\end{abstract}
+
+\tableofcontents
+
+\section{Document status and scope}
+
+\subsection{Meaning of status labels}
+
+Four kinds of statements are distinguished throughout this note.
+
+\begin{description}[leftmargin=34mm,style=nextline]
+\item[Established theory]
+Standard RT-TDDFT, minimal coupling, gauge transformation, evolving-Hilbert-
+space geometry, and rational approximation results supported by the cited
+literature.
+\item[Normative Aion 0.2]
+An agreed definition or software/numerical contract that the refactor must
+implement.
+\item[Draft-validated]
+Physics or algorithms exercised in the present research tree, but not yet
+available through the clean 0.2 API or fully covered by its tests.
+\item[Planned/unvalidated]
+Agreed work whose complete reusable implementation and validation remain to
+be done.
+\end{description}
+
+\begin{statusbox}{Normative Aion 0.2}
+When this note uses \emph{must} or gives an unqualified stored name, it
+specifies the intended 0.2 contract. The implementation plan in
+\path{docs/refactor_implementation_plan.md} controls the order and acceptance
+gates. That plan is deliberately mutable; changes to the physics conventions
+require an explicit reviewed decision.
+\end{statusbox}
+
+\subsection{Validated physical domain}
+
+The first release targets finite, fixed-nucleus, all-electron molecules in
+restricted spin-summed Kohn--Sham DFT, with pure LDA or GGA functionals and
+prescribed spatially uniform electric fields. Atomic units are used internally
+and the numerical precision is double real/complex precision on CPU and GPU.
+The nuclear attraction is local.
+
+The following are explicitly outside the first physics stack:
+
+\begin{itemize}
+\item pseudopotentials, effective-core potentials, and nonlocal ionic
+  operators;
+\item hybrid and exact-exchange current corrections;
+\item unrestricted, noncollinear, or relativistic spin dynamics;
+\item moving nuclei and their basis-velocity connection;
+\item periodic boundary conditions;
+\item Maxwell backreaction and adaptive time grids.
+\end{itemize}
+
+These cases must be rejected rather than silently treated with formulas valid
+only for local all-electron Hamiltonians. The source and observable interfaces
+are nevertheless designed so that spatially varying fields, aloof relativistic
+projectiles, EELS, and possibly periodic velocity gauge can be added later
+without redefining the present uniform-field theory. They are extension seams,
+not present work packages.
+
+\section{Notation and conventions}
+
+\subsection{Atomic basis and density}
+
+Let \(\{\lvert\phi_\mu(t)\rangle\}\) be a generally time-dependent
+nonorthogonal atomic-orbital (AO) basis. The overlap and occupied orbitals are
+\begin{equation}
+ S_{\mu\nu}(t)=\langle\phi_\mu(t)\vert\phi_\nu(t)\rangle,
+ \qquad
+ \lvert\psi_i(t)\rangle
+ =\sum_\mu\lvert\phi_\mu(t)\rangle C_{\mu i}(t).
+\end{equation}
+With occupations collected in \(f\), the canonical AO density convention is
+\begin{equation}
+ P=CfC^\dagger,\qquad
+ N=\ReTr(PS),\qquad
+ \langle O\rangle=\ReTr(PO).
+ \label{eq:density-convention}
+\end{equation}
+The occupations contain the complete spin multiplicity. No contraction may
+insert an implicit closed-shell factor of two. A different covariant/dual or
+orthonormal representation is a different type and requires an explicit
+conversion.
+
+Electronic charge and mass are kept symbolically as \(q\) and \(m\);
+electrons have \(q=-1\), \(m=1\) in atomic units. We retain \(\hbar\)
+in derivations to expose phases and signs, although \(\hbar=1\) in the
+implementation. The reduced vector potential is
+\begin{equation}
+ \vect a=\frac{\vect A}{c},
+\end{equation}
+and the full stored name is \code{vector\_potential\_reduced}. This avoids
+an otherwise persistent ambiguity about factors of \(c\).
+
+\subsection{Coordinates, origin, and molecular observables}
+
+Input coordinates are preserved exactly: Aion must never silently recenter a
+molecule. An explicit electromagnetic origin \(\vect O\), defaulting to the
+input-coordinate origin, is stored. Electronic, fixed-nuclear, and total
+dipoles use this same origin:
+\begin{align}
+ \vect\mu_{\mathrm e}
+   &=q\,\ReTr\!\left[P(\vect r-\vect O S)\right],\\
+ \vect\mu_{\mathrm N}
+   &=\sum_A Z_A(\vect R_A-\vect O),\\
+ \vect\mu_{\mathrm{tot}}
+   &=\vect\mu_{\mathrm e}+\vect\mu_{\mathrm N}.
+\end{align}
+For the finite molecule, \(\vect J\) denotes total charge current, not a
+volume-normalized current density.
+
+\subsection{Time grid and sampling location}
+
+For a fixed step, integer index is authoritative:
+\begin{equation}
+ t_n=t_0+n\Delta t,\qquad n=0,\ldots,N.
+\end{equation}
+There are \(N\) propagation intervals and \(N+1\) endpoint states.
+Floating-point time is stored as a convenience. State, dipole, current, and
+sampled energy records are endpoint-centred. Work increments, point power,
+and Ward residuals associated with a propagation interval are midpoint- or
+interval-centred and carry their own step/time arrays.
+
+\section{Electronic structure and the AO equation of motion}
+
+\subsection{Field-free Kohn--Sham model}
+
+The all-electron molecular reference is a converged restricted Kohn--Sham
+calculation. For a pure LDA/GGA functional its field-free Fock/Kohn--Sham
+matrix is written
+\begin{equation}
+ H_0[P]=T+V_{\mathrm{nuc}}+J[P]+V_{\mathrm{xc}}[P].
+\end{equation}
+The corresponding field-free energy decomposition is
+\begin{align}
+ T_s[P]&=\ReTr(PT),&
+ E_{\mathrm{eN}}[P]&=\ReTr(PV_{\mathrm{nuc}}),\\
+ E_{\mathrm H}[P]&=\frac12\ReTr(PJ[P]),&
+ E_{\mathrm{xc}}[P]&=E_{\mathrm{xc}}[n_P],\\
+ E_{\mathrm{NN}}&=\sum_{A<B}\frac{Z_AZ_B}{R_{AB}},&
+ U_0[P]&=T_s+E_{\mathrm{eN}}+E_{\mathrm H}
+       +E_{\mathrm{xc}}+E_{\mathrm{NN}}.
+ \label{eq:dft-energy}
+\end{align}
+Real-time propagation is used within the Runge--Gross density--potential
+framework\cite{RungeGross1984}; PBE is a representative pure GGA in the
+validated functional class\cite{PBE1996}.
+The implementation uses PySCF for the RKS reference, numerical grid, effective
+potential, and functional energy\cite{Sun2018}. The first release stores
+combined exchange--correlation energy; an exchange/correlation split is not a
+required observable.
+
+\subsection{Connection in a time-dependent nonorthogonal basis}
+
+Projection of the time-dependent Kohn--Sham equation into an evolving basis
+gives
+\begin{equation}
+ \ii\hbar\left(S\dot C+\omega C\right)=\hH C,
+ \qquad
+ \omega_{\mu\nu}
+ =\langle\phi_\mu\vert\dot\phi_\nu\rangle .
+ \label{eq:general-eom}
+\end{equation}
+The geometry is not an optional correction. It imposes metric compatibility
+\begin{equation}
+ \dot S=\omega+\omega^\dagger,
+ \label{eq:metric-compatibility}
+\end{equation}
+which guarantees preservation of the physical overlap norm under the exact
+equation. Artacho and O'Regan discuss why an evolving Hilbert space is
+geometrically different from a standard fixed-coordinate matrix
+ODE\cite{ArtachoORegan2017}.
+
+For implementation, define
+\begin{equation}
+ \mathcal A=S^{-1}\left[-\omega-\frac{\ii}{\hbar}\hH\right],
+ \qquad \dot C=\mathcal A C,
+ \qquad \dot P=\mathcal A P+P\mathcal A^\dagger.
+ \label{eq:generator-density}
+\end{equation}
+Knowledge of \(S(t)\) and \(\omega(t)\) at arbitrary times removes any need
+to integrate a separate metric equation. It does not remove the need to
+transport the electronic state consistently between two different metrics,
+nor the need to solve the nonlinear midpoint Hamiltonian self-consistently.
+
+\begin{statusbox}{Normative Aion 0.2}
+Every formulation returns the explicit triple
+\((S,\hH,\omega)\). The older implicit split between an intrinsic
+Hamiltonian and a residual connection is not a public contract.
+\end{statusbox}
+
+\section{Electromagnetic sources and gauge data}
+
+\subsection{Potential-first representation}
+
+The minimal-coupling one-particle operator is
+\begin{equation}
+ h(t)=\frac{1}{2m}\left(\vect p-q\vect a(\vect r,t)\right)^2
+      +q\phi(\vect r,t)+v_0,
+ \label{eq:minimal-coupling}
+\end{equation}
+where \(\vect p=-\ii\hbar\nabla\). The electric field is
+\begin{equation}
+ \vect E=-\partial_t\vect a-\nabla\phi.
+\end{equation}
+A gauge function \(\chi\) acts as
+\begin{equation}
+ \vect a' = \vect a+\nabla\chi,\qquad
+ \phi'=\phi-\dot\chi,\qquad
+ \psi'=\exp(\ii q\chi/\hbar)\psi.
+ \label{eq:gauge-transform}
+\end{equation}
+
+The reusable source layer describes the physical field separately from a
+chosen gauge representation. It is potential-first and evaluable at arbitrary
+times, including every SCEM midpoint. A field-first convenience input is
+compiled to consistent potentials before propagation; \(\vect a\) is never
+constructed by incremental numerical integration inside the electronic hot
+loop.
+
+\subsection{Projected node/link sample}
+
+For the covariant formulation, associate AO \(\mu\) with an atomic anchor
+\(a(\mu)\). The compact projected source sample is
+\begin{equation}
+ \left\{\phi_a(t),L_{ab}(t),\dot L_{ab}(t)\right\},\qquad
+ L_{ab}=\int_{\vect R_b}^{\vect R_a}\vect a\cdot\dd\vect\ell,
+ \quad a<b .
+ \label{eq:source-sample}
+\end{equation}
+The pair electromotive potential is
+\begin{equation}
+ V_{ab}=-\dot L_{ab}-\phi_a+\phi_b.
+ \label{eq:pair-emf}
+\end{equation}
+Links and EMFs are oriented \(b\to a\), while \(I_{ab}>0\) denotes
+charge flow \(a\to b\). With the corresponding signed incidence matrix,
+\begin{align}
+ \dot Q_a+\sum_b I_{ab}&=0,\label{eq:continuity}\\
+ \vect J_{\mathrm{graph}}
+   &=\sum_{a<b}I_{ab}(\vect R_b-\vect R_a),\label{eq:graph-current}\\
+ \mathcal P_{\mathrm{source}}
+   &=-\sum_{a<b}I_{ab}V_{ab}.\label{eq:graph-power}
+\end{align}
+Under Eq.~\eqref{eq:gauge-transform},
+\(L'_{ab}=L_{ab}+\chi_a-\chi_b\), so Eq.~\eqref{eq:pair-emf} is invariant.
+
+Multiple physical providers are added at the primitive potential/link level
+before projection or Wilson dressing. A temporal gate \(g(t)\) acts on
+potentials,
+\begin{equation}
+ \phi^g=g\phi,\qquad L^g=gL,\qquad
+ \dot L^g=\dot g L+g\dot L.
+\end{equation}
+Omitting the product-rule term would omit a real switching field.
+
+\subsection{Finite pulses and discrete kicks}
+
+A compactly supported resonant pulse may be defined in the vector potential:
+\begin{equation}
+ \vect a(t)=a_0
+ \sin^2\!\left(\frac{\pi t}{T}\right)
+ \sin(\Omega t+\varphi)\,\hat{\vect e},
+ \qquad 0\le t\le T,
+ \label{eq:finite-pulse}
+\end{equation}
+with \(T\) an exact integer number of carrier cycles and
+\(\vect E=-\dot{\vect a}\). The amplitude is normalized to the requested
+peak electric field. Equation~\eqref{eq:finite-pulse} has
+\(\vect a(0)=\vect a(T)=0\) and zero net impulse. This is a property of this
+pulse family, not a restriction on the physical use of pulses.
+
+If a maximum step is requested, choose
+\begin{equation}
+ N=\left\lceil T/\Delta t_{\max}\right\rceil,\qquad
+ \Delta t=T/N
+\end{equation}
+so the boundary is exactly a grid point. General pulses may carry nonzero
+impulse. A simulation or analysis workflow may request a zero-impulse
+constraint when its scientific purpose requires one; the pulse abstraction
+itself imposes no such policy.
+
+A delta kick is a uniquely identified discrete event, not a narrow sampled
+pulse. Events lie exactly on grid boundaries and are stored with pre- and
+post-event records at the same physical time, distinguished by side and
+sequence. The exact map is formulation-owned:
+
+\begin{itemize}
+\item bare LG applies the coefficient-space representation of
+  \(\exp(\ii\vect\kappa\cdot\vect r)\);
+\item bare VG leaves coefficients continuous and makes the discontinuous
+  change \(\vect a(0^+)=-\vect\kappa\) in the adopted electronic sign
+  convention;
+\item P0+E1 applies its covariant gauge/state event map.
+\end{itemize}
+
+Applied event identifiers are checkpointed, making a restarted event
+idempotent.
+
+\section{Bare length-gauge formulation}
+
+\subsection{Equation of motion}
+
+For a uniform field in length gauge, \(\vect a=0\) and
+\(\phi=-\vect E\cdot(\vect r-\vect O)\). In a fixed AO basis,
+\begin{equation}
+ S=S_0,\qquad \omega=0,\qquad
+ H_{\mathrm{LG}}[P,t]
+ =H_0[P]-q\vect E(t)\cdot(\vect r-\vect O S).
+ \label{eq:lg-hamiltonian}
+\end{equation}
+
+\subsection{Dipole and currents}
+
+The primary current is the analytic time derivative of the length-gauge
+dipole:
+\begin{align}
+ \mu_{\mathrm e,\alpha}
+   &=q\ReTr[P R_\alpha],
+ &R_\alpha&=r_\alpha-O_\alpha S,\\
+ J_{\mathrm{LG},\alpha}
+   &=q\ReTr[\dot P R_\alpha]\nonumber\\
+   &=\Re\left\{
+     \frac{\ii q}{\hbar}
+     \Tr\left[P\left(
+       H_{\mathrm{LG}}S^{-1}R_\alpha
+       -R_\alpha S^{-1}H_{\mathrm{LG}}
+     \right)\right]\right\}.
+ \label{eq:lg-current}
+\end{align}
+The second line follows from Eq.~\eqref{eq:generator-density} and is not a
+finite difference.
+
+For comparison, a local all-electron ambient mechanical diagnostic is
+\begin{equation}
+ J_{\mathrm{para},\alpha}
+ =\frac q m\ReTr(Pp_\alpha),\qquad
+ J_{\mathrm{dia},\alpha}=0,\qquad
+ \vect J_{\mathrm{mech}}=\vect J_{\mathrm{para}}.
+ \label{eq:lg-mechanical}
+\end{equation}
+The analytic dipole current is the primary LG observable. In a finite basis,
+Eq.~\eqref{eq:lg-current} and Eq.~\eqref{eq:lg-mechanical} need not coincide;
+their difference measures finite-subspace failure of continuum commutator
+identities.
+
+\subsection{Energy}
+
+The length-gauge matter energy excludes the source coupling:
+\begin{equation}
+ U_{\mathrm{matter}}^{\mathrm{LG}}=U_0[P].
+\end{equation}
+The electronic and fixed-nuclear scalar couplings and generator energy are
+\begin{align}
+ U_{\mathrm{EM,e}}^{\mathrm{LG}}
+   &=-\vect E\cdot\vect\mu_{\mathrm e},&
+ U_{\mathrm{EM,N}}^{\mathrm{LG}}
+   &=-\vect E\cdot\vect\mu_{\mathrm N},\\
+ E_{\mathrm{generator}}^{\mathrm{LG}}
+   &=U_{\mathrm{matter}}^{\mathrm{LG}}
+     +U_{\mathrm{EM,e}}^{\mathrm{LG}}
+     +U_{\mathrm{EM,N}}^{\mathrm{LG}}.
+\end{align}
+For fixed nuclei,
+\begin{align}
+ \frac{\dd U_{\mathrm{matter}}^{\mathrm{LG}}}{\dd t}
+   &=\vect E\cdot\vect J_{\mathrm{LG}},\label{eq:lg-work}\\
+ \frac{\dd E_{\mathrm{generator}}^{\mathrm{LG}}}{\dd t}
+   &=-\dot{\vect E}\cdot\vect\mu_{\mathrm{tot}}.
+ \label{eq:lg-generator-rate}
+\end{align}
+These are different valid energies. The phrase \emph{total energy} is
+therefore insufficient without the qualifier \code{matter} or
+\code{generator}. When the field vanishes at both selected endpoints, the
+final deposited matter energy and final generator-energy gain agree.
+
+\section{Bare velocity-gauge formulation}
+
+\subsection{Hamiltonian}
+
+For \(\phi=0\) and spatially uniform \(\vect a(t)\), expansion of
+Eq.~\eqref{eq:minimal-coupling} gives the AO matrix
+\begin{equation}
+ H_{\mathrm{VG}}[P,t]
+ =H_0[P]
+ -\frac q m\vect a(t)\cdot\vect p
+ +\frac{q^2}{2m}|\vect a(t)|^2S.
+ \label{eq:vg-hamiltonian}
+\end{equation}
+This is the local all-electron velocity-gauge form used in the NAO
+RT-TDDFT treatment of Pemmaraju \emph{et al.}\cite{Pemmaraju2018}. For a
+nonlocal ionic potential, an additional gauge-transformed nonlocal operator
+and corresponding current correction are required; they are outside scope.
+
+With PySCF derivative overlaps, the implementation fixes and tests the
+canonical-momentum convention
+\begin{equation}
+ p_\alpha=\ii\hbar
+ \langle\nabla_\alpha\phi_\mu\vert\phi_\nu\rangle,
+\end{equation}
+including its Hermiticity and sign.
+
+\subsection{Mechanical current}
+
+The bare VG primary current is the mechanical current,
+\begin{align}
+ J_{\mathrm{para},\alpha}
+   &=\frac q m\ReTr(Pp_\alpha),\label{eq:vg-jpara}\\
+ J_{\mathrm{dia},\alpha}
+   &=-\frac{q^2}{m}N a_\alpha,\label{eq:vg-jdia}\\
+ J_{\mathrm{mech},\alpha}
+   &=J_{\mathrm{para},\alpha}+J_{\mathrm{dia},\alpha}.
+ \label{eq:vg-current}
+\end{align}
+The two pieces must be available separately. Plotting only
+\(q\ReTr(Pp_\alpha)\) as the VG physical current omits the diamagnetic
+piece.
+
+\subsection{Mechanical kinetic and matter energy}
+
+The mechanical kinetic energy is
+\begin{align}
+ T_{\mathrm{mech}}[P,t]
+ &=T_{\mathrm{can}}[P]+T_{\mathrm{linear}}[P,t]
+   +T_{\mathrm{dia}}[P,t],\label{eq:vg-tkin}\\
+ T_{\mathrm{can}}&=\ReTr(PT),\nonumber\\
+ T_{\mathrm{linear}}
+   &=-\frac q m\vect a\cdot\ReTr(P\vect p),\nonumber\\
+ T_{\mathrm{dia}}
+   &=\frac{q^2}{2m}N|\vect a|^2.\nonumber
+\end{align}
+The VG matter energy is
+\begin{equation}
+ U_{\mathrm{matter}}^{\mathrm{VG}}
+ =T_{\mathrm{mech}}+E_{\mathrm{eN}}+E_{\mathrm H}
+  +E_{\mathrm{xc}}+E_{\mathrm{NN}}.
+ \label{eq:vg-energy}
+\end{equation}
+In the pure VG representation it is also the electronic generator energy for
+the prescribed field, and
+\begin{equation}
+ \frac{\dd U_{\mathrm{matter}}^{\mathrm{VG}}}{\dd t}
+ =\vect E\cdot\vect J_{\mathrm{mech}}.
+ \label{eq:vg-work}
+\end{equation}
+An energy that retains only \(T_{\mathrm{can}}\) contains a large,
+apparently anomalous oscillatory error during the pulse. Both the linear
+\(\vect a\cdot\vect p\) and quadratic \(a^2\) contributions in
+Eq.~\eqref{eq:vg-tkin} are compulsory.
+
+\section{Covariant P0 formulation}
+
+\subsection{Wilson-dressed overlap}
+
+Let each AO carry an anchor position \(\vect R_{a(\mu)}\). With the link
+oriented from the anchor of \(\nu\) to that of \(\mu\), define
+\begin{equation}
+ \Theta_{\mu\nu}(t)
+ =\exp\!\left[\frac{\ii q}{\hbar}
+   L_{a(\mu)a(\nu)}(t)\right],
+ \qquad
+ S_{\mu\nu}(t)=\Theta_{\mu\nu}(t)S^0_{\mu\nu}.
+ \label{eq:p0-overlap}
+\end{equation}
+The inverse-dressed density passed to the field-free electronic-structure
+model is
+\begin{equation}
+ P^0=\Theta^*\odot P,
+ \label{eq:inverse-density}
+\end{equation}
+where \(\odot\) is elementwise multiplication. If
+\(H_0[P^0]\) is constructed by PySCF, the P0 equation-of-motion matrix is
+obtained by the forward dressing
+\begin{equation}
+ H_{\Pzero}[P,t]=\Theta\odot H_0[P^0].
+ \label{eq:p0-hamiltonian}
+\end{equation}
+
+\subsection{Projected connection}
+
+Introduce the diagonal site scalar-potential connection
+\begin{equation}
+ \sigma_{\mu\nu}
+ =\delta_{\mu\nu}\frac{\ii q}{\hbar}
+   \phi_{a(\mu)}.
+\end{equation}
+The site-covariant overlap derivative and P0 connection are
+\begin{align}
+ D_{\mathrm{site}}S
+   &=\dot S+\sigma S-S\sigma,\label{eq:site-derivative}\\
+ \omega_{\Pzero}
+   &=S\sigma+\frac12D_{\mathrm{site}}S.
+ \label{eq:p0-connection}
+\end{align}
+Because \(\sigma^\dagger=-\sigma\) for a real scalar potential,
+Eq.~\eqref{eq:p0-connection} satisfies
+\(\omega_{\Pzero}+\omega_{\Pzero}^\dagger=\dot S\) exactly.
+
+The P0 equation is consequently
+\begin{equation}
+ \ii\hbar(S\dot C+\omega_{\Pzero}C)
+ =H_{\Pzero}[P,t]C .
+ \label{eq:p0-eom}
+\end{equation}
+The scalar-potential and link time dependence is geometrical: it is carried by
+the projected connection and metric, not added again to
+Eq.~\eqref{eq:p0-hamiltonian}.
+
+\subsection{Site charge and graph current}
+
+Let \(M_a\) be the fixed AO selector/projector associated with anchor
+\(a\). The symmetrized source charge is
+\begin{equation}
+ Q_a=\frac q2\ReTr\!\left[P\{M_a,S\}\right].
+ \label{eq:site-charge}
+\end{equation}
+For each stored pair, let \(S_{ab}\) denote its oriented overlap contribution
+and \(H_{\mathrm{source},ba}\) the corresponding explicit source block.
+Define
+\begin{equation}
+ K_{\mathrm{dyn}}
+ =H_{\mathrm{dyn}}-\frac{\ii\hbar}{2}D_{\mathrm{site}}S.
+\end{equation}
+Here \(H_{\mathrm{dyn}}\) is the Hermitian matrix in the equivalent
+coefficient-velocity equation after the non-metric connection terms have been
+moved to its right-hand side. Thus \(H_{\mathrm{dyn}}=H_{\Pzero}\) for P0 and
+\(H_{\mathrm{dyn}}=H_{\Pzero}+V_{\Eone}\) for P0+E1. This algebraic definition
+does not alter the normative connection split in Eq.~\eqref{eq:e1-split}.
+The variational graph-current expression used by the covariant model is
+\begin{align}
+ I_{ab}
+ &=\frac q\hbar\ImTr\!\left[
+ P\left(
+ S_{ab}S^{-1}K_{\mathrm{dyn}}
+ +K_{\mathrm{dyn}}^\dagger S^{-1}S_{ab}
+ \right)\right]\nonumber\\
+ &\quad
+ +\frac{2q}{\hbar}\ImTr\!\left(PH_{\mathrm{source},ba}\right).
+ \label{eq:p0-pair-current}
+\end{align}
+Together with Eqs.~\eqref{eq:continuity}--\eqref{eq:graph-power}, this gives
+the P0 charge, current vector, and source power. The pair orientation and the
+definition of the source block are part of the data model, not choices made by
+individual analysis scripts.
+
+\section{P0+E1 correction}
+
+\subsection{Central dipoles and variational connection}
+
+For the AO pair \((\mu,\nu)\), define the anchor-pair centre
+\begin{equation}
+ \vect R_{\mu\nu}
+ =\frac12\left(\vect R_{a(\mu)}+\vect R_{a(\nu)}\right)
+\end{equation}
+and field-free central dipole matrices
+\begin{equation}
+ d^\alpha_{\mu\nu}
+ =q\left[r^\alpha_{\mu\nu}
+          -R^\alpha_{\mu\nu}S^0_{\mu\nu}\right].
+ \label{eq:central-dipole}
+\end{equation}
+Their dressed Hermitian form and E1 variational potential are
+\begin{align}
+ D_\alpha(t)
+   &=\Herm\!\left[\Theta(t)\odot d^\alpha\right],
+ &\Herm X&=\frac12(X+X^\dagger),\label{eq:dressed-dipole}\\
+ V_{\Eone}[P,t]
+   &=-\sum_\alpha E_\alpha(t)D_\alpha(t).
+ \label{eq:e1-potential}
+\end{align}
+
+The defining physics split is
+\begin{equation}
+ \boxed{
+ \hH=H_{\Pzero},\qquad
+ \omega_{\Pzero+\Eone}
+ =\omega_{\Pzero}+\frac{\ii}{\hbar}V_{\Eone}.}
+ \label{eq:e1-split}
+\end{equation}
+Putting \(V_{\Eone}\) in both \(\hH\) and \(\omega\) double counts it.
+Equation~\eqref{eq:e1-split} expresses the projection of the ambient
+electromagnetic connection into the P0+E1 equivariant subspace.
+
+\subsection{Covariant dipole}
+
+Writing \(N_a=Q_a/q\), the electronic covariant dipole is
+\begin{equation}
+ \mu_{\Pzero+\Eone,\alpha}
+ =q\sum_a N_aR_{a\alpha}+\ReTr(PD_\alpha).
+ \label{eq:covariant-dipole}
+\end{equation}
+The first term transports site charge between anchors; the second restores
+intra-/inter-site polarization retained at E1.
+
+\subsection{E1 residual and total source current}
+
+The reduced-vector-potential derivative of the dressed central dipole is
+\begin{equation}
+ D_{\alpha;\beta}
+ =\frac{\partial D_\alpha}{\partial a_\beta}
+ =\Herm\!\left[
+ \frac{\ii q}{\hbar}
+ (R_{a(\mu),\beta}-R_{a(\nu),\beta})
+ \Theta_{\mu\nu}d^\alpha_{\mu\nu}
+ \right].
+ \label{eq:dressed-dipole-derivative}
+\end{equation}
+The E1 residual source current is
+\begin{equation}
+ J_{\Eone,\beta}
+ =\frac{\dd}{\dd t}\ReTr(PD_\beta)
+ +\sum_\alpha E_\alpha\ReTr(PD_{\alpha;\beta}).
+ \label{eq:e1-current}
+\end{equation}
+Its first term is the intrinsic polarization rate and its second term is the
+phase response. Both pieces are recorded.
+
+The total P0+E1 variational source current is
+\begin{equation}
+ \vect J_{\mathrm{src}}
+ =\sum_{a<b}I_{ab}^{(\Pzero\mid\Eone)}
+  (\vect R_b-\vect R_a)+\vect J_{\Eone}.
+ \label{eq:source-current}
+\end{equation}
+In Eq.~\eqref{eq:p0-pair-current}, the coefficient/dynamical part sees the
+full P0+E1 equation, while the explicit source-Hamiltonian block is the base
+P0 source contribution. This separation prevents E1 double counting.
+
+The defining checks are
+\begin{align}
+ \dot Q_a+\sum_b I_{ab}&=0,\label{eq:cov-continuity}\\
+ \vect J_{\mathrm{src}}
+   &=\frac{\dd\vect\mu_{\Pzero+\Eone}}{\dd t},\label{eq:j-mu}\\
+ \frac{\dd U_{\mathrm{cov}}}{\dd t}
+   &=\vect E\cdot\vect J_{\mathrm{src}}.
+ \label{eq:cov-ward}
+\end{align}
+
+\begin{statusbox}{Draft-validated}
+The current research tree contains the P0/P0+E1 tensors, connection split,
+site charges, pair-current expression, and analytic E1-current pieces. Their
+clean typed integration with the complete energy ledger and storage schema is
+planned, not yet complete.
+\end{statusbox}
+
+\section{Mechanical-current diagnostics}
+
+\subsection{Generic local contraction}
+
+For an arbitrary density and prescribed local vector potential, define AO
+matrices
+\begin{equation}
+ A^{\mathrm{op}}_{\alpha,\mu\nu}(t)
+ =\langle\phi_\mu\vert
+ a_\alpha(\vect r,t)\vert\phi_\nu\rangle.
+\end{equation}
+The reusable low-level diagnostic is
+\begin{align}
+ J_{\mathrm{para},\alpha}
+   &=\frac q m\ReTr(Pp_\alpha),\label{eq:generic-jpara}\\
+ J_{\mathrm{dia},\alpha}
+   &=-\frac{q^2}{m}\ReTr(PA^{\mathrm{op}}_\alpha),
+     \label{eq:generic-jdia}\\
+ \vect J_{\mathrm{mech}}
+   &=\vect J_{\mathrm{para}}+\vect J_{\mathrm{dia}}.
+ \label{eq:generic-jmech}
+\end{align}
+For a uniform field,
+\(A^{\mathrm{op}}_\alpha=a_\alpha S\), giving
+Eq.~\eqref{eq:vg-jdia}. The density need only be finite, Hermitian, and
+shape-compatible; idempotency, positivity, and electron count are optional
+diagnostics rather than hidden preconditions.
+
+\subsection{Covariant ambient projection}
+
+In the uniform covariant representation the canonical momentum and
+diamagnetic operator are
+\begin{align}
+ p^{\mathrm{can,cov}}_\alpha
+ &=\Theta\odot(p^0_\alpha+q a_\alpha S^0),
+ \label{eq:cov-pcan}\\
+ p^{\mathrm{dia,cov}}_\alpha
+ &=-q a_\alpha S(t).
+\end{align}
+Their explicit \(a_\alpha\) terms cancel, so the total ambient-projected
+mechanical operator reduces to
+\begin{equation}
+ p^{\mathrm{mech,cov}}_\alpha
+ =\Theta\odot p^0_\alpha.
+ \label{eq:cov-pmech}
+\end{equation}
+The resulting observable is named
+\code{ambient\_projected\_mechanical\_current}. It is a useful common
+diagnostic, but it is not the P0+E1 variational source current in
+Eq.~\eqref{eq:source-current}. The two must never share a generic stored
+\code{current} label.
+
+\section{Covariant energy and universal energy ledger}
+
+\subsection{Covariant matter energy}
+
+The gauge-invariant P0/P0+E1 matter energy is evaluated from the inverse-
+dressed density in Eq.~\eqref{eq:inverse-density}:
+\begin{equation}
+ U_{\mathrm{cov}}[P,t]
+ =T_s[P^0]+E_{\mathrm{eN}}[P^0]+E_{\mathrm H}[P^0]
+  +E_{\mathrm{xc}}[P^0]+E_{\mathrm{NN}}.
+ \label{eq:cov-energy}
+\end{equation}
+The E1 source-coupling expectation
+\begin{equation}
+ U_{\Eone,\mathrm{coupling}}=\ReTr(PV_{\Eone})
+\end{equation}
+is stored separately and is not included in
+Eq.~\eqref{eq:cov-energy}. This is necessary for the Ward identity
+Eq.~\eqref{eq:cov-ward}. Equivalent dressed-frame contractions are valuable
+independent validation identities, not alternative user-facing definitions.
+
+\subsection{Qualified totals}
+
+The energy observable records, when meaningful for a formulation:
+
+\begin{enumerate}
+\item canonical/paramagnetic kinetic, vector-potential-linear kinetic,
+  diamagnetic kinetic, and their mechanical sum;
+\item electron--nuclear, Hartree, combined exchange--correlation, and
+  nuclear--nuclear energies;
+\item electronic scalar EM coupling, fixed-nuclear scalar EM coupling, and
+  their sum;
+\item \code{energy\_matter\_total};
+\item \code{energy\_generator\_total};
+\item absorbed energy and accumulated source work;
+\item analytic energy rate, source power, and Ward residuals.
+\end{enumerate}
+
+The conventional DFT word \emph{total} is retained only with a qualifier.
+There is no public \code{total\_energy}, because
+Eqs.~\eqref{eq:lg-work}, \eqref{eq:lg-generator-rate},
+\eqref{eq:vg-work}, and \eqref{eq:cov-ward} show that different totals
+answer different physical questions during a pulse.
+
+For every formulation,
+\begin{equation}
+ \Delta U_{\mathrm{abs}}(t)
+ =U_{\mathrm{matter}}(t)-U_{\mathrm{matter}}(t_0)
+ \label{eq:absorbed-energy}
+\end{equation}
+is compared to independently accumulated source work. Fixed nuclei have no
+current and do not absorb power; their scalar coupling is nevertheless stored
+to establish origin cancellation in a neutral system.
+
+\subsection{Independent analytic energy derivative}
+
+For the pure-functional DFT energy, functional differentiation gives
+schematically
+\begin{equation}
+ \frac{\dd U}{\dd t}
+ =\ReTr\!\left[F_{\mathrm{energy}}[P]\,\dot P\right]
+ +\left.\frac{\partial U}{\partial t}\right|_P,
+ \label{eq:analytic-energy-rate}
+\end{equation}
+where \(\dot P\) is obtained analytically from
+Eq.~\eqref{eq:generator-density}. This route is independent of the
+\(\vect E\cdot\vect J\) contraction and therefore provides a
+non-tautological Ward test. Finite differences of sampled energies are only
+secondary convergence diagnostics.
+
+At every accepted propagation interval, source work is advanced from the
+converged midpoint:
+\begin{equation}
+ W_{n+1}=W_n+\Delta t\,
+ \mathcal P_{\mathrm{source}}(t_{n+1/2}) .
+ \label{eq:work-quadrature}
+\end{equation}
+The midpoint state and source already exist, so no additional Fock build is
+required. Work is accumulated every interval even when energy is not sampled
+there. A robust normalized Ward residual reports both absolute and relative
+scales and should decrease quadratically with \(\Delta t\) in the asymptotic
+regime.
+
+\begin{statusbox}{Planned/unvalidated}
+The draft tree has partial aggregate energy methods and ad hoc reconstruction
+of missing bare-VG kinetic terms. The complete qualified ledger and analytic
+functional energy derivative described here are not yet a reusable
+implementation.
+\end{statusbox}
+
+\section{Self-consistent exponential midpoint propagation}
+
+\subsection{Why the connection matters numerically}
+
+For a fixed linear ODE, exponentiating a midpoint generator is routine. Here
+three facts interact:
+
+\begin{enumerate}
+\item the density determines the Kohn--Sham Hamiltonian;
+\item the coordinate metric differs at the beginning and end of an interval;
+\item the connection contains both an analytically integrable diagonal site
+  piece and a residual projected piece that belongs in the dynamical
+  generator.
+\end{enumerate}
+
+An exponential that is unitary in one Euclidean or L\"owdin-orthogonalized
+frame need not map the \(S_n\) norm to the \(S_{n+1}\) norm. Small defects can
+accumulate and feed back into the nonlinear density. The remedy is to respect
+parallel transport and cross-metric geometry explicitly, not to pretend that
+\(S(t)\) is fixed.
+
+\subsection{Common nonlinear midpoint solve}
+
+Both production propagators use the same SCEM fixed point. Given an input
+midpoint density, build
+\((S_{1/2},H_{\mathrm{eom},1/2},\omega_{1/2})\), construct a
+trial propagator, obtain an output midpoint density, and iterate to
+consistency. The convergence measure is
+\begin{equation}
+ r_P=
+ \frac{
+ \norm{S_{1/2}^{1/2}
+ (P_{\mathrm{out}}-P_{\mathrm{in}})
+ S_{1/2}^{1/2}}_F
+ }{\max(N_e,1)}.
+ \label{eq:scem-residual}
+\end{equation}
+The initial defaults are \(r_P\le10^{-10}\), at most 50 iterations, and
+minimum damping 0.1. Start with a full Hermitian density update and reduce
+mixing when the residual worsens. Record the iteration count, final density
+residual, and an independent Hamiltonian residual. A failed midpoint is never
+accepted; tolerances and \(\Delta t\) are never silently changed.
+
+\subsection{Fixed-metric transport}
+
+For bare LG/VG, \(S=S_0\) and \(\omega=0\). The midpoint generator is
+\begin{equation}
+ \mathcal A_{1/2}
+ =-\frac{\ii}{\hbar}S^{-1}H_{1/2},
+\end{equation}
+which is \(S\)-skew-Hermitian. Its rational map can therefore act directly in
+the nonorthogonal coordinates while preserving the \(S\) norm algebraically.
+A L\"owdin transform is not required.
+
+\subsection{Connection-aware site-parallel frame}
+
+Write the analytically known diagonal site connection as \(\sigma(t)\).
+Its exact parallel transport over one interval is
+\begin{equation}
+ G_\sigma(t_{n+1},t_n)
+ =\exp\!\left[-\int_{t_n}^{t_{n+1}}\sigma(t)\,\dd t\right].
+ \label{eq:site-transport}
+\end{equation}
+For the diagonal Abelian uniform-field case this is elementwise and depends
+only on the known source. Pull the overlap, Hamiltonian, and residual
+connection into this site-parallel frame. At the self-consistent midpoint,
+the combined generator is
+\begin{equation}
+ \bar{\mathcal A}_{1/2}
+ =\bar S_{1/2}^{-1}
+ \left[-\bar\omega_{\mathrm{res},1/2}
+       -\frac{\ii}{\hbar}\bar H_{1/2}\right].
+ \label{eq:pulled-generator}
+\end{equation}
+The E1 contribution in Eq.~\eqref{eq:e1-split} is part of
+\(\bar\omega_{\mathrm{res}}\), not an auxiliary length-gauge Hamiltonian.
+
+\subsection{Rational exponential and metric correction}
+
+The production default is the Pad\'e [2/2] map
+\begin{equation}
+ R_{22}(Z)=
+ \left(I-\frac Z2+\frac{Z^2}{12}\right)^{-1}
+ \left(I+\frac Z2+\frac{Z^2}{12}\right),
+ \qquad Z=\Delta t\,\bar{\mathcal A}_{1/2}.
+ \label{eq:pade22}
+\end{equation}
+Cayley [1/1] is retained as a diagnostic. These are systematically
+improvable approximations to the frozen exponential\cite{Higham2008}, but the
+complete midpoint method remains globally second order unless the
+Hamiltonian/source quadrature and nonlinear construction are also raised in
+order.
+
+After transforming the raw interval map back to AO coordinates, impose the
+cross-metric constraint by right Cholesky correction:
+\begin{align}
+ M&=U_{\mathrm{raw}}^\dagger S_{n+1}U_{\mathrm{raw}}
+   =R_M^\dagger R_M,\nonumber\\
+ S_n&=R_S^\dagger R_S,\nonumber\\
+ Q&=R_M^{-1}R_S,\qquad
+ U=U_{\mathrm{raw}}Q.
+ \label{eq:cholesky-correction}
+\end{align}
+Then \(U^\dagger S_{n+1}U=S_n\) up to roundoff. Record the raw defect,
+corrected defect, and \(\norm{Q-I}\). This is a constraint correction to an
+already constructed physical transport; it is not propagation in an evolving
+symmetrically orthogonalized L\"owdin basis.
+
+Only roundoff-scale anti-Hermitian contamination may be symmetrized, under a
+separately recorded threshold. A larger defect is a hard failure.
+
+\section{Observable and storage model}
+
+\subsection{Typed observable calculators}
+
+An observable declares:
+
+\begin{itemize}
+\item the formulation capabilities and operator/source dependencies it needs;
+\item whether it is evaluated at endpoints, midpoints, or events;
+\item its independent integer-step schedule;
+\item units, tensor shape, definition ID, and decomposition labels;
+\item whether evaluation requires a Fock build or may reuse midpoint data.
+\end{itemize}
+
+Unsupported observables fail during simulation construction. Energy is not
+computed every step by default. Energy, dipole/current, step diagnostics,
+checkpoints, and dense-matrix snapshots have independent schedules, while
+initial and final requested observables are always captured.
+
+\subsection{Canonical artifacts}
+
+The canonical numerical format is versioned HDF5:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Artifact & Purpose\\
+\midrule
+\code{reference.h5} & Immutable backend-neutral prepared electronic reference\\
+\code{trajectory.h5} & Canonical observable and diagnostic trajectory\\
+\code{em\_source.h5} & Optional full-resolution/per-provider source history\\
+\code{checkpoint\_<step>.h5} & Immutable restart state at an accepted boundary\\
+\code{status.json} & Small atomic status record for detached monitoring\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Top-level trajectory groups are
+\begin{gather*}
+ \texttt{/meta},\quad
+ \texttt{/configuration},\quad
+ \texttt{/reference},\quad
+ \texttt{/time},\quad
+ \texttt{/source},\\
+ \texttt{/observables},\quad
+ \texttt{/diagnostics},\quad
+ \texttt{/events},\quad
+ \texttt{/restart}.
+\end{gather*}
+Definition-specific observable paths are required; generic
+\texttt{/current}, \texttt{/dipole}, or \texttt{/energy} datasets are
+forbidden. Each stream owns step/time coordinates. Every dataset has unit and
+dimension attributes. Scalar streams are uncompressed; dense/checkpoint arrays
+are chunked on record boundaries with low-level gzip and shuffle.
+
+Writers publish transactionally: write a \code{.partial} file, validate and
+flush it, set an internal completion marker, and atomically rename it.
+Completed artifacts are immutable. Controlled failures may publish
+\code{trajectory.failed.h5} with \code{complete=false}; a hard crash leaves
+only the partial artifact.
+
+\subsection{Restart and lineage}
+
+A checkpoint contains the dynamic state, occupations, global step/time,
+accumulated work, relevant nonlinear continuation data, and applied-event IDs.
+It contains no pickled PySCF or GPU object. Restart reconstructs the prepared
+reference from normalized input and verifies all fingerprints.
+
+A resumed segment first reconstructs, writes, and authenticates the repeated
+boundary state \(n_r\) before advancing to \(n_r+1\). It records parent run
+ID, checkpoint hash, and global step offset. Analysis deduplicates the shared
+boundary only through this lineage. SIGINT/SIGTERM is handled at a safe
+accepted-step boundary; a half-converged midpoint is never checkpointed as a
+valid state.
+
+\subsection{Semantic identity and provenance}
+
+A deterministic simulation ID is the SHA-256 hash of losslessly normalized
+scientific configuration, array dtypes/shapes/bytes, source and reference
+fingerprints. Paths, timestamps, host names, and output schedules are
+excluded. A unique run ID distinguishes execution attempts. Full software,
+Git, dependency, CPU/GPU, and device provenance is stored. A requested GPU
+run never falls back to CPU.
+
+\section{Spectroscopy}
+
+Casida linear response and real-time kick spectra are postprocessing
+workflows. Casida roots, oscillator strengths, and transition directions are
+stored as structured numerical data\cite{Casida1995}. A resonant comparison
+selects a polarization-bright root by an explicit threshold or root choice and
+recomputes it for every basis; otherwise an on-resonance/off-resonance
+comparison would be physically ambiguous.
+
+For a kick \(\vect\kappa\), the canonical molecular response is
+\begin{equation}
+ \alpha_{\alpha\beta}(\Omega)
+ =\frac{\delta\widetilde\mu_\alpha(\Omega)}
+        {\kappa_\beta}.
+\end{equation}
+The transform convention is
+\begin{equation}
+ \widetilde f(\Omega)
+ =\int_0^T w(t)f(t)\ee^{+\ii\Omega t}\,\dd t.
+ \label{eq:fft-convention}
+\end{equation}
+The full complex result, sign, normalization, time origin, quadrature, window,
+damping, and zero padding are metadata, not hidden plotting choices. The
+default window is rectangular. Optional exponential damping
+\(\ee^{-\eta t}\) stores \(\eta\) in energy units. The intrinsic frequency
+resolution is approximately \(2\pi/T\); zero padding interpolates the sampled
+spectrum but does not improve this resolution. A current-domain transform
+supplies an independent frequency-domain check.
+
+\section{Reusable API and implementation boundaries}
+
+\subsection{Static preparation and dynamic construction}
+
+The top-level Python workflow is intentionally small:
+\begin{verbatim}
+reference = prepare_reference(reference_config)
+reference.save("reference.h5")
+
+simulation = build_simulation(
+    reference=reference,
+    source=physical_source,
+    formulation=formulation_config,
+    propagation=propagation_config,
+    observables=observable_config,
+    output=output_config,
+)
+result = run(simulation)
+resumed = resume(checkpoint_path, output=child_output)
+trajectory = load_trajectory(path)
+\end{verbatim}
+
+One prepared reference is reused by all formulations in a gauge comparison,
+preventing repeated SCF work and guaranteeing a common initial problem.
+References, configurations, operator bundles, sources, and formulation
+definitions are immutable. Backend caches and preallocated scratch arrays
+belong to a mutable \code{Workspace}; two simulations never share state or
+workspace.
+
+\subsection{Package domains}
+
+\begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
+\toprule
+Package & Responsibility\\
+\midrule
+\endhead
+\code{aion.config} &
+Immutable typed input, strict validation, normalization, units, and hashes.\\
+\code{aion.backends} &
+Array protocol, CPU/GPU implementations, device residency, and workspaces.\\
+\code{aion.electronic\_structure} &
+PySCF RKS preparation, grids, reference reconstruction, core and derived
+operator bundles.\\
+\code{aion.electromagnetism} &
+Physical sources, gauge representations, node/link samples, envelopes,
+compiled time series, and events.\\
+\code{aion.formulations} &
+Bare LG/VG and P0/P0+E1 implementations of
+\((S,\hH,\omega)\), formulation observables, and support checks.\\
+\code{aion.propagation} &
+State protocols, common nonlinear SCEM, fixed-metric and connection-aware
+transport.\\
+\code{aion.observables} &
+Typed dipole, current, mechanical-current, energy, power, continuity, and Ward
+calculators.\\
+\code{aion.io} &
+HDF5 schemas, transactional writers, checkpoints, lineage, readers, and
+export.\\
+\code{aion.workflows} &
+Preparation, simulation building, run/resume, comparisons, Casida, and kick
+spectra.\\
+\bottomrule
+\end{longtable}
+
+Dependencies are one-way: formulations consume references and sources;
+propagators consume the formulation protocol; observables inspect states and
+formulations; I/O receives records but never enters the physics. The CLI
+\code{aion prepare|run|resume|inspect|export} is a thin caller of the same
+typed API.
+
+\subsection{Prepared reference content}
+
+The immutable \code{reference.h5} contains normalized molecule/basis/
+functional/grid input, converged coefficients and occupations, ground-state
+density, nuclear data, EM origin, exact quadrature-grid coordinates and
+weights, and the core operator bundle
+\[
+  \{S,T,V_{\mathrm{nuc}},\vect r,\vect p,
+    \text{nuclear data},f\}.
+\]
+It does not store AO values on the grid and never pickles live objects.
+Loading reconstructs PySCF/backend models and verifies fingerprints.
+Atomic projectors/topology and P0/E1 tensors are independently versioned
+derived bundles with their own invalidation boundaries.
+
+\section{Present draft versus the 0.2 target}
+
+\begin{statusbox}{Current-tree assessment after WP0}
+The research draft was archived and verified on 8 September 2026. Its
+molecule-specific campaigns, runners, postprocessing, historical notes, and
+large results were moved with checksum manifests to the separate
+\path{CALCULATIONS} repository. The reusable draft modules listed below remain
+in Aion as individually reviewable source material; they are not an API that
+0.2 must preserve.
+\end{statusbox}
+
+The principal reusable draft components are:
+
+\begin{longtable}{@{}p{0.31\textwidth}p{0.63\textwidth}@{}}
+\toprule
+Current module & Implemented research functionality\\
+\midrule
+\endhead
+\path{src/aion/cn_tddft.py} &
+Bare length-gauge propagation, LG kick, density/dipole utilities, and
+fixed-metric SCEM; it still contains older propagation paths and a coarse
+energy interface.\\
+\path{src/aion/velocity_gauge.py} &
+Bare local velocity-gauge Hamiltonian, reduced-vector-potential pulse,
+discontinuous VG kick, and mechanical current.\\
+\path{src/aion/pyscf_p0.py} &
+CPU/GPU inverse density dressing, PySCF potential/energy construction, and
+forward Hamiltonian dressing; live mean-field state is not yet separated into
+a backend-neutral reference artifact.\\
+\path{src/aion/p0_e1.py} &
+Central dipoles, E1 variational potential, connection contribution,
+covariant dipole, and analytic E1-current terms.\\
+\path{src/aion/observables.py} &
+P0 site charge, analytic charge derivative, pair/graph current, continuity,
+and graph power.\\
+\path{src/aion/connection_cayley.py} &
+Connection-aware SCEM experiments, Cayley/Pad\'e transport, and Cholesky
+metric correction.\\
+\path{src/aion/p0_diagnostics.py} &
+Flat research diagnostic rows, including partial current/power/energy
+quantities.\\
+\bottomrule
+\end{longtable}
+
+Important missing reusable layers are:
+
+\begin{itemize}
+\item a unified immutable reference and source/simulation builder;
+\item formulation-owned typed primary and diagnostic observables;
+\item the generic mechanical-current operator API;
+\item the complete qualified energy ledger and independent analytic
+  \(\dd U/\dd t\);
+\item a single shared SCEM nonlinear engine behind both transports;
+\item versioned transactional HDF5 with exact restart lineage;
+\item a thin common CLI and reusable spectroscopy outputs.
+\end{itemize}
+
+At present, some comparison scripts reconstruct missing VG linear and
+diamagnetic kinetic energies, calculate bare-LG momentum current, or assemble
+covariant mechanical diagnostics after propagation. Plotting scripts also
+encode observable definitions. In 0.2 these calculations belong to
+\code{aion.observables}; campaigns select and plot stored definitions but do
+not rederive them.
+
+\section{Validation requirements}
+
+\subsection{Hierarchy}
+
+The validation fixtures have distinct purposes:
+
+\begin{description}[leftmargin=32mm,style=nextline]
+\item[Synthetic matrices]
+Exact signs, Hermiticity, metric compatibility, graph incidence/orientation,
+gauge covariance, rational-map algebra, and cross-metric transport.
+\item[H\(_2\)]
+Zero field, molecular symmetry, bare-gauge smoke tests, exact kicks, and
+compact timestep convergence.
+\item[LiH]
+Nonzero E1 response, gauge/origin transformations, variational current,
+continuity, Ward energy, connection transport, restart, and CPU/GPU parity.
+\item[NH\(_3\)]
+Integrated release validation only: aug-cc-pVTZ, five driven cycles plus five
+field-free cycles, all four formulations, accepted step and a shorter
+half-step interval.
+\end{description}
+
+CO, ammonia/PNA production studies, and basis-convergence campaigns are
+external scientific calculations, not unit-test decisions. Existing draft
+trajectories are evidence, not golden truth.
+
+\subsection{Independent internal checks}
+
+The principal assertions are:
+
+\begin{enumerate}
+\item \(P=P^\dagger\), electron number and occupied-state metric
+  normalization;
+\item Eq.~\eqref{eq:metric-compatibility} and cross-metric preservation;
+\item explicit gauge-function transformations and EMF invariance;
+\item translation of the EM origin, including electronic/nuclear
+  cancellation for neutral systems;
+\item Eq.~\eqref{eq:cov-continuity} on every node and consistency of pair
+  signs with Eq.~\eqref{eq:graph-current};
+\item directional derivatives of the variational source action versus
+  Eq.~\eqref{eq:source-current};
+\item analytic Eq.~\eqref{eq:j-mu}, independent of finite differences;
+\item energy-component sums and analytic Eq.~\eqref{eq:analytic-energy-rate}
+  versus source power;
+\item approximately second-order reduction of trajectory and Ward errors
+  under step halving;
+\item uninterrupted versus restarted trajectory identity;
+\item CPU/GPU parity for state, observables, energy components, invariants,
+  and backend residency.
+\end{enumerate}
+
+Full-array pinned trajectories are not the primary oracle. Selected numerical
+endpoints are retained only when they provide an independent protection.
+
+\subsection{GPU and performance policy}
+
+Every milestone that changes executable numerical physics must run its
+applicable tests on the physical GPU. The execution sandbox may hide the
+device; this is handled by requesting elevated execution, never by omitting
+GPU tests or substituting CPU-only tests. A requested GPU backend fails if
+unavailable.
+
+The fast test suite uses up to eight workers with one BLAS thread each.
+Molecular CPU tests run serially with up to eight BLAS threads, and GPU tests
+run serially. Preparation, Fock construction, steady step time, memory, I/O,
+and host transfers are measured separately. An unexplained steady-step
+regression of roughly ten percent or more is flagged, but correctness and
+physics gates take priority.
+
+\section{Conclusions}
+
+The bare and covariant formulations solve related physical problems but do
+not share interchangeable current or energy definitions. Bare LG uses the
+analytic dipole derivative as its primary current; bare VG uses paramagnetic
+plus diamagnetic mechanical current and requires the complete mechanical
+kinetic energy; P0+E1 uses the variational source current implied by its
+projected connection. A common ambient-projected mechanical current is an
+important diagnostic, not a replacement for the covariant source current.
+
+The difficult numerical feature of P0+E1 is not ignorance of the connection:
+the connection is analytically known from prescribed fields and static matrix
+elements. The issue is faithful finite-step transport between distinct
+metrics while the nonlinear Hamiltonian is determined at the midpoint. Exact
+site parallel transport, a combined residual generator, Pad\'e midpoint
+propagation, and a right Cholesky cross-metric correction address that geometry
+without an evolving L\"owdin frame.
+
+The planned 0.2 architecture makes these physics definitions reusable and
+auditable. It separates immutable reference preparation, physical sources,
+formulations, propagation, observables, and storage; it records qualified
+energy/current definitions; and it treats conservation, Ward identities,
+convergence, restart, and CPU/GPU parity as release gates. The preservation and
+repository-separation gate WP0 is complete. Numerical and API implementation
+still requires separate authorization.
+
+\section*{Rebuilding this document}
+
+From the \path{aion/docs} directory, the PDF is rebuilt and all references are
+resolved with the single shell command
+\begin{verbatim}
+for pass in 1 2 3; do \
+  /usr/bin/pdflatex -interaction=nonstopmode \
+  -halt-on-error theory_and_implementation.tex; \
+done
+\end{verbatim}
+The generated auxiliary, log, outline, and table-of-contents files are build
+artifacts; the tracked deliverables are the TeX source and PDF.
+
+\begin{thebibliography}{99}
+
+\bibitem{RungeGross1984}
+E.~Runge and E.~K.~U. Gross,
+\emph{Density-Functional Theory for Time-Dependent Systems},
+\emph{Physical Review Letters} \textbf{52}, 997--1000 (1984),
+\href{https://doi.org/10.1103/PhysRevLett.52.997}
+{doi:10.1103/PhysRevLett.52.997}.
+
+\bibitem{Casida1995}
+M.~E. Casida,
+\emph{Time-dependent density functional response theory for molecules},
+in \emph{Recent Advances in Density Functional Methods, Part I},
+edited by D.~P. Chong (World Scientific, 1995), pp.~155--192.
+
+\bibitem{Pemmaraju2018}
+C.~D. Pemmaraju, F.~D. Vila, J.~J. Kas, S.~A. Sato, J.~J. Rehr, K.~Yabana,
+and D.~Prendergast,
+\emph{Velocity-gauge real-time TDDFT within a numerical atomic orbital basis
+set},
+\emph{Computer Physics Communications} \textbf{226}, 30--38 (2018),
+\href{https://doi.org/10.1016/j.cpc.2018.01.013}
+{doi:10.1016/j.cpc.2018.01.013}.
+
+\bibitem{ArtachoORegan2017}
+E.~Artacho and D.~D. O'Regan,
+\emph{Quantum mechanics in an evolving Hilbert space},
+\emph{Physical Review B} \textbf{95}, 115155 (2017),
+\href{https://doi.org/10.1103/PhysRevB.95.115155}
+{doi:10.1103/PhysRevB.95.115155}.
+
+\bibitem{PBE1996}
+J.~P. Perdew, K.~Burke, and M.~Ernzerhof,
+\emph{Generalized Gradient Approximation Made Simple},
+\emph{Physical Review Letters} \textbf{77}, 3865--3868 (1996),
+\href{https://doi.org/10.1103/PhysRevLett.77.3865}
+{doi:10.1103/PhysRevLett.77.3865}.
+
+\bibitem{Sun2018}
+Q.~Sun, T.~C. Berkelbach, N.~S. Blunt, G.~H. Booth, S.~Guo, Z.~Li,
+J.~Liu, J.~D. McClain, E.~R. Sayfutyarova, S.~Sharma, S.~Wouters, and
+G.~K.-L. Chan,
+\emph{PySCF: the Python-based simulations of chemistry framework},
+\emph{WIREs Computational Molecular Science} \textbf{8}, e1340 (2018),
+\href{https://doi.org/10.1002/wcms.1340}
+{doi:10.1002/wcms.1340}.
+
+\bibitem{Higham2008}
+N.~J. Higham,
+\emph{Functions of Matrices: Theory and Computation}
+(Society for Industrial and Applied Mathematics, 2008),
+\href{https://doi.org/10.1137/1.9780898717778}
+{doi:10.1137/1.9780898717778}.
+
+\end{thebibliography}
+
+\end{document}
