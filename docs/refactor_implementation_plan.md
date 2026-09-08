@@ -1,6 +1,6 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0 complete; numerical/API implementation has not started
+Status: WP0 and WP1 complete; numerical implementation has not started
 
 Last design review: 2026-09-08
 
@@ -560,6 +560,8 @@ Milestone M0: untouched archive plus auditable clean repository boundaries.
 
 Dependencies: WP0.
 
+Status: complete on 2026-09-08.
+
 Work:
 
 - rebuild pyproject.toml for version 0.2.0 development;
@@ -897,10 +899,11 @@ reason.
 | 2026-09-08 | Initial plan created from the completed design interview | Establish the agreed 0.2 implementation baseline before any tree mutation |
 | 2026-09-08 | Removed special-purpose pulse terminology | Pulses are source objects; their scientific use belongs to a simulation or workflow |
 | 2026-09-08 | Completed WP0 archive, migration, and audit | Establish an immutable recovery point and separate reusable code from calculations before refactoring |
+| 2026-09-08 | Completed WP1 package, configuration, identity, schema, observable-record, status, API, CLI, and quality contracts | Establish the clean typed 0.2 boundary and remove active access to unreviewed draft numerics before porting physics |
 
 ## 16. Present authorization
 
-Creation of this plan, the companion LaTeX note/PDF, and execution of WP0 were
-authorized and are complete. WP1 through WP7 remain proposed future actions.
-This document does not itself authorize numerical/API refactoring, new
+Creation of this plan, the companion LaTeX note/PDF, and execution of WP0 and
+WP1 were authorized and are complete. WP2 through WP7 remain proposed future
+actions. This document does not itself authorize numerical implementation, new
 calculation campaigns, or release.

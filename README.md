@@ -1,135 +1,95 @@
-# aion
+# Aion
 
-Prototype real-time electronic dynamics code for fixed Gaussian AO bases.
+Aion is a reusable Python library for gauge-covariant real-time TDDFT in
+finite molecular atomic-orbital bases. Version `0.2.0.dev1` is a clean break
+from the archived research prototype.
 
-The current useful development target is deliberately narrow:
+WP1 establishes the non-numerical contracts on which the new implementation
+will be built:
 
-- closed-shell PySCF RKS references,
-- molecular Gaussian basis sets,
-- pure length gauge with spatially uniform electric fields,
-- occupied-orbital propagation in the AO basis,
-- adiabatic local or semi-local DFT, currently tested mainly with PBE,
-- strict self-consistent exponential midpoint propagation,
-- optional GPU execution through GPU4PySCF and CuPy.
+- immutable, strictly validated Python configurations;
+- deterministic normalized TOML and lossless scientific identities;
+- explicit atomic-unit, electromagnetic-origin, and fixed-time-grid types;
+- independently versioned HDF5 artifact schemas and typed observables;
+- a strict `status.json` record;
+- physics-oriented package domains and a small typed public API;
+- a thin `aion` CLI with `prepare`, `run`, `resume`, `inspect`, and `export`.
 
-Older leapfrog, generalized Crank-Nicolson, and EP-PC1 paths remain in the tree
-for comparison, but new development should use the SCEM path unless there is a
-specific reason to compare integrators.
+The numerical reference builder, formulations, propagators, runners, and
+spectroscopy workflows are intentionally unavailable at this milestone. Their
+public shells fail explicitly instead of importing or executing archived draft
+code.
 
-An experimental conventional velocity-gauge driver following Pemmaraju et al.
-is also available for finite-basis comparisons.  It uses the same SCEM path as
-the length-gauge driver; see `docs/pemmaraju_velocity_gauge.md` for conventions,
-current observables, and the intentional nonlocal-pseudopotential restriction.
+## Validated domain
 
-## Core API
+The first `0.2` implementation targets fixed-nucleus, finite, all-electron
+molecules; closed-shell spin-summed RKS; pure LDA/GGA functionals; prescribed
+uniform electric fields; fixed timesteps; and float64/complex128 CPU and GPU
+execution. Pseudopotentials, hybrids, moving nuclei, periodic systems, Maxwell
+backreaction, and adaptive timesteps are rejected rather than approximated.
 
-The main entry point is:
+## Python API
+
+Only names in `aion.__all__` define the stable top-level API. The principal
+workflow functions are:
 
 ```python
-from aion import LengthGaugeCNRTTDDFT
-
-rt = LengthGaugeCNRTTDDFT.from_ground_state(
-    mf,
-    field=lambda t: [0.0, 0.0, 0.0],
-    backend="cpu",
+from aion import (
+    build_simulation,
+    load_reference,
+    load_trajectory,
+    prepare_reference,
+    resume,
+    run,
 )
-coeff = rt.apply_delta_kick(rt.initial_coefficients(), [0.0, 0.0, 1.0e-3])
-
-for coeff, rec in rt.propagate_scem(coeff, dt=0.05, nsteps=10):
-    print(rec.time, rec.dipole)
 ```
 
-For GPU runs, construct the PySCF object with GPU4PySCF first:
+Expert contracts are available from their named domains:
 
-```python
-mf = mf.density_fit().to_gpu()
-rt = LengthGaugeCNRTTDDFT.from_ground_state(mf, field, backend="gpu")
+```text
+aion.config
+aion.backends
+aion.electronic_structure
+aion.electromagnetism
+aion.formulations
+aion.propagation
+aion.observables
+aion.io
+aion.workflows
 ```
 
-Run GPU examples and tests through the project launcher:
+See [configuration_and_schema_contracts.md](docs/configuration_and_schema_contracts.md)
+for the exact configuration, identity, artifact, observable, and CLI contracts.
+The physics and planned implementation are specified in
+[theory_and_implementation.pdf](docs/theory_and_implementation.pdf) and
+[refactor_implementation_plan.md](docs/refactor_implementation_plan.md).
 
-```bash
-/home/cgs/00_WORK/Projection_Code/aion/tools/gpu-python -m pytest -q tests/test_gpu_backend.py
-```
+## Managed development environment
 
-The launcher sets the local `PYTHONPATH`, CUDA library paths, and cache
-directories needed by this workstation.
-
-## Managed CPU development environment
-
-The CPU/PySCF development environment belongs exclusively to Aion. Its direct
-requirements are declared in `environment.yml`, and its exact conda-forge
-package URLs and hashes are recorded in `conda-linux-64.lock`. Run it without
-activating Conda or modifying shell startup files:
+Use the project-owned Python 3.12 prefix without activating Conda:
 
 ```bash
 /home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
   -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
-  python --version
+  python -m pytest -n 8 -m fast
 ```
 
-The local checkout is installed editable in that prefix. The GPU launcher is
-a separate workstation path and is not part of this CPU reference
-environment.
-
-## Supported Envelope
-
-The validated production-like path is:
-
-- `LengthGaugeCNRTTDDFT.propagate_scem` or `run_scem`,
-- closed-shell RKS,
-- pure LDA/GGA functionals,
-- real AO bases,
-- `real_density_for_veff=True`,
-- CPU PySCF or GPU4PySCF density-fitted PBE.
-
-Hybrid TDDFT, TDHF, and full complex-density GPU exchange are not supported
-yet.  The GPU path intentionally rejects unsupported combinations rather than
-silently running a physically different approximation.
-
-## Tests
-
-CPU tests:
+Quality gates are:
 
 ```bash
 /home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
   -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
-  python -m pytest -q
+  ruff check src tests
+
+/home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
+  -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
+  ruff format --check src tests
+
+/home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
+  -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
+  mypy
 ```
 
-GPU tests:
-
-```bash
-/home/cgs/00_WORK/Projection_Code/aion/tools/gpu-python -m pytest -q tests/test_gpu_backend.py
-```
-
-## Examples
-
-Small examples are kept as runnable documentation.  They should not become the
-main implementation.
-
-- `examples/gpu_backend/run_h2_gpu_scem.py`: tiny GPU smoke run.
-- `examples/gpu_backend/benchmark_scem_cpu_gpu.py`: CPU/GPU timing harness.
-- `examples/gauge_p0_toy/run_p0_toy_gauge_compare.py`: pure Peierls P0 toy
-  propagation comparing length, mixed, and velocity gauges on source
-  observables, graph currents, continuity, and power diagnostics.  Use
-  `--model hubbard` to exercise the nonlinear midpoint solve.
-- `examples/velocity_gauge/run_h2_pemmaraju_comparison.py`: compares the
-  conventional static-AO length and Pemmaraju velocity gauges with Wilson
-  P0+E1 length/velocity trajectories under one analytic pulse.
-- `examples/velocity_gauge/optimize_h2o.py`, `run_h2o_casida.py`, and
-  `run_h2o_pemmaraju_comparison.py`: optimize H2O, locate its lowest
-  dipole-allowed Casida root, and run the same four-way comparison resonantly
-  on the optimized molecule.
-- `examples/pyscf_p0_bridge/run_h2_p0_one_body.py`: H2 P0 one-body propagation
-  using real PySCF Gaussian AO overlap and core Hamiltonian matrices.
-- `examples/small_molecule_references/run_diatomic_kick_spectrum.py`: reference
-  diatomic kick spectrum runner with CN, EP-PC1, and SCEM options.
-
-Large exploratory campaigns and generated trajectories are intentionally kept
-out of version control.
-
-## Current Numerical Status
-
-See `docs/scem_current_status.md` for the current integrator choice, timestep
-guidance, GPU status, and near-term development plan.
+Fast tests use at most eight workers. Molecular CPU integrations will run
+serially with up to eight numerical-library threads, while physical-GPU tests
+will run serially through `tools/gpu-python`.

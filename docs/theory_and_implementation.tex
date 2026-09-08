@@ -61,9 +61,10 @@ source work, and the evolving-metric connection. The production propagation
 algorithm is self-consistent exponential midpoint (SCEM), with a
 connection-aware transport for the covariant formulations and no
 time-dependent L\"owdin frame. The final sections map these definitions to a
-reusable API, storage schema, and validation hierarchy. This is a normative
-design document; it does not claim that the refactor described here has already
-been implemented.
+reusable API, storage schema, and validation hierarchy. This is primarily a
+normative design document. Its non-numerical package, configuration, identity,
+schema, status, and API contracts were implemented in WP1; the physical and
+numerical layers remain gated future work unless explicitly identified.
 \end{abstract}
 
 \tableofcontents
@@ -1161,61 +1162,58 @@ Loading reconstructs PySCF/backend models and verifies fingerprints.
 Atomic projectors/topology and P0/E1 tensors are independently versioned
 derived bundles with their own invalidation boundaries.
 
-\section{Present draft versus the 0.2 target}
+\section{Present implementation versus the 0.2 target}
 
-\begin{statusbox}{Current-tree assessment after WP0}
+\begin{statusbox}{Current-tree assessment after WP1}
 The research draft was archived and verified on 8 September 2026. Its
 molecule-specific campaigns, runners, postprocessing, historical notes, and
 large results were moved with checksum manifests to the separate
-\path{CALCULATIONS} repository. The reusable draft modules listed below remain
-in Aion as individually reviewable source material; they are not an API that
-0.2 must preserve.
+\path{CALCULATIONS} repository. WP1 then removed the active flat prototype
+modules and established the clean 0.2 package contracts. Draft equations and
+kernels remain available through the immutable archive and calculation
+repository, but none is silently reachable through the 0.2 API.
 \end{statusbox}
 
-The principal reusable draft components are:
+The reusable layers implemented by WP1 are:
 
 \begin{longtable}{@{}p{0.31\textwidth}p{0.63\textwidth}@{}}
 \toprule
-Current module & Implemented research functionality\\
+Current package & Implemented contract\\
 \midrule
 \endhead
-\path{src/aion/cn_tddft.py} &
-Bare length-gauge propagation, LG kick, density/dipole utilities, and
-fixed-metric SCEM; it still contains older propagation paths and a coarse
-energy interface.\\
-\path{src/aion/velocity_gauge.py} &
-Bare local velocity-gauge Hamiltonian, reduced-vector-potential pulse,
-discontinuous VG kick, and mechanical current.\\
-\path{src/aion/pyscf_p0.py} &
-CPU/GPU inverse density dressing, PySCF potential/energy construction, and
-forward Hamiltonian dressing; live mean-field state is not yet separated into
-a backend-neutral reference artifact.\\
-\path{src/aion/p0_e1.py} &
-Central dipoles, E1 variational potential, connection contribution,
-covariant dipole, and analytic E1-current terms.\\
-\path{src/aion/observables.py} &
-P0 site charge, analytic charge derivative, pair/graph current, continuity,
-and graph power.\\
-\path{src/aion/connection_cayley.py} &
-Connection-aware SCEM experiments, Cayley/Pad\'e transport, and Cholesky
-metric correction.\\
-\path{src/aion/p0_diagnostics.py} &
-Flat research diagnostic rows, including partial current/power/energy
-quantities.\\
+\code{aion.config} &
+Frozen reference and simulation dataclasses, atomic-unit origin and fixed-grid
+types, discriminated formulations/sources/events, strict TOML resolution, and
+lossless canonical SHA-256 identities.\\
+\code{aion.io} &
+Independent semantic schema versions, structural validators and skeletons for
+reference, trajectory, source-history, and checkpoint HDF5 artifacts, plus the
+strict non-authoritative \code{status.json} record. Transactional writers are
+not yet implemented.\\
+\code{aion.observables} &
+Definition-specific immutable observable metadata and sampled records. The
+physical dipole, current, energy, power, Ward, and continuity calculators are
+not yet implemented.\\
+\code{aion.workflows} and \code{aion} &
+Typed top-level interfaces and CLI commands. Numerical entry points fail
+explicitly with their owning future work package; configuration validation and
+HDF5 header inspection are functional.\\
 \bottomrule
 \end{longtable}
 
 Important missing reusable layers are:
 
 \begin{itemize}
-\item a unified immutable reference and source/simulation builder;
-\item formulation-owned typed primary and diagnostic observables;
+\item a unified immutable prepared reference and compiled-source/simulation
+  builder behind the established configuration contracts;
+\item formulation-owned physical primary and diagnostic observable
+  calculators behind the established record types;
 \item the generic mechanical-current operator API;
 \item the complete qualified energy ledger and independent analytic
   \(\dd U/\dd t\);
 \item a single shared SCEM nonlinear engine behind both transports;
-\item versioned transactional HDF5 with exact restart lineage;
-\item a thin common CLI and reusable spectroscopy outputs.
+\item transactional HDF5 writers with exact restart lineage;
+\item completed numerical CLI commands and reusable spectroscopy outputs.
 \end{itemize}
 
 At present, some comparison scripts reconstruct missing VG linear and
@@ -1312,13 +1310,14 @@ site parallel transport, a combined residual generator, Pad\'e midpoint
 propagation, and a right Cholesky cross-metric correction address that geometry
 without an evolving L\"owdin frame.
 
-The planned 0.2 architecture makes these physics definitions reusable and
+The 0.2 architecture makes these physics definitions reusable and
 auditable. It separates immutable reference preparation, physical sources,
 formulations, propagation, observables, and storage; it records qualified
 energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
-repository-separation gate WP0 is complete. Numerical and API implementation
-still requires separate authorization.
+repository-separation gate WP0 and the non-numerical contract gate WP1 are
+complete. Numerical implementation begins with WP2 and remains subject to its
+separate acceptance gates.
 
 \section*{Rebuilding this document}
 

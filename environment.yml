@@ -6,9 +6,13 @@ dependencies:
   - python=3.12
   - numpy
   - scipy
+  - h5py
   - pyscf
   - matplotlib
   - pytest
+  - pytest-xdist
+  - ruff
+  - mypy
   - pip
   - setuptools>=64
   - wheel

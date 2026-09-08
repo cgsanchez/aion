@@ -1,39 +1,92 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aion"
-version = "0.1.0"
-description = "Real-time TDDFT prototypes for gauge-covariant finite-basis dynamics"
-requires-python = ">=3.10"
+version = "0.2.0.dev1"
+description = "Gauge-covariant real-time TDDFT for finite molecular AO bases"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-  "numpy",
-  "scipy",
+  "h5py>=3.12",
+  "numpy>=2.0",
+  "scipy>=1.14",
 ]
 
 [project.optional-dependencies]
-pyscf = [
-  "pyscf",
+cpu = [
+  "pyscf>=2.8",
 ]
 gpu = [
-  "cupy-cuda12x",
-  "gpu4pyscf-cuda12x",
+  "cupy-cuda12x>=14.0",
+  "gpu4pyscf-cuda12x>=1.7",
+  "pyscf>=2.8",
 ]
 plot = [
-  "matplotlib",
+  "matplotlib>=3.9",
 ]
 test = [
-  "pytest",
+  "pytest>=8",
+  "pytest-xdist>=3.6",
+]
+quality = [
+  "mypy>=1.15",
+  "ruff>=0.11",
 ]
 dev = [
-  "matplotlib",
-  "pyscf",
-  "pytest",
+  "matplotlib>=3.9",
+  "mypy>=1.15",
+  "pyscf>=2.8",
+  "pytest>=8",
+  "pytest-xdist>=3.6",
+  "ruff>=0.11",
 ]
+
+[project.scripts]
+aion = "aion.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+aion = ["py.typed"]
+
 [tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers -m 'not integration and not gpu'"
 pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "fast: dependency-light algebraic, configuration, and schema tests",
+  "integration: small molecular CPU integration tests run serially",
+  "gpu: physical-GPU tests run serially in the managed GPU environment",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = [
+  "src/aion/__init__.py",
+  "src/aion/_version.py",
+  "src/aion/cli.py",
+  "src/aion/config",
+  "src/aion/io",
+  "src/aion/observables",
+  "src/aion/workflows",
+]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["h5py", "h5py.*"]
+ignore_missing_imports = true
