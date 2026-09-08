@@ -176,3 +176,70 @@ def test_uniform_b_symmetric_and_landau_gauges_are_site_gauge_equivalent():
         ao_g[:, None] * symmetric.metric(0.0) * ao_g.conj()[None, :]
     )
     assert np.linalg.norm(landau.metric(0.0) - transformed_metric) < 1.0e-12
+
+
+def test_uniform_b_affine_point_and_straight_line_operations():
+    field = np.array([0.13, -0.08, 0.11])
+    origin = np.array([0.21, -0.34, 0.17])
+    landau_u = np.array([field[1], -field[0], 0.0])
+    starts = np.array(
+        [
+            [0.24, -0.17, 0.31],
+            [-0.42, 0.56, 0.13],
+        ]
+    )
+    ends = np.array(
+        [
+            [1.12, 0.37, -0.29],
+            [0.33, -0.22, 0.71],
+        ]
+    )
+
+    gauges = (
+        UniformMagneticGauge(field, gauge="symmetric", origin=origin),
+        UniformMagneticGauge(
+            field,
+            gauge="landau",
+            origin=origin,
+            landau_u=landau_u,
+        ),
+    )
+    for gauge in gauges:
+        if gauge.gauge == "symmetric":
+            expected_a = 0.5 * np.cross(field, ends - origin)
+        else:
+            assert gauge.landau_u is not None
+            expected_a = np.einsum(
+                "px,x->p",
+                ends - origin,
+                gauge.landau_u,
+            )[:, None] * np.cross(field, gauge.landau_u)[None, :]
+        assert np.linalg.norm(gauge.vector_potential(ends) - expected_a) < 1.0e-14
+
+        midpoint = 0.5 * (starts + ends)
+        displacement = ends - starts
+        expected_integral = np.einsum(
+            "px,px->p",
+            gauge.vector_potential(midpoint),
+            displacement,
+        )
+        actual_integral = gauge.straight_line_integrals(starts, ends)
+        assert np.linalg.norm(actual_integral - expected_integral) < 1.0e-14
+
+        analytic_gradient = gauge.straight_line_integral_gradients(starts, ends)
+        finite_difference = np.empty_like(analytic_gradient)
+        step = 1.0e-6
+        for component in range(3):
+            shift = np.zeros(3)
+            shift[component] = step
+            plus = gauge.straight_line_integrals(starts, ends + shift)
+            minus = gauge.straight_line_integrals(starts, ends - shift)
+            finite_difference[:, component] = (plus - minus) / (2.0 * step)
+        assert np.linalg.norm(analytic_gradient - finite_difference) < 1.0e-9
+
+        coords = np.vstack((starts, ends[:1]))
+        pairwise = gauge.straight_line_integrals(
+            coords[None, :, :],
+            coords[:, None, :],
+        )
+        assert np.linalg.norm(gauge.bond_line_integrals(coords) - pairwise) < 1.0e-14

@@ -10,6 +10,7 @@ from aion.matrix_models import (
     density_from_coefficients,
     site_populations,
 )
+from aion.p0_diagnostics import coefficient_derivative
 from aion.variable_metric import VariableMetricSCEM
 
 
@@ -76,6 +77,55 @@ def test_variable_metric_scem_preserves_endpoint_metric_for_linear_model():
     assert result.iterations == 1
     assert result.hamiltonian_residual < 1.0e-12
     assert rt.orthonormality_error(result.coeff_next, 0.2) < 1.0e-11
+
+
+def test_variable_metric_scem_matches_instantaneous_connection_equation():
+    rng = np.random.default_rng(86420)
+    anchors = AOAnchors(
+        atom_coords=np.array([[0.0, 0.0, 0.0], [1.2, -0.3, 0.4]]),
+        ao_to_atom=np.array([0, 0, 1]),
+    )
+    s0 = _spd_matrix(rng, anchors.nao)
+    h0 = _hermitian_matrix(rng, anchors.nao)
+    field = np.array([0.04, -0.02, 0.03])
+    geometry = PeierlsGeometry(
+        anchors,
+        s0,
+        electric=UniformElectricGauge.length(
+            field=_constant_vector(field),
+            field_integral=lambda t: field * t,
+        ),
+    )
+    model = LinearOneBodyModel(h0)
+    occupations = np.array([2.0])
+    time = 0.37
+    coeff = _orthonormal_coefficients(rng, geometry.metric(time), nocc=1)
+    density = density_from_coefficients(coeff, occupations)
+    hamiltonian = model.hamiltonian(density, time, geometry)
+    expected = coefficient_derivative(coeff, hamiltonian, geometry, time)
+    rt = VariableMetricSCEM(geometry, model, occupations)
+
+    errors = []
+    for dt in (2.0e-3, 1.0e-3):
+        plus = rt.step(
+            coeff,
+            time=time,
+            dt=dt,
+            midpoint_tolerance=1.0e-12,
+            density_tolerance=None,
+        ).coeff_next
+        minus = rt.step(
+            coeff,
+            time=time,
+            dt=-dt,
+            midpoint_tolerance=1.0e-12,
+            density_tolerance=None,
+        ).coeff_next
+        finite_difference = (plus - minus) / (2.0 * dt)
+        errors.append(np.linalg.norm(finite_difference - expected))
+
+    assert errors[1] < errors[0] / 3.5
+    assert errors[1] < 2.0e-5
 
 
 def test_site_hubbard_model_converges_and_preserves_endpoint_metric():

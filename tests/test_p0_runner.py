@@ -71,6 +71,26 @@ def test_sin2_uniform_electric_gauge_impulse_matches_field_derivative():
     assert np.linalg.norm(electric.impulse(100.0) - electric.impulse(50.0)) < 1.0e-14
 
 
+def test_five_cycle_sin2_pulse_has_zero_field_and_vector_potential_at_end():
+    omega = 0.20304185038149578
+    duration = 5.0 * 2.0 * np.pi / omega
+    electric = sin2_uniform_electric_gauge(
+        amplitude=0.025,
+        omega=omega,
+        cycles=5.0,
+        polarization=np.array([0.0, 0.0, 1.0]),
+        lambda_value=1.0,
+    )
+
+    assert np.linalg.norm(electric.electric_field(duration)) < 1.0e-14
+    assert np.linalg.norm(electric.vector_potential(duration)) < 1.0e-14
+    assert np.linalg.norm(electric.electric_field(np.nextafter(duration, np.inf))) == 0.0
+    assert (
+        np.linalg.norm(electric.vector_potential(np.nextafter(duration, np.inf)))
+        < 1.0e-14
+    )
+
+
 def test_velocity_delta_kick_transforms_coefficients_to_post_kick_metric():
     anchors, s0, _h0, occupations, coeff = _toy_problem()
     field_free = PeierlsGeometry(anchors, s0)

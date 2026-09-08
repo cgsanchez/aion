@@ -14,8 +14,10 @@ from .observables import (
     electronic_energy,
     energy_derivative,
     p0_continuity_residual,
+    p0_dipole_derivative,
     p0_dipole_moment,
     p0_dipole_power,
+    p0_graph_current_vector,
     p0_graph_currents,
     p0_site_charge_derivative,
     p0_site_charges,
@@ -26,6 +28,8 @@ from .p0_e1 import (
     p0_e1_dipole_derivative,
     p0_e1_dipole_moment,
     p0_e1_dipole_power,
+    p0_e1_intrinsic_dipole_derivative,
+    p0_e1_uniform_residual_current,
 )
 
 
@@ -163,6 +167,8 @@ def record_p0_observables(
     currents = p0_graph_currents(rho, hamiltonian, geometry, time)
     current_balance = np.sum(currents, axis=1)
     continuity_residual = p0_continuity_residual(charge_derivative, currents)
+    p0_current_vector = p0_graph_current_vector(currents, geometry)
+    p0_dipole_dot = p0_dipole_derivative(charge_derivative, geometry)
     energy = model_energy(model, rho, time, geometry, hamiltonian)
     energy_dot = model_energy_derivative(
         model,
@@ -179,6 +185,9 @@ def record_p0_observables(
         geometry,
         electric_field_for_power(geometry, time),
     )
+    field = electric_field_for_power(geometry, time)
+    source_current = p0_current_vector
+    source_current_power = float(np.dot(field, source_current))
 
     row: P0Row = {
         "step": int(step),
@@ -193,6 +202,14 @@ def record_p0_observables(
         "dipole_x": float(dipole[0]),
         "dipole_y": float(dipole[1]),
         "dipole_z": float(dipole[2]),
+        "source_current_x": float(source_current[0]),
+        "source_current_y": float(source_current[1]),
+        "source_current_z": float(source_current[2]),
+        "source_current_power": source_current_power,
+        "source_current_power_residual": energy_dot - source_current_power,
+        "source_current_dipole_derivative_residual_norm": float(
+            np.linalg.norm(source_current - p0_dipole_dot)
+        ),
         "orthonormality_error": coefficient_orthonormality_error(coeff, metric),
         "midpoint_iterations": int(midpoint_iterations),
         "hamiltonian_residual": float(hamiltonian_residual),
@@ -222,8 +239,38 @@ def record_p0_observables(
             central_dipoles0=central_dipoles0,
             geometry=geometry,
             t=time,
-            electric_field=electric_field_for_power(geometry, time),
+            electric_field=field,
         )
+        intrinsic_current = p0_e1_intrinsic_dipole_derivative(
+            density=rho,
+            density_dot=rho_dot,
+            central_dipoles0=central_dipoles0,
+            geometry=geometry,
+            t=time,
+        )
+        residual_current = p0_e1_uniform_residual_current(
+            density=rho,
+            density_dot=rho_dot,
+            central_dipoles0=central_dipoles0,
+            geometry=geometry,
+            t=time,
+            electric_field=field,
+        )
+        phase_response = residual_current - intrinsic_current
+        base_hamiltonian = hamiltonian - model.e1_hamiltonian(time, geometry)
+        split_graph_currents = p0_graph_currents(
+            rho,
+            hamiltonian,
+            geometry,
+            time,
+            source_hamiltonian=base_hamiltonian,
+        )
+        split_p0_current = p0_graph_current_vector(
+            split_graph_currents,
+            geometry,
+        )
+        source_current = split_p0_current + residual_current
+        source_current_power = float(np.dot(field, source_current))
         row.update(
             {
                 "e1_dipole_x": float(e1_dipole[0]),
@@ -232,6 +279,27 @@ def record_p0_observables(
                 "e1_dipole_derivative_x": float(e1_dipole_derivative[0]),
                 "e1_dipole_derivative_y": float(e1_dipole_derivative[1]),
                 "e1_dipole_derivative_z": float(e1_dipole_derivative[2]),
+                "p0_action_current_x": float(split_p0_current[0]),
+                "p0_action_current_y": float(split_p0_current[1]),
+                "p0_action_current_z": float(split_p0_current[2]),
+                "e1_polarization_current_x": float(intrinsic_current[0]),
+                "e1_polarization_current_y": float(intrinsic_current[1]),
+                "e1_polarization_current_z": float(intrinsic_current[2]),
+                "e1_phase_response_current_x": float(phase_response[0]),
+                "e1_phase_response_current_y": float(phase_response[1]),
+                "e1_phase_response_current_z": float(phase_response[2]),
+                "e1_residual_current_x": float(residual_current[0]),
+                "e1_residual_current_y": float(residual_current[1]),
+                "e1_residual_current_z": float(residual_current[2]),
+                "source_current_x": float(source_current[0]),
+                "source_current_y": float(source_current[1]),
+                "source_current_z": float(source_current[2]),
+                "source_current_power": source_current_power,
+                "source_current_power_residual": energy_dot
+                - source_current_power,
+                "source_current_dipole_derivative_residual_norm": float(
+                    np.linalg.norm(source_current - e1_dipole_derivative)
+                ),
                 "e1_dipole_power": e1_dipole_power,
                 "e1_power_residual": energy_dot - e1_dipole_power,
             }
@@ -305,6 +373,14 @@ def summarize_p0_gauge_errors(
     ref_pop = np.column_stack(
         [p0_row_series(reference, f"population_{atom}") for atom in range(natom)]
     )
+    has_source_current = all(
+        f"source_current_{axis}" in reference[0] for axis in "xyz"
+    )
+    ref_source_current = None
+    if has_source_current:
+        ref_source_current = np.column_stack(
+            [p0_row_series(reference, f"source_current_{axis}") for axis in "xyz"]
+        )
     has_e1 = all(f"e1_dipole_{axis}" in reference[0] for axis in "xyz")
     ref_e1_dipole = None
     if has_e1:
@@ -349,6 +425,31 @@ def summarize_p0_gauge_errors(
             ),
             "max_abs_current": float(np.max(p0_row_series(rows, "max_abs_current"))),
         }
+        if has_source_current and all(
+            f"source_current_{axis}" in rows[0] for axis in "xyz"
+        ):
+            assert ref_source_current is not None
+            source_current = np.column_stack(
+                [p0_row_series(rows, f"source_current_{axis}") for axis in "xyz"]
+            )
+            label_summary["max_source_current_norm_error"] = float(
+                np.max(np.linalg.norm(source_current - ref_source_current, axis=1))
+            )
+            label_summary["max_source_current_power_residual"] = float(
+                np.max(
+                    np.abs(p0_row_series(rows, "source_current_power_residual"))
+                )
+            )
+            label_summary[
+                "max_source_current_dipole_derivative_residual"
+            ] = float(
+                np.max(
+                    p0_row_series(
+                        rows,
+                        "source_current_dipole_derivative_residual_norm",
+                    )
+                )
+            )
         if has_e1 and all(f"e1_dipole_{axis}" in rows[0] for axis in "xyz"):
             assert ref_e1_dipole is not None
             e1_dipole = np.column_stack(

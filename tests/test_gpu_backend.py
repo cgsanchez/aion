@@ -7,6 +7,7 @@ import pytest
 import scipy.linalg
 
 from aion import (
+    ConnectionCayleySCEM,
     P0E1Model,
     PyscfP0DftGpuModel,
     PyscfP0DftModel,
@@ -14,6 +15,7 @@ from aion import (
     UniformElectricGauge,
     UniformMagneticGauge,
     VariableMetricSCEM,
+    VelocityGaugeCNRTTDDFT,
     pyscf_central_dipole_matrices,
 )
 from aion.backends import make_backend
@@ -281,6 +283,56 @@ def test_gpu4pyscf_scem_matches_cpu_observables_for_short_h2_kick():
     assert rec_gpu.orthonormality_error < 1.0e-8
 
 
+def test_gpu4pyscf_pemmaraju_velocity_gauge_matches_cpu_short_kick():
+    _require_cupy()
+    pytest.importorskip("gpu4pyscf")
+    from pyscf import dft, gto
+
+    mol = gto.M(
+        atom="H 0 0 0; H 0 0 0.74",
+        basis="sto-3g",
+        unit="Angstrom",
+        verbose=0,
+    )
+    mf_cpu = dft.RKS(mol, xc="pbe").density_fit()
+    mf_cpu.grids.level = 0
+    mf_cpu.kernel()
+    assert mf_cpu.converged
+    mf_gpu = mf_cpu.to_gpu()
+    assert mf_gpu.converged
+
+    impulse = np.array([0.0, 0.0, 1.0e-3])
+    rt_cpu = VelocityGaugeCNRTTDDFT.from_delta_kick(
+        mf_cpu,
+        impulse,
+        backend="cpu",
+    )
+    rt_gpu = VelocityGaugeCNRTTDDFT.from_delta_kick(
+        mf_gpu,
+        impulse,
+        backend="gpu",
+    )
+    coeff_cpu = rt_cpu.apply_delta_kick(rt_cpu.initial_coefficients(), impulse)
+    coeff_gpu = rt_gpu.apply_delta_kick(rt_gpu.initial_coefficients(), impulse)
+
+    common = dict(
+        dt=0.05,
+        nsteps=2,
+        midpoint_tolerance=1.0e-9,
+        density_tolerance=1.0e-9,
+        max_iterations=8,
+        record_energy=False,
+    )
+    rec_cpu = list(rt_cpu.propagate_scem(coeff_cpu, **common))[-1][1]
+    rec_gpu = list(rt_gpu.propagate_scem(coeff_gpu, **common))[-1][1]
+    rt_gpu.backend.synchronize()
+
+    assert np.linalg.norm(rec_gpu.dipole - rec_cpu.dipole) < 1.0e-7
+    assert np.linalg.norm(rec_gpu.current - rec_cpu.current) < 1.0e-7
+    assert abs(rec_gpu.electron_number - rec_cpu.electron_number) < 1.0e-8
+    assert rec_gpu.orthonormality_error < 1.0e-8
+
+
 def test_gpu4pyscf_run_scem_matches_propagate_scem_final_record():
     _require_cupy()
     pytest.importorskip("gpu4pyscf")
@@ -336,14 +388,19 @@ def test_gpu4pyscf_run_scem_matches_propagate_scem_final_record():
     assert summary.record_final.orthonormality_error < 1.0e-8
 
 
-def test_gpu4pyscf_p0_e1_scem_matches_cpu_h2_short_step():
+@pytest.mark.parametrize(
+    "integrator_class",
+    [VariableMetricSCEM, ConnectionCayleySCEM],
+    ids=["lowdin-exponential", "connection-cayley"],
+)
+def test_gpu4pyscf_p0_e1_scem_matches_cpu_lih_short_step(integrator_class):
     cupy = _require_cupy()
     pytest.importorskip("gpu4pyscf")
     from pyscf import dft, gto
 
     mol = gto.M(
-        atom="H 0 0 -0.37; H 0 0 0.37",
-        basis="sto-3g",
+        atom="Li 0 0 -0.7978; H 0 0 0.7978",
+        basis="6-31g",
         unit="Angstrom",
         verbose=0,
     )
@@ -362,6 +419,7 @@ def test_gpu4pyscf_p0_e1_scem_matches_cpu_h2_short_step():
     )
     base_gpu = PyscfP0DftGpuModel.from_reference(reference_gpu)
     central_cpu = pyscf_central_dipole_matrices(reference_cpu)
+    assert np.linalg.norm(central_cpu) > 1.0
     central_gpu = cupy.asarray(central_cpu)
     model_cpu = P0E1Model(base_cpu, central_cpu)
     model_gpu = P0E1Model(base_gpu, central_gpu)
@@ -373,13 +431,13 @@ def test_gpu4pyscf_p0_e1_scem_matches_cpu_h2_short_step():
         lambda_value=lambda _t: 0.4,
         lambda_derivative=lambda _t: 0.0,
     )
-    rt_cpu = VariableMetricSCEM(
+    rt_cpu = integrator_class(
         reference_cpu.geometry(electric=electric),
         model_cpu,
         reference_cpu.occupations,
         backend="cpu",
     )
-    rt_gpu = VariableMetricSCEM(
+    rt_gpu = integrator_class(
         reference_gpu.geometry(electric=electric),
         model_gpu,
         reference_gpu.occupations,

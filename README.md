@@ -16,6 +16,11 @@ Older leapfrog, generalized Crank-Nicolson, and EP-PC1 paths remain in the tree
 for comparison, but new development should use the SCEM path unless there is a
 specific reason to compare integrators.
 
+An experimental conventional velocity-gauge driver following Pemmaraju et al.
+is also available for finite-basis comparisons.  It uses the same SCEM path as
+the length-gauge driver; see `docs/pemmaraju_velocity_gauge.md` for conventions,
+current observables, and the intentional nonlocal-pseudopotential restriction.
+
 ## Core API
 
 The main entry point is:
@@ -50,6 +55,23 @@ Run GPU examples and tests through the project launcher:
 The launcher sets the local `PYTHONPATH`, CUDA library paths, and cache
 directories needed by this workstation.
 
+## Managed CPU development environment
+
+The CPU/PySCF development environment belongs exclusively to Aion. Its direct
+requirements are declared in `environment.yml`, and its exact conda-forge
+package URLs and hashes are recorded in `conda-linux-64.lock`. Run it without
+activating Conda or modifying shell startup files:
+
+```bash
+/home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
+  -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
+  python --version
+```
+
+The local checkout is installed editable in that prefix. The GPU launcher is
+a separate workstation path and is not part of this CPU reference
+environment.
+
 ## Supported Envelope
 
 The validated production-like path is:
@@ -70,7 +92,9 @@ silently running a physically different approximation.
 CPU tests:
 
 ```bash
-/home/cgs/00_WORK/Projection_Code/miniconda3/bin/python -m pytest -q
+/home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
+  -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
+  python -m pytest -q
 ```
 
 GPU tests:
@@ -90,6 +114,13 @@ main implementation.
   propagation comparing length, mixed, and velocity gauges on source
   observables, graph currents, continuity, and power diagnostics.  Use
   `--model hubbard` to exercise the nonlinear midpoint solve.
+- `examples/velocity_gauge/run_h2_pemmaraju_comparison.py`: compares the
+  conventional static-AO length and Pemmaraju velocity gauges with Wilson
+  P0+E1 length/velocity trajectories under one analytic pulse.
+- `examples/velocity_gauge/optimize_h2o.py`, `run_h2o_casida.py`, and
+  `run_h2o_pemmaraju_comparison.py`: optimize H2O, locate its lowest
+  dipole-allowed Casida root, and run the same four-way comparison resonantly
+  on the optimized molecule.
 - `examples/pyscf_p0_bridge/run_h2_p0_one_body.py`: H2 P0 one-body propagation
   using real PySCF Gaussian AO overlap and core Hamiltonian matrices.
 - `examples/small_molecule_references/run_diatomic_kick_spectrum.py`: reference

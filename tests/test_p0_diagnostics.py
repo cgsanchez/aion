@@ -89,6 +89,8 @@ def test_record_p0_observables_reports_ward_diagnostics_for_linear_model():
     assert row["instantaneous_continuity_residual_norm"] < 1.0e-13
     assert abs(row["dipole_power_residual"]) < 1.0e-13
     assert abs(row["power_residual"]) < 2.0e-10
+    assert row["source_current_dipole_derivative_residual_norm"] < 1.0e-13
+    assert abs(row["source_current_power_residual"]) < 2.0e-10
 
 
 def test_summarize_p0_gauge_errors_uses_source_observables():

@@ -1,0 +1,12 @@
+schema = 1
+catalog = "2026.07.1"
+profiles = ["gnu"]
+
+[profile.gnu]
+modules = []
+
+[conda]
+name = "aion"
+platform = "linux-64"
+specification = "environment.yml"
+lock = "conda-linux-64.lock"

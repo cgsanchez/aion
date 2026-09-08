@@ -59,6 +59,48 @@ def _metric_factors(metric: np.ndarray, backend=None) -> tuple[np.ndarray, np.nd
     return sqrt, invsqrt
 
 
+def _orthonormal_metric_connection(
+    metric: np.ndarray,
+    metric_dot: np.ndarray,
+    *,
+    metric_invsqrt: np.ndarray,
+    backend=None,
+) -> np.ndarray:
+    r"""Return the anti-Hermitian metric connection in the Löwdin frame.
+
+    For ``X = S^{1/2} C`` and
+
+    ``Cdot = ... - 1/2 S^{-1} Sdot C``,
+
+    the orthonormal-frame equation contains
+
+    ``K = (d S^{1/2}/dt) S^{-1/2}
+           - 1/2 S^{-1/2} Sdot S^{-1/2}``.
+
+    The Fréchet derivative of the positive square root is evaluated in the
+    eigenbasis of ``S``.  ``K`` is anti-Hermitian; explicit projection removes
+    only roundoff before it is folded into the effective Hermitian generator.
+    """
+
+    backend = CPUBackend() if backend is None else backend
+    metric = _backend_hermitian_part(metric, backend)
+    metric_dot = _backend_hermitian_part(metric_dot, backend)
+    eig, vec = backend.eigh(metric)
+    if backend.min_float(eig) <= 0.0:
+        raise np.linalg.LinAlgError("metric is not positive definite")
+    sqrt_eig = eig**0.5
+    dot_eigenbasis = vec.conj().T @ metric_dot @ vec
+    sqrt_dot_eigenbasis = dot_eigenbasis / (
+        sqrt_eig[:, None] + sqrt_eig[None, :]
+    )
+    sqrt_dot = vec @ sqrt_dot_eigenbasis @ vec.conj().T
+    connection = (
+        sqrt_dot @ metric_invsqrt
+        - 0.5 * metric_invsqrt @ metric_dot @ metric_invsqrt
+    )
+    return 0.5 * (connection - connection.conj().T)
+
+
 def _orthonormal_hamiltonian(
     hamiltonian: np.ndarray,
     metric_invsqrt: np.ndarray,
@@ -178,10 +220,21 @@ class VariableMetricSCEM:
         s_start = backend.asarray(self.geometry.metric(time), dtype=np.complex128)
         s_mid = _transport_matrix_backend(self.geometry.metric(t_mid), u_mid, backend)
         s_next = _transport_matrix_backend(self.geometry.metric(t_next), u_next, backend)
+        s_mid_dot = _transport_matrix_backend(
+            self.geometry.covariant_metric_dot(t_mid),
+            u_mid,
+            backend,
+        )
 
         s_start_sqrt, _ = _metric_factors(s_start, backend)
         _, s_mid_invsqrt = _metric_factors(s_mid, backend)
         _, s_next_invsqrt = _metric_factors(s_next, backend)
+        orthonormal_connection = _orthonormal_metric_connection(
+            s_mid,
+            s_mid_dot,
+            metric_invsqrt=s_mid_invsqrt,
+            backend=backend,
+        )
 
         rho_start = self.density_from_coefficients(coeff)
         h_iter_original = self.model.hamiltonian(rho_start, t_mid, self.geometry)
@@ -192,11 +245,15 @@ class VariableMetricSCEM:
 
         for iteration in range(1, max_iterations + 1):
             h_orth = _orthonormal_hamiltonian(h_iter, s_mid_invsqrt, backend)
+            h_effective_orth = _backend_hermitian_part(
+                h_orth + 1j * self.hbar * orthonormal_connection,
+                backend,
+            )
             coeff_mid_parallel = _exponential_action(
                 coeff,
                 start_metric_sqrt=s_start_sqrt,
                 target_metric_invsqrt=s_mid_invsqrt,
-                h_orth=h_orth,
+                h_orth=h_effective_orth,
                 dt=0.5 * dt,
                 hbar=self.hbar,
                 backend=backend,
@@ -231,7 +288,10 @@ class VariableMetricSCEM:
                 converged = converged and d_residual <= density_tolerance
 
             if converged:
-                h_accept_orth = h_built_orth
+                h_accept_orth = _backend_hermitian_part(
+                    h_built_orth + 1j * self.hbar * orthonormal_connection,
+                    backend,
+                )
                 coeff_next_parallel = _exponential_action(
                     coeff,
                     start_metric_sqrt=s_start_sqrt,

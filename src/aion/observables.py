@@ -199,6 +199,7 @@ def p0_graph_currents(
     t: float,
     *,
     covariant_metric_dot: np.ndarray | None = None,
+    source_hamiltonian: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return the antisymmetric P0 source graph current matrix.
 
@@ -208,18 +209,31 @@ def p0_graph_currents(
 
     For a pair of sites ``a != b`` the implemented density-matrix form is
 
-    ``I_ab = q/hbar Im Tr[rho(S_ab S^-1 K + K^dag S^-1 S_ab)]``
-    ``      + 2q/hbar Im Tr[rho H_ba]``,
+    ``I_ab = q/hbar Im Tr[rho(S_ab S^-1 K_dyn + K_dyn^dag S^-1 S_ab)]``
+    ``      + 2q/hbar Im Tr[rho H_source,ba]``,
 
-    with ``K = H - i hbar/2 D_t S``.  In an orthogonal basis the overlap-block
+    with ``K_dyn = H_dyn - i hbar/2 D_t S``. By default ``H_source=H_dyn``.
+    Supplying a distinct ``source_hamiltonian`` supports an action-level split
+    in which a residual interaction affects the coefficient velocity but its
+    explicit source derivative is recorded separately. In an orthogonal basis
+    the overlap-block
     term vanishes and this reduces to the usual bond current
-    ``2q/hbar Im Tr[rho H_ba]``.
+    ``2q/hbar Im Tr[rho H_source,ba]``.
     """
 
     rho = _square_matrix(density, name="density")
     h = _square_matrix(hamiltonian, name="hamiltonian")
     if rho.shape != geometry.overlap0.shape or h.shape != geometry.overlap0.shape:
         raise ValueError(f"density and hamiltonian must have shape {geometry.overlap0.shape}")
+    h_source = (
+        h
+        if source_hamiltonian is None
+        else _square_matrix(source_hamiltonian, name="source_hamiltonian")
+    )
+    if h_source.shape != geometry.overlap0.shape:
+        raise ValueError(
+            f"source_hamiltonian must have shape {geometry.overlap0.shape}"
+        )
 
     s = geometry.metric(t)
     s_inv = np.linalg.inv(s)
@@ -240,7 +254,7 @@ def p0_graph_currents(
             if a == b:
                 continue
             s_ab = p0_directed_block(s, geometry, a, b)
-            h_ba = p0_directed_block(h, geometry, b, a)
+            h_ba = p0_directed_block(h_source, geometry, b, a)
             overlap_term = np.trace(rho @ (s_ab @ s_inv @ k + k.conj().T @ s_inv @ s_ab))
             hamiltonian_term = np.trace(rho @ h_ba)
             currents[a, b] = (
@@ -248,6 +262,29 @@ def p0_graph_currents(
                 + 2.0 * prefactor * hamiltonian_term.imag
             )
     return 0.5 * (currents - currents.T)
+
+
+def p0_graph_current_vector(
+    graph_currents: np.ndarray,
+    geometry: PeierlsGeometry,
+) -> np.ndarray:
+    """Return the uniform-source vector current represented by graph bonds.
+
+    With ``Acal_ab = A0 . (R_a - R_b)`` and the current orientation used by
+    :func:`p0_graph_currents`, variation with respect to the uniform Cartesian
+    vector potential gives
+
+    ``J = sum_(a<b) I_ab (R_b - R_a)``.
+    """
+
+    currents = np.asarray(graph_currents, dtype=float)
+    natom = geometry.anchors.natom
+    if currents.shape != (natom, natom):
+        raise ValueError("graph_currents must match geometry atom count")
+    displacement = (
+        geometry.atom_coords[None, :, :] - geometry.atom_coords[:, None, :]
+    )
+    return 0.5 * np.einsum("ab,abx->x", currents, displacement)
 
 
 def p0_continuity_residual(

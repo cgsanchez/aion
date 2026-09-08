@@ -61,6 +61,13 @@ class CPUBackend:
     def eigh(self, a: Any):
         return scipy.linalg.eigh(np.asarray(a), check_finite=False)
 
+    def cholesky(self, a: Any):
+        return scipy.linalg.cholesky(
+            np.asarray(a),
+            lower=True,
+            check_finite=False,
+        )
+
     def solve(self, a: Any, b: Any):
         return scipy.linalg.solve(a, b, assume_a="gen", check_finite=False)
 
@@ -124,6 +131,9 @@ class CuPyBackend:
 
     def eigh(self, a: Any):
         return self.cp.linalg.eigh(a)
+
+    def cholesky(self, a: Any):
+        return self.cp.linalg.cholesky(a)
 
     def solve(self, a: Any, b: Any):
         return self.cp.linalg.solve(a, b)

@@ -8,6 +8,11 @@ from .cn_tddft import (
     SCEMRunSummary,
     SCEMStepResult,
 )
+from .connection_cayley import (
+    ConnectionCayleySCEM,
+    ConnectionCayleySCEMStepResult,
+    ConnectionLinkResult,
+)
 from .fields import ContinuousWave, GaussianPulse, Sin2Pulse
 from .gauge import (
     AOAnchors,
@@ -42,6 +47,7 @@ from .observables import (
     p0_dipole_derivative,
     p0_dipole_moment,
     p0_dipole_power,
+    p0_graph_current_vector,
     p0_graph_currents,
     p0_site_charge_derivative,
     p0_site_charges,
@@ -67,10 +73,14 @@ from .p0_e1 import (
     central_dipole_matrices,
     dressed_central_dipole_matrices,
     dressed_central_dipole_matrix_dots,
+    dressed_central_dipole_uniform_vector_derivatives,
     p0_e1_dipole_derivative,
+    p0_e1_intrinsic_dipole_derivative,
     p0_e1_dipole_moment,
     p0_e1_dipole_power,
+    p0_e1_uniform_residual_current,
     p0_e1_uniform_electric_potential,
+    p0_e1_time_connection_residual,
     p0_pair_scalar_potential_matrix,
     pyscf_central_dipole_matrices,
 )
@@ -120,6 +130,10 @@ from .variable_metric import (
     VariableMetricSCEM,
     VariableMetricSCEMStepResult,
 )
+from .velocity_gauge import (
+    VelocityGaugeCNRTTDDFT,
+    VelocityGaugePropagationRecord,
+)
 
 __all__ = [
     "AOAnchors",
@@ -136,6 +150,9 @@ __all__ = [
     "MidpointConvergenceError",
     "PeierlsGeometry",
     "CNPropagationRecord",
+    "ConnectionCayleySCEM",
+    "ConnectionCayleySCEMStepResult",
+    "ConnectionLinkResult",
     "DEFAULT_GAUGE_LAMBDAS",
     "PropagationRecord",
     "P0E1Model",
@@ -154,6 +171,8 @@ __all__ = [
     "VariableMetricConvergenceError",
     "VariableMetricSCEM",
     "VariableMetricSCEMStepResult",
+    "VelocityGaugeCNRTTDDFT",
+    "VelocityGaugePropagationRecord",
     "apply_p0_velocity_delta_kick",
     "apply_e1_central_delta_kick",
     "ao_pair_anchor_centers",
@@ -167,6 +186,7 @@ __all__ = [
     "density_derivative_from_coefficients",
     "dressed_central_dipole_matrices",
     "dressed_central_dipole_matrix_dots",
+    "dressed_central_dipole_uniform_vector_derivatives",
     "dressed_central_second_moment_matrices",
     "electron_count",
     "electric_field_for_power",
@@ -189,14 +209,18 @@ __all__ = [
     "p0_dipole_operator_matrices",
     "p0_dipole_power",
     "p0_e1_dipole_derivative",
+    "p0_e1_intrinsic_dipole_derivative",
     "p0_e1_dipole_moment",
     "p0_e1_dipole_power",
+    "p0_e1_uniform_residual_current",
     "p0_e1_uniform_electric_potential",
+    "p0_e1_time_connection_residual",
     "p0_e1_dipole_operator_matrices",
     "p0_e2_full_second_moment_matrices",
     "p0_e2_second_moment",
     "p0_e2_second_moment_operator_matrices",
     "p0_graph_currents",
+    "p0_graph_current_vector",
     "p0_natom_from_rows",
     "p0_row_series",
     "p0_site_gauge_phase",

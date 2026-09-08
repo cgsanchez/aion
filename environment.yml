@@ -1,0 +1,22 @@
+name: aion
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - numpy
+  - scipy
+  - pyscf
+  - matplotlib
+  - pytest
+  - pip
+  - setuptools>=64
+  - wheel
+  - pip:
+      # Match the GPU4PySCF/CuPy stack used for the validated pulse campaign.
+      - gpu4pyscf-cuda12x==1.7.4
+      - cupy-cuda12x==14.1.1
+      - cutensor-cu12==2.7.0
+      - nvidia-cuda-runtime-cu12==12.9.79
+      - nvidia-cublas-cu12==12.9.2.10
+      - nvidia-cusolver-cu12==11.7.5.82

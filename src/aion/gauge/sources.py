@@ -19,6 +19,13 @@ def _as_vector3(value, *, name: str) -> np.ndarray:
     return array
 
 
+def _as_cartesian_array(value, *, name: str) -> np.ndarray:
+    array = np.asarray(value, dtype=float)
+    if array.ndim == 0 or array.shape[-1] != 3:
+        raise ValueError(f"{name} must have final dimension 3")
+    return array
+
+
 def _pair_displacements(coords: np.ndarray) -> np.ndarray:
     return coords[:, None, :] - coords[None, :, :]
 
@@ -141,20 +148,111 @@ class UniformMagneticGauge:
         object.__setattr__(self, "origin", origin)
         object.__setattr__(self, "landau_u", landau_u)
 
-    def bond_line_integrals(self, coords: np.ndarray, _t: float | None = None) -> np.ndarray:
-        coords = np.asarray(coords, dtype=float)
-        displacements = _pair_displacements(coords)
+    @property
+    def affine_matrix(self) -> np.ndarray:
+        """Return ``M`` such that ``A(r) = M @ (r - origin)``.
+
+        Both supported gauges are affine in position.  Exposing the affine
+        map makes the straight-line Wilson integral and its endpoint
+        derivative analytic without imposing a coordinate-axis convention.
+        """
+
+        bx, by, bz = self.magnetic_field
+        cross_matrix = np.array(
+            [
+                [0.0, -bz, by],
+                [bz, 0.0, -bx],
+                [-by, bx, 0.0],
+            ]
+        )
         if self.gauge == "symmetric":
-            left = coords[None, :, :] - self.origin[None, None, :]
-            right = coords[:, None, :] - self.origin[None, None, :]
-            triangles = np.cross(left, right)
-            return 0.5 * np.einsum("x,abx->ab", self.magnetic_field, triangles)
+            return 0.5 * cross_matrix
 
         assert self.landau_u is not None
-        midpoint = 0.5 * (coords[:, None, :] + coords[None, :, :])
-        prefactor = np.einsum("abx,x->ab", midpoint - self.origin, self.landau_u)
-        vector = np.cross(self.magnetic_field, self.landau_u)
-        return prefactor * np.einsum("x,abx->ab", vector, displacements)
+        return np.outer(np.cross(self.magnetic_field, self.landau_u), self.landau_u)
+
+    def vector_potential(self, points: np.ndarray) -> np.ndarray:
+        """Evaluate the selected vector potential at Cartesian points."""
+
+        points = _as_cartesian_array(points, name="points")
+        return (points - self.origin) @ self.affine_matrix.T
+
+    def straight_line_integrals(
+        self,
+        starts: np.ndarray,
+        ends: np.ndarray,
+    ) -> np.ndarray:
+        """Integrate ``A . dl`` from ``starts`` to ``ends``.
+
+        The leading dimensions of ``starts`` and ``ends`` are broadcast.  An
+        affine vector potential is integrated exactly by its midpoint value.
+        """
+
+        starts = _as_cartesian_array(starts, name="starts")
+        ends = _as_cartesian_array(ends, name="ends")
+        starts, ends = np.broadcast_arrays(starts, ends)
+        displacements = ends - starts
+        midpoints = 0.5 * (starts + ends)
+        return np.einsum(
+            "...x,...x->...",
+            self.vector_potential(midpoints),
+            displacements,
+        )
+
+    def straight_line_integral_gradients(
+        self,
+        starts: np.ndarray,
+        ends: np.ndarray,
+    ) -> np.ndarray:
+        """Return the gradient with respect to each straight-line endpoint."""
+
+        starts = _as_cartesian_array(starts, name="starts")
+        ends = _as_cartesian_array(ends, name="ends")
+        starts, ends = np.broadcast_arrays(starts, ends)
+        displacements = ends - starts
+        symmetric_part = self.affine_matrix + self.affine_matrix.T
+        return self.vector_potential(starts) + 0.5 * (
+            displacements @ symmetric_part.T
+        )
+
+    def anchor_to_point_line_integrals(
+        self,
+        anchors: np.ndarray,
+        points: np.ndarray,
+    ) -> np.ndarray:
+        """Return straight Wilson integrals with shape ``(npoint, nanchor)``."""
+
+        anchors = _as_cartesian_array(anchors, name="anchors")
+        points = _as_cartesian_array(points, name="points")
+        if anchors.ndim != 2 or points.ndim != 2:
+            raise ValueError("anchors and points must have shape (n, 3)")
+        return self.straight_line_integrals(
+            anchors[None, :, :],
+            points[:, None, :],
+        )
+
+    def anchor_to_point_line_integral_gradients(
+        self,
+        anchors: np.ndarray,
+        points: np.ndarray,
+    ) -> np.ndarray:
+        """Return endpoint gradients with shape ``(npoint, nanchor, 3)``."""
+
+        anchors = _as_cartesian_array(anchors, name="anchors")
+        points = _as_cartesian_array(points, name="points")
+        if anchors.ndim != 2 or points.ndim != 2:
+            raise ValueError("anchors and points must have shape (n, 3)")
+        return self.straight_line_integral_gradients(
+            anchors[None, :, :],
+            points[:, None, :],
+        )
+
+    def bond_line_integrals(self, coords: np.ndarray, _t: float | None = None) -> np.ndarray:
+        coords = np.asarray(coords, dtype=float)
+        return self.straight_line_integrals(
+            coords[None, :, :],
+            coords[:, None, :],
+        )
 
     def bond_line_integral_dots(self, coords: np.ndarray, _t: float | None = None) -> np.ndarray:
         return np.zeros((np.asarray(coords).shape[0], np.asarray(coords).shape[0]))

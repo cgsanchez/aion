@@ -2,11 +2,12 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-workspace_root="$(cd "$repo_root/.." && pwd)"
-python_bin="$workspace_root/miniconda3/bin/python"
+conda_root="${AION_CONDA_ROOT:-/home/cgs/01_TOOLS/EasyBuild/conda}"
+conda_prefix="${AION_CONDA_PREFIX:-$conda_root/envs/aion}"
+python_bin="$conda_prefix/bin/python"
 
 if [[ ! -x "$python_bin" ]]; then
-    echo "missing project Miniconda Python: $python_bin" >&2
+    echo "missing declared Aion Conda Python: $python_bin" >&2
     exit 127
 fi
 
@@ -15,7 +16,8 @@ export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/aion-cache}"
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
 export AION_GPU_LAUNCHER=1
 
-nvidia_lib_root="$workspace_root/miniconda3/lib/python3.13/site-packages/nvidia"
+python_site="$("$python_bin" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+nvidia_lib_root="$python_site/nvidia"
 if [[ -d "$nvidia_lib_root" ]]; then
     for libdir in "$nvidia_lib_root"/*/lib; do
         if [[ -d "$libdir" ]]; then

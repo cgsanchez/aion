@@ -14,9 +14,13 @@ from aion import (
     density_from_coefficients,
     density_derivative_from_coefficients,
     dressed_central_dipole_matrices,
+    dressed_central_dipole_uniform_vector_derivatives,
     p0_e1_dipole_derivative,
     p0_e1_dipole_moment,
+    p0_e1_uniform_residual_current,
     p0_e1_uniform_electric_potential,
+    p0_graph_current_vector,
+    p0_graph_currents,
     p0_pair_scalar_potential_matrix,
     p0_site_charge_derivative,
     pyscf_central_dipole_matrices,
@@ -115,6 +119,47 @@ def test_dressed_central_dipoles_are_hermitian_in_mixed_gauge():
         assert np.linalg.norm(dressed[axis] - dressed[axis].conj().T) < 1.0e-14
 
 
+def test_dressed_central_dipole_uniform_vector_derivative_matches_finite_difference():
+    reference = _water_reference()
+    field = np.array([0.011, -0.017, 0.023])
+    electric = UniformElectricGauge(
+        field=_constant_vector(field),
+        field_integral=lambda t: field * t,
+        lambda_value=lambda _t: 0.5,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    geometry = reference.geometry(electric=electric)
+    central_dipoles = pyscf_central_dipole_matrices(reference)
+    time = 0.37
+    analytic = dressed_central_dipole_uniform_vector_derivatives(
+        central_dipoles,
+        geometry,
+        time,
+    )
+
+    ao_coords = geometry.anchors.atom_coords[geometry.anchors.ao_to_atom]
+    pair_displacements = ao_coords[:, None, :] - ao_coords[None, :, :]
+    theta = geometry.theta(time)
+    eps = 1.0e-6
+    finite_difference = np.empty_like(analytic)
+    for beta in range(3):
+        phase = (
+            1j
+            * geometry.charge
+            / geometry.hbar
+            * eps
+            * pair_displacements[:, :, beta]
+        )
+        for alpha in range(3):
+            plus = np.exp(phase) * theta * central_dipoles[alpha]
+            minus = np.exp(-phase) * theta * central_dipoles[alpha]
+            plus = 0.5 * (plus + plus.conj().T)
+            minus = 0.5 * (minus + minus.conj().T)
+            finite_difference[alpha, beta] = (plus - minus) / (2.0 * eps)
+
+    assert np.linalg.norm(analytic - finite_difference) < 1.0e-9
+
+
 def test_p0_e1_model_zero_field_reduces_to_base_model():
     reference = _water_reference()
     geometry = reference.geometry()
@@ -208,6 +253,59 @@ def test_p0_e1_dipole_derivative_matches_finite_difference():
     assert np.linalg.norm(analytic - fd) < 1.0e-8
 
 
+def test_p0_e1_action_split_current_matches_total_dipole_derivative():
+    reference = _water_reference()
+    base_model = PyscfP0DftModel.from_reference(reference)
+    central_dipoles = pyscf_central_dipole_matrices(reference)
+    model = P0E1Model(base_model, central_dipoles)
+    field = np.array([0.011, -0.017, 0.023])
+    electric = UniformElectricGauge(
+        field=_constant_vector(field),
+        field_integral=lambda t: field * t,
+        lambda_value=lambda _t: 0.5,
+        lambda_derivative=lambda _t: 0.0,
+    )
+    geometry = reference.geometry(electric=electric)
+    time = 0.17
+    coeff = reference.initial_coefficients()
+    rho = density_from_coefficients(coeff, reference.occupations)
+    hamiltonian = model.hamiltonian(rho, time, geometry)
+    coeff_dot = coefficient_derivative(coeff, hamiltonian, geometry, time)
+    rho_dot = density_derivative_from_coefficients(
+        coeff,
+        coeff_dot,
+        reference.occupations,
+    )
+    charge_dot = p0_site_charge_derivative(rho, rho_dot, geometry, time)
+    dipole_dot = p0_e1_dipole_derivative(
+        charge_derivative=charge_dot,
+        density=rho,
+        density_dot=rho_dot,
+        central_dipoles0=central_dipoles,
+        geometry=geometry,
+        t=time,
+    )
+
+    graph_current = p0_graph_currents(
+        rho,
+        hamiltonian,
+        geometry,
+        time,
+        source_hamiltonian=hamiltonian - model.e1_hamiltonian(time, geometry),
+    )
+    p0_current = p0_graph_current_vector(graph_current, geometry)
+    e1_current = p0_e1_uniform_residual_current(
+        density=rho,
+        density_dot=rho_dot,
+        central_dipoles0=central_dipoles,
+        geometry=geometry,
+        t=time,
+        electric_field=field,
+    )
+
+    assert np.linalg.norm(p0_current + e1_current - dipole_dot) < 1.0e-11
+
+
 def test_p0_e1_short_trajectory_is_gauge_covariant_for_water():
     reference = _water_reference()
     base_model = PyscfP0DftModel.from_reference(reference)
@@ -239,6 +337,10 @@ def test_p0_e1_short_trajectory_is_gauge_covariant_for_water():
     assert summary["velocity"]["max_energy_abs_error"] < 1.0e-8
     assert summary["mixed"]["max_e1_dipole_norm_error"] < 1.0e-8
     assert summary["velocity"]["max_e1_dipole_norm_error"] < 1.0e-8
+    assert summary["mixed"]["max_source_current_norm_error"] < 1.0e-8
+    assert summary["velocity"]["max_source_current_norm_error"] < 1.0e-8
+    for values in summary.values():
+        assert values["max_source_current_dipole_derivative_residual"] < 1.0e-10
     assert summary["length"]["max_e1_power_residual"] < 1.0e-6
     assert summary["mixed"]["max_e1_power_residual"] < 1.0e-6
     assert summary["velocity"]["max_e1_power_residual"] < 1.0e-6

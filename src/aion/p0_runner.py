@@ -7,6 +7,7 @@ from typing import Callable
 
 import numpy as np
 
+from .connection_cayley import ConnectionCayleySCEM
 from .gauge import PeierlsGeometry, UniformElectricGauge
 from .p0_diagnostics import P0Row, record_p0_observables
 from .variable_metric import VariableMetricSCEM
@@ -29,6 +30,7 @@ class P0SCEMSettings:
     density_tolerance: float | None = 1.0e-9
     max_iterations: int = 18
     mixing: float = 0.7
+    integrator: str = "lowdin_exponential"
 
     def __post_init__(self) -> None:
         if self.dt <= 0.0:
@@ -43,6 +45,10 @@ class P0SCEMSettings:
             raise ValueError("max_iterations must be positive")
         if not (0.0 < self.mixing <= 1.0):
             raise ValueError("mixing must be in (0, 1]")
+        if self.integrator not in {"lowdin_exponential", "connection_cayley"}:
+            raise ValueError(
+                "integrator must be 'lowdin_exponential' or 'connection_cayley'"
+            )
 
 
 def constant_uniform_electric_gauge(
@@ -229,11 +235,17 @@ def run_p0_scem_trajectory(
 ) -> list[P0Row]:
     """Propagate one P0 trajectory and record diagnostics at every step."""
 
-    rt = VariableMetricSCEM(geometry, model, occupations)
+    integrator_class = (
+        ConnectionCayleySCEM
+        if settings.integrator == "connection_cayley"
+        else VariableMetricSCEM
+    )
+    rt = integrator_class(geometry, model, occupations)
     coeff = np.asarray(coeff0, dtype=np.complex128).copy()
     rows: list[P0Row] = [
         {
             "gauge": label,
+            "integrator": settings.integrator,
             **record_p0_observables(
                 step=0,
                 time=0.0,
@@ -256,9 +268,19 @@ def run_p0_scem_trajectory(
             mixing=settings.mixing,
         )
         coeff = result.coeff_next
+        connection_diagnostics = {}
+        if hasattr(result, "left_connection_metric_error"):
+            connection_diagnostics = {
+                "left_connection_metric_error": result.left_connection_metric_error,
+                "right_connection_metric_error": result.right_connection_metric_error,
+                "maximum_connection_correction_norm": (
+                    result.maximum_connection_correction_norm
+                ),
+            }
         rows.append(
             {
                 "gauge": label,
+                "integrator": settings.integrator,
                 **record_p0_observables(
                     step=step,
                     time=step * settings.dt,
@@ -270,6 +292,7 @@ def run_p0_scem_trajectory(
                     hamiltonian_residual=result.hamiltonian_residual,
                     density_residual=result.density_residual,
                 ),
+                **connection_diagnostics,
             }
         )
     return rows

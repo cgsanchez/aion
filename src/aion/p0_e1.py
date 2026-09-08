@@ -138,6 +138,52 @@ def dressed_central_dipole_matrix_dots(
     return dots
 
 
+def dressed_central_dipole_uniform_vector_derivatives(
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+) -> np.ndarray:
+    r"""Return ``partial d_P^alpha / partial A0_beta`` for uniform ``A0``.
+
+    The returned tensor has shape ``(3, 3, nao, nao)`` with dipole component
+    ``alpha`` first and uniform-vector-potential component ``beta`` second.
+    For the endpoint phase
+
+    ``Theta_ij = exp[(i q / hbar) A0 . (R_i - R_j)]``
+
+    the derivative is
+
+    ``Hermitian[(i q / hbar) (R_i-R_j)_beta Theta_ij d^alpha_ij]``.
+    """
+
+    dipoles0 = _central_dipole_array(central_dipoles0)
+    xp = _array_module(dipoles0)
+    if dipoles0.shape[1:] != geometry.overlap0.shape:
+        raise ValueError(
+            f"central_dipoles0 must have AO shape {geometry.overlap0.shape}"
+        )
+    ao_coords = xp.asarray(
+        geometry.anchors.atom_coords[geometry.anchors.ao_to_atom],
+        dtype=float,
+    )
+    pair_displacements = ao_coords[:, None, :] - ao_coords[None, :, :]
+    theta = xp.asarray(geometry.theta(t), dtype=xp.complex128)
+    derivatives = xp.empty(
+        (3, 3, dipoles0.shape[1], dipoles0.shape[2]),
+        dtype=xp.complex128,
+    )
+    prefactor = 1j * geometry.charge / geometry.hbar
+    for alpha in range(3):
+        for beta in range(3):
+            derivatives[alpha, beta] = hermitian_part(
+                prefactor
+                * pair_displacements[:, :, beta]
+                * theta
+                * dipoles0[alpha]
+            )
+    return derivatives
+
+
 def p0_e1_uniform_electric_potential(
     central_dipoles0: np.ndarray,
     geometry: PeierlsGeometry,
@@ -161,6 +207,36 @@ def p0_e1_uniform_electric_potential(
     xp = _array_module(dressed)
     field_backend = xp.asarray(electric_field, dtype=float)
     return hermitian_part(-xp.einsum("x,xij->ij", field_backend, dressed))
+
+
+def p0_e1_time_connection_residual(
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    *,
+    field: np.ndarray | None = None,
+) -> np.ndarray:
+    r"""Return the lower-index P0+E1 residual time connection.
+
+    The projected Wilson-frame derivation gives
+
+    ``eta_E1 = (i / hbar) V_E1``
+
+    with ``V_E1 = -E_alpha d_P^alpha``.  ``eta_E1`` is anti-Hermitian and is
+    the part of ``<chi_mu|D_t chi_nu>`` not retained by pure P0.  Keeping this
+    object explicit lets a connection-aware propagator transport it as
+    geometry instead of treating the equivalent ``V_E1`` as a Hamiltonian
+    interaction.
+    """
+
+    potential = p0_e1_uniform_electric_potential(
+        central_dipoles0,
+        geometry,
+        t,
+        field=field,
+    )
+    residual = (1j / geometry.hbar) * potential
+    return 0.5 * (residual - residual.conj().T)
 
 
 def p0_pair_scalar_potential_matrix(
@@ -197,6 +273,93 @@ def p0_e1_dipole_moment(
     return p0_dipole_moment(rho, geometry, t) + spread
 
 
+def p0_e1_intrinsic_dipole_derivative(
+    *,
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+) -> np.ndarray:
+    """Return the ordinary time derivative of ``Tr[rho d_P]``."""
+
+    rho = np.asarray(density, dtype=np.complex128)
+    rho_dot = np.asarray(density_dot, dtype=np.complex128)
+    dressed = dressed_central_dipole_matrices(central_dipoles0, geometry, t)
+    dressed_dot = dressed_central_dipole_matrix_dots(
+        central_dipoles0,
+        geometry,
+        t,
+    )
+    return np.asarray(
+        [
+            (
+                np.trace(rho_dot @ dressed[axis])
+                + np.trace(rho @ dressed_dot[axis])
+            ).real
+            for axis in range(3)
+        ]
+    )
+
+
+def p0_e1_uniform_residual_current(
+    *,
+    density: np.ndarray,
+    density_dot: np.ndarray,
+    central_dipoles0: np.ndarray,
+    geometry: PeierlsGeometry,
+    t: float,
+    electric_field: np.ndarray | None = None,
+) -> np.ndarray:
+    r"""Return the uniform Cartesian Euler--Lagrange E1 residual current.
+
+    For ``L_E1 = E_alpha Re Tr[rho D_alpha]`` and
+    ``E = -A0_dot - grad(Phi)``, variation with respect to the uniform vector
+    potential gives
+
+    ``J_beta = d/dt Re Tr[rho D_beta]``
+    ``       + E_alpha Re Tr[rho partial_A0_beta D_alpha]``.
+
+    This is the residual current to combine with the action-split P0 graph
+    current. It must not be added to a graph current that uses the full P0+E1
+    Hamiltonian in both its dynamical and explicit-source terms.
+    """
+
+    rho = np.asarray(density, dtype=np.complex128)
+    field = (
+        np.zeros(3)
+        if geometry.electric is None
+        else np.asarray(geometry.electric.electric_field(t), dtype=float)
+    )
+    if electric_field is not None:
+        field = np.asarray(electric_field, dtype=float)
+    if field.shape != (3,):
+        raise ValueError("electric_field must have shape (3,)")
+
+    polarization_current = p0_e1_intrinsic_dipole_derivative(
+        density=rho,
+        density_dot=density_dot,
+        central_dipoles0=central_dipoles0,
+        geometry=geometry,
+        t=t,
+    )
+    phase_vertices = np.asarray(
+        dressed_central_dipole_uniform_vector_derivatives(
+            central_dipoles0,
+            geometry,
+            t,
+        ),
+        dtype=np.complex128,
+    )
+    phase_response = np.einsum(
+        "a,abij,ji->b",
+        field,
+        phase_vertices,
+        rho,
+    ).real
+    return polarization_current + phase_response
+
+
 def p0_e1_dipole_derivative(
     *,
     charge_derivative: np.ndarray,
@@ -209,18 +372,12 @@ def p0_e1_dipole_derivative(
 ) -> np.ndarray:
     """Return ``d/dt [q sum_a N_a R_a + Tr(rho d_P)]``."""
 
-    rho = np.asarray(density, dtype=np.complex128)
-    rho_dot = np.asarray(density_dot, dtype=np.complex128)
-    dressed = dressed_central_dipole_matrices(central_dipoles0, geometry, t)
-    dressed_dot = dressed_central_dipole_matrix_dots(central_dipoles0, geometry, t)
-    spread_dot = np.asarray(
-        [
-            (
-                np.trace(rho_dot @ dressed[axis])
-                + np.trace(rho @ dressed_dot[axis])
-            ).real
-            for axis in range(3)
-        ]
+    spread_dot = p0_e1_intrinsic_dipole_derivative(
+        density=density,
+        density_dot=density_dot,
+        central_dipoles0=central_dipoles0,
+        geometry=geometry,
+        t=t,
     )
     if not include_site:
         return spread_dot
@@ -289,6 +446,29 @@ class P0E1Model:
     ) -> np.ndarray:
         base_h = self.base_model.hamiltonian(density, t, geometry)
         return hermitian_part(base_h + self.e1_hamiltonian(t, geometry))
+
+    def intrinsic_hamiltonian(
+        self,
+        density: np.ndarray,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> np.ndarray:
+        """Return the Hamiltonian with the E1 connection residual removed."""
+
+        return hermitian_part(self.base_model.hamiltonian(density, t, geometry))
+
+    def connection_residual(
+        self,
+        t: float,
+        geometry: PeierlsGeometry,
+    ) -> np.ndarray:
+        """Return ``eta_E1`` for connection-aware propagation."""
+
+        return p0_e1_time_connection_residual(
+            self.central_dipoles0,
+            geometry,
+            t,
+        )
 
     def energy(
         self,
