@@ -31,6 +31,8 @@ class ArrayBackend(Protocol):
 
     def to_host(self, value: object) -> np.ndarray: ...
 
+    def scalar_to_float(self, value: object) -> float: ...
+
     def is_resident(self, value: object) -> bool: ...
 
     def assert_resident(self, value: object, *, name: str = "array") -> None: ...
@@ -64,6 +66,14 @@ class NumPyBackend:
     def to_host(self, value: object) -> np.ndarray:
         self.assert_resident(value)
         return np.asarray(value)
+
+    def scalar_to_float(self, value: object) -> float:
+        if not isinstance(value, np.ndarray | np.generic):
+            raise DeviceResidencyError("control value is not a NumPy scalar")
+        array = np.asarray(value)
+        if array.shape != ():
+            raise DeviceResidencyError("control value must be scalar")
+        return float(array)
 
     def is_resident(self, value: object) -> bool:
         return isinstance(value, np.ndarray | np.generic)
@@ -126,6 +136,14 @@ class CuPyBackend:
         self.assert_resident(value)
         with self._cp.cuda.Device(self.device_index):
             return np.asarray(self._cp.asnumpy(value))
+
+    def scalar_to_float(self, value: object) -> float:
+        self.assert_resident(value, name="control scalar")
+        resident: Any = value
+        if resident.shape != ():
+            raise DeviceResidencyError("control value must be scalar")
+        with self._cp.cuda.Device(self.device_index):
+            return float(resident.item())
 
     def is_resident(self, value: object) -> bool:
         if not isinstance(value, self._cp.ndarray):

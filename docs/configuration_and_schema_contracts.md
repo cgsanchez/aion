@@ -1,8 +1,8 @@
 # Aion 0.2 configuration and schema contracts
 
-Status: contracts through instantaneous formulation physics were implemented by
-WP1--WP3 for Aion `0.2.0.dev3`. Propagation, runner, trajectory, checkpoint, and
-spectroscopy workflows remain deliberately unavailable.
+Status: contracts through connection-aware and fixed-metric propagation were
+implemented by WP1--WP4 for Aion `0.2.0.dev4`. Production runners, trajectory,
+checkpoint, and spectroscopy workflows remain deliberately unavailable.
 
 ## 1. Authority and strictness
 
@@ -160,15 +160,16 @@ prepare_reference  load_reference  build_simulation
 run                resume          load_trajectory
 ```
 
-`prepare_reference` and `load_reference` are implemented by WP2, and
-`build_simulation` by WP3. Preparation
+`prepare_reference` and `load_reference` are implemented by WP2, formulation
+construction by WP3, and the propagation-bound `build_simulation` by WP4. Preparation
 runs one validated RKS calculation; loading authenticates the portable data and
 runtime dependency contract without rerunning SCF. Each later simulation gets
 a separate backend workspace, which reconstructs PySCF/GPU4PySCF and transfers
 the reference exactly once. A built simulation binds the compiled source,
-selected gauge/formulation, initial AO density, backend workspace, event
-schedule, and typed observable calculators without starting propagation. The
-remaining workflow functions are typed shells
+selected gauge/formulation, occupied-orbital state, common SCEM propagator,
+backend workspace, event schedule, and typed observable calculators without
+starting propagation. Its `step()` method advances one accepted interval in
+memory; it performs no event handling or persistent I/O. The remaining workflow functions are typed shells
 that raise `FeatureNotImplementedError` with their responsible future work
 package, preventing fallback to the archived draft.
 

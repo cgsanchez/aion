@@ -21,7 +21,7 @@ pytestmark = pytest.mark.fast
 
 
 def test_public_api_is_small_and_versioned() -> None:
-    assert aion.__version__ == "0.2.0.dev3"
+    assert aion.__version__ == "0.2.0.dev4"
     assert set(aion.__all__) == {
         "BackendConfig",
         "FormulationConfig",

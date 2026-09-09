@@ -67,7 +67,9 @@ status, and API contracts were implemented in WP1. WP2 implements the common
 prepared electronic reference, backend workspaces, AO operators, and compiled
 electromagnetic source. WP3 implements all four formulations and their
 instantaneous dipoles, currents, energy ledgers, analytic rates, and observable
-definitions; propagation remains gated future work unless explicitly identified.
+definitions. WP4 implements the common nonlinear SCEM engine, direct fixed-
+metric propagation, and connection-aware covariant transport on both CPU and
+GPU. Persistent runners and trajectory/checkpoint I/O remain later work.
 \end{abstract}
 
 \tableofcontents
@@ -928,8 +930,10 @@ consistency. The convergence measure is
 The initial defaults are \(r_P\le10^{-10}\), at most 50 iterations, and
 minimum damping 0.1. Start with a full Hermitian density update and reduce
 mixing when the residual worsens. Record the iteration count, final density
-residual, and an independent Hamiltonian residual. A failed midpoint is never
-accepted; tolerances and \(\Delta t\) are never silently changed.
+residual, and an independent Hamiltonian residual. Only \(r_P\) determines
+fixed-point acceptance; the Hamiltonian residual is a separately recorded
+diagnostic, not a hidden second convergence condition. A failed midpoint is
+never accepted; tolerances and \(\Delta t\) are never silently changed.
 
 \subsection{Fixed-metric transport}
 
@@ -952,7 +956,18 @@ Its exact parallel transport over one interval is
  \label{eq:site-transport}
 \end{equation}
 For the diagonal Abelian uniform-field case this is elementwise and depends
-only on the known source. Pull the overlap, Hamiltonian, and residual
+only on the known source. With physical reduced vector potential \(\vect a\),
+AO anchor \(\vect R_{a(\mu)}\), and electromagnetic origin \(\vect O\), the
+implemented diagonal is
+\begin{equation}
+ [G_\sigma(t,t_n)]_{\mu\mu}
+ =\exp\!\left[-\frac{\ii q}{\hbar}
+ (\vect R_{a(\mu)}-\vect O)\cdot
+ \bigl(\vect a(t)-\vect a(t_n)\bigr)\right]
+ \label{eq:uniform-site-transport}
+\end{equation}
+in the covariant length representation and the identity in the covariant
+velocity representation. Pull the overlap, Hamiltonian, and residual
 connection into this site-parallel frame. At the self-consistent midpoint,
 the combined generator is
 \begin{equation}
@@ -996,8 +1011,25 @@ corrected defect, and \(\norm{Q-I}\). This is a constraint correction to an
 already constructed physical transport; it is not propagation in an evolving
 symmetrically orthogonalized L\"owdin basis.
 
+Correction disablement exists only as an explicit diagnostic construction.
+In that mode the raw defect is exposed rather than silently accepted as a
+production state constraint.
+
 Only roundoff-scale anti-Hermitian contamination may be symmetrized, under a
 separately recorded threshold. A larger defect is a hard failure.
+
+\begin{statusbox}{Implemented and validated in WP4}
+One occupied-orbital state and one density-fixed-point SCEM engine serve all
+four formulations. Bare LG/VG use the direct nonorthogonal fixed-metric map;
+P0/P0+E1 use exact site transport, the pulled combined Hamiltonian--connection
+generator, and right-Cholesky cross-metric correction. Cayley [1/1] and Pad\'e
+[2/2] share one backend-neutral solve path. Scratch arrays are allocated once
+per simulation, accepted midpoint data are retained in memory for observers,
+and every algebraic constraint or nonlinear failure is explicit. Synthetic,
+H2, and LiH tests establish norm/metric preservation, gauge covariance,
+approximately second-order molecular convergence, CPU/GPU agreement, physical
+GPU residency, and absence of Aion bulk host transfers inside a step.
+\end{statusbox}
 
 \section{Observable and storage model}
 
@@ -1201,7 +1233,7 @@ derived bundles with their own invalidation boundaries.
 
 \section{Present implementation versus the 0.2 target}
 
-\begin{statusbox}{Current-tree assessment after WP3}
+\begin{statusbox}{Current-tree assessment after WP4}
 The research draft was archived and verified on 8 September 2026. Its
 molecule-specific campaigns, runners, postprocessing, historical notes, and
 large results were moved with checksum manifests to the separate
@@ -1211,10 +1243,12 @@ common static electronic problem and prescribed electromagnetic input. WP3
 implements the four formulation and instantaneous-observable layers after
 re-deriving and independently testing the archived equations. Draft equations
 and kernels remain available through the immutable archive and calculation
-repository, but none is silently reachable through the 0.2 API.
+repository, but none is silently reachable through the 0.2 API. WP4 adds the
+shared in-memory propagator and both transport geometries without reviving an
+archived runner.
 \end{statusbox}
 
-The reusable layers implemented through WP3 are:
+The reusable layers implemented through WP4 are:
 
 \begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
 \toprule
@@ -1259,18 +1293,23 @@ Explicit bare LG/VG and covariant P0/P0+E1 triples, Wilson geometry, inverse-
 dressed pure-DFT builds, E1 tensors, formulation-owned dipoles/source currents,
 mechanical diagnostics, graph continuity, source power, and qualified energy
 ledgers. All arrays remain resident on the selected NumPy/CuPy backend.\\
+\code{aion.propagation} &
+Occupied-orbital state and diagnostics, shared damped-Picard SCEM fixed point,
+direct fixed-metric and analytic-connection transports, Cayley and Pad\'e maps,
+right-Cholesky cross-metric correction, roundoff-only cleanup, hard constraint
+failures, and persistent backend-resident scratch.\\
 \code{aion.workflows} and \code{aion} &
 Typed top-level interfaces and CLI commands. \code{prepare\_reference},
 \code{load\_reference}, \code{build\_simulation}, and CLI \code{prepare} are
-functional; later numerical
-entry points fail explicitly with their owning future work package.\\
+functional; a built simulation can advance accepted steps in memory. Production
+run/resume and later numerical entry points fail explicitly with their owning
+future work package.\\
 \bottomrule
 \end{longtable}
 
 Important missing reusable layers are:
 
 \begin{itemize}
-\item a single shared SCEM nonlinear engine behind both transports;
 \item transactional trajectory/checkpoint writers with exact restart lineage;
 \item completed numerical CLI commands and reusable spectroscopy outputs.
 \end{itemize}
@@ -1386,9 +1425,9 @@ formulations, propagation, observables, and storage; it records qualified
 energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
 repository-separation gate WP0, contract gate WP1, common-reference/source gate
-WP2, and instantaneous-physics gate WP3 are complete. Connection-aware and
-fixed-metric propagation begin in WP4 and remain subject to its separate
-acceptance gates.
+WP2, instantaneous-physics gate WP3, and shared-propagation gate WP4 are
+complete. Persistent runners, checkpoint/restart, and output scheduling begin
+in WP5 and remain separately gated.
 
 \section*{Rebuilding this document}
 

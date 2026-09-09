@@ -51,3 +51,34 @@ class SourceCompilationError(AionError, ValueError):
 
 class FormulationError(AionError, RuntimeError):
     """A formulation input or instantaneous identity is invalid."""
+
+
+class PropagationError(AionError, RuntimeError):
+    """A propagation state or numerical step violates its declared contract."""
+
+
+class StateIntegrityError(PropagationError):
+    """A dynamic electronic state is non-finite or exceeds a cleanup threshold."""
+
+
+class MetricConstraintError(PropagationError):
+    """A metric factorization or required cross-metric constraint failed."""
+
+
+class MidpointConvergenceError(PropagationError):
+    """The self-consistent midpoint density did not converge."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        step_index: int,
+        iterations: int,
+        density_residual: float,
+        hamiltonian_residual: float,
+    ) -> None:
+        super().__init__(message)
+        self.step_index = step_index
+        self.iterations = iterations
+        self.density_residual = density_residual
+        self.hamiltonian_residual = hamiltonian_residual

@@ -1,6 +1,6 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0--WP3 complete; propagation implementation has not started
+Status: WP0--WP4 complete; production runner and persistence have not started
 
 Last design review: 2026-09-08
 
@@ -741,6 +741,8 @@ testable.
 
 Dependencies: WP3.
 
+Status: complete on 2026-09-09.
+
 Work:
 
 - implement orbital-state protocol and shared midpoint-density solver;
@@ -770,6 +772,39 @@ Acceptance:
 - accepted steps satisfy convergence, Hermiticity, and metric constraints;
 - measured global order is approximately two in the asymptotic regime;
 - GPU tests run on the physical device and show no hot-loop host transfers.
+
+Completion record:
+
+- implemented a backend-resident occupied-orbital state, immutable accepted-
+  step result, complete nonlinear/link diagnostics, and an extensible state
+  protocol retained for a future density-matrix propagator;
+- implemented one damped-Picard midpoint-density SCEM loop for fixed-metric and
+  connection-aware transports; only the invariant metric density residual
+  controls acceptance, while the Hamiltonian residual remains independent
+  diagnostic evidence;
+- implemented direct nonorthogonal fixed-metric propagation with no Löwdin
+  transform and common Cayley [1/1]/Padé [2/2] rational-map kernels;
+- implemented exact uniform Abelian site transport from the compiled physical
+  vector potential, pulled-frame residual connection and Hamiltonian, E1 in the
+  connection exactly once, and right-Cholesky cross-metric correction at
+  predictor, midpoint, and endpoint links;
+- made correction disablement explicit and diagnostic-only, preserved raw and
+  corrected metric defects plus correction norm, and made nonlinear,
+  Hermiticity, input-metric, link-metric, and output-metric failures hard;
+- preallocated reusable hot-loop buffers in the per-simulation workspace,
+  retained stable accepted midpoint data for WP5 observers, and exposed one
+  in-memory `BuiltSimulation.step()` without claiming runner/event/I/O support;
+- synthetic tests establish fixed-metric norm preservation, Padé/Cayley local
+  rational order, cross-metric correction, correction scaling, Hermiticity
+  thresholds, and second-order midpoint composition;
+- complete P0+E1 molecular convergence tests measure order 2.17 for H2 and
+  2.18 for LiH in the tested asymptotic range; length/velocity covariant
+  trajectories agree to roundoff in the compact covariance tests;
+- CPU fast gate: 64 tests; molecular CPU integration gate: 24 tests; physical-
+  GPU gate: 6 tests. The WP4 GPU case advances H2 and LiH trajectories, covers
+  bare VG and P0+E1, checks CPU/GPU states, midpoint results and observables,
+  confirms persistent device residency, and traps any Aion bulk `to_host`
+  transfer within the propagation step.
 
 Estimate: 8–12 developer days; several hours to one day of compact convergence
 and parity compute.
@@ -965,10 +1000,11 @@ reason.
 | 2026-09-08 | Completed WP1 package, configuration, identity, schema, observable-record, status, API, CLI, and quality contracts | Establish the clean typed 0.2 boundary and remove active access to unreviewed draft numerics before porting physics |
 | 2026-09-09 | Completed WP2 references, backends, operators, exact-grid reconstruction, compiled sources, events, and transactional static/source I/O | Establish a single authenticated static problem and EM input shared by all later formulations; physical-GPU testing also found and eliminated backend-specific grid rebuilding |
 | 2026-09-09 | Completed WP3 formulations, currents, dipoles, energy ledgers, analytic rates, and scheduled observable definitions | Make all instantaneous physics reusable and independently testable; LiH validation required separating full continuity pair currents from action-split P0 source pairs |
+| 2026-09-09 | Completed WP4 shared SCEM, direct fixed-metric propagation, and analytic-connection transport | Establish one geometry-correct nonlinear engine for all formulations; compact H2/LiH tests confirm second-order convergence, gauge covariance, metric preservation, and physical-GPU residency |
 
 ## 16. Present authorization
 
 Creation of this plan, the companion LaTeX note/PDF, and execution of WP0
-through WP3 were authorized and are complete. WP4 through WP7 remain proposed
+through WP4 were authorized and are complete. WP5 through WP7 remain proposed
 future actions. This document does not itself authorize further numerical
 implementation, new calculation campaigns, or release.

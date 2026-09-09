@@ -34,11 +34,12 @@ class AODensity:
         if self.matrix.dtype != np.dtype(np.complex128):
             raise FormulationError("AO density must use complex128 precision")
         xp = self.backend.namespace
-        if not bool(xp.all(xp.isfinite(self.matrix))):
+        if not bool(self.backend.scalar_to_float(xp.all(xp.isfinite(self.matrix)))):
             raise FormulationError("AO density contains non-finite values")
         residual = self.hermiticity_residual()
-        if float(residual) > 1.0e-11:
-            raise FormulationError(f"AO density is not Hermitian: residual={float(residual):.3e}")
+        residual_value = self.backend.scalar_to_float(residual)
+        if residual_value > 1.0e-11:
+            raise FormulationError(f"AO density is not Hermitian: residual={residual_value:.3e}")
 
     @classmethod
     def from_matrix(cls, value: object, backend: ArrayBackend) -> AODensity:
@@ -114,7 +115,7 @@ class FormulationSourceSample:
             vector = physical_vector
             vector_dot = physical_vector_dot
         return cls(
-            time_au=float(workspace.backend.to_host(times[index : index + 1])[0]),
+            time_au=workspace.backend.scalar_to_float(times[index]),
             gauge=gauge,
             electric_field=workspace.require(f"{prefix}.{loc}.electric_field")[index],
             electric_field_dot=workspace.require(f"{prefix}.{loc}.electric_field_dot")[index],

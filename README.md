@@ -1,12 +1,12 @@
 # Aion
 
 Aion is a reusable Python library for gauge-covariant real-time TDDFT in
-finite molecular atomic-orbital bases. Version `0.2.0.dev3` is a clean break
+finite molecular atomic-orbital bases. Version `0.2.0.dev4` is a clean break
 from the archived research prototype.
 
 WP1 established the strict package/configuration/storage contracts, WP2 the
-common static electronic problem and prescribed EM input, and WP3 the complete
-instantaneous formulation physics:
+common static electronic problem and prescribed EM input, WP3 the complete
+instantaneous formulation physics, and WP4 the shared propagation layer:
 
 - immutable, strictly validated Python configurations;
 - deterministic normalized TOML and lossless scientific identities;
@@ -37,12 +37,22 @@ instantaneous formulation physics:
   analytic length-gauge generator rates; and
 - dependency-declared observable calculators with independent schedules and
   persistent formulation-qualified definitions;
+- occupied-orbital states and one density-self-consistent exponential-midpoint
+  engine shared by all four formulations;
+- direct nonorthogonal fixed-metric transport and connection-aware covariant
+  transport with exact uniform-field site parallel transport, with no evolving
+  Löwdin frame;
+- selectable Cayley [1/1] and Padé [2/2] rational maps, adaptive damped Picard
+  iteration, roundoff-only Hermitian cleanup, and hard nonlinear failure;
+- right-Cholesky cross-metric correction with raw/corrected link diagnostics
+  and an explicitly diagnostic-only correction-disable mode;
 - independently versioned HDF5 schemas, typed observable records, and a strict
   `status.json` record; and
 - a thin CLI whose `prepare` command now publishes a complete reference.
 
-Propagation, trajectory/checkpoint storage, runners, and spectroscopy remain
-owned by WP4--WP6. Their public shells fail explicitly instead of importing or
+Trajectory/checkpoint storage, production runners, and spectroscopy remain
+owned by WP5--WP6. The in-memory `BuiltSimulation.step()` boundary is usable;
+the later public workflow shells fail explicitly instead of importing or
 executing archived draft code.
 
 ## Validated domain

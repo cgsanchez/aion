@@ -24,6 +24,13 @@ from aion.formulations import (
     build_formulation,
 )
 from aion.observables import ObservableCalculators, build_observable_calculators
+from aion.propagation import (
+    OrbitalState,
+    PropagationStepResult,
+    SCEMPropagator,
+    build_initial_orbital_state,
+    build_propagator,
+)
 
 type PathInput = str | PathLike[str]
 
@@ -40,13 +47,14 @@ class Trajectory(Protocol):
 
 @dataclass(slots=True)
 class BuiltSimulation:
-    """Validated WP3 simulation binding, ready for a later propagator."""
+    """Validated simulation binding with a reusable in-memory WP4 stepper."""
 
     config: SimulationConfig
     reference: PreparedReference
     source: CompiledUniformSource
     formulation: Formulation
-    density: AODensity
+    state: OrbitalState
+    propagator: SCEMPropagator
     calculators: ObservableCalculators
     events: EventSchedule
 
@@ -57,6 +65,10 @@ class BuiltSimulation:
     @property
     def simulation_id(self) -> str:
         return self.config.scientific_id
+
+    @property
+    def density(self) -> AODensity:
+        return self.state.density()
 
     def source_sample(self, location: SourceSampling, index: int) -> FormulationSourceSample:
         return FormulationSourceSample.from_workspace(
@@ -72,6 +84,15 @@ class BuiltSimulation:
         state = self.density if density is None else density
         source = self.source_sample(location, index)
         return self.formulation.evaluate(state, source)
+
+    def step(self, state: OrbitalState | None = None) -> PropagationStepResult:
+        """Advance one in-memory step without starting the WP5 runner."""
+
+        current = self.state if state is None else state
+        result = self.propagator.step(current)
+        if state is None:
+            self.state = result.state
+        return result
 
 
 def prepare_reference(config: ReferenceConfig) -> PreparedReference:
@@ -124,7 +145,8 @@ def build_simulation(
     source = compile_source_for_reference(config.source, config.propagation.time_grid, reference)
     source.install(workspace)
     formulation = build_formulation(config.formulation, reference, workspace)
-    density = AODensity.from_matrix(workspace.require("ground_state.density"), workspace.backend)
+    state = build_initial_orbital_state(formulation, workspace)
+    propagator = build_propagator(formulation, config.propagation, workspace)
     calculators = build_observable_calculators(
         config.output.schedules,
         config.formulation.kind,
@@ -138,7 +160,8 @@ def build_simulation(
         reference=reference,
         source=source,
         formulation=formulation,
-        density=density,
+        state=state,
+        propagator=propagator,
         calculators=calculators,
         events=events,
     )
