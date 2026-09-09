@@ -1,8 +1,8 @@
 # Aion 0.2 configuration and schema contracts
 
-Status: configuration contracts were implemented by WP1 and prepared-reference
-and compiled-source contracts by WP2 for Aion `0.2.0.dev2`. Formulation,
-propagation, runner, and spectroscopy workflows remain deliberately unavailable.
+Status: contracts through instantaneous formulation physics were implemented by
+WP1--WP3 for Aion `0.2.0.dev3`. Propagation, runner, trajectory, checkpoint, and
+spectroscopy workflows remain deliberately unavailable.
 
 ## 1. Authority and strictness
 
@@ -60,7 +60,9 @@ content.
 A resolved simulation document contains:
 
 - an authenticated reference SHA-256 digest plus its relocatable path;
-- one of `bare_length_gauge`, `bare_velocity_gauge`, `p0`, or `p0_e1`;
+- one of `bare_length_gauge`, `bare_velocity_gauge`, `p0`, or `p0_e1`, with an
+  explicit length/velocity representation (fixed by the bare kind and selectable
+  for P0/P0+E1);
 - a discriminated physical source definition;
 - zero or more uniquely identified exact kick events on integer boundaries;
 - an endpoint-inclusive `FixedTimeGrid`;
@@ -78,10 +80,11 @@ step as authoritative: `N` intervals always produce `N+1` endpoints.
 
 Sources are potential-first contracts. Zero, compactly supported sin²
 vector-potential pulse, authenticated compiled-source, and reproducible
-Python-provider records are discriminated inputs. WP2 implements physical
+Python-provider records are discriminated inputs. WP2/WP3 implement physical
 uniform providers, additive composition, product-rule analytic envelopes,
-peak-electric-field pulse normalization, endpoint/midpoint compilation, and
-LG/VG/P0 node-link gauge derivation. A pulse is simply a source object; its
+peak-electric-field pulse normalization, endpoint/midpoint compilation through
+the second vector-potential derivative (hence the electric-field derivative),
+and LG/VG/P0 node-link gauge derivation. A pulse is simply a source object; its
 scientific use belongs to a workflow. Kicks are separate exact events and must
 lie on a state boundary.
 
@@ -121,7 +124,7 @@ than edit one in place.
 | --- | --- | --- |
 | prepared reference | `aion.reference` `1.0.0` | `meta`, `configuration`, `reference` |
 | trajectory | `aion.trajectory` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `observables`, `diagnostics`, `events`, `restart` |
-| source history | `aion.source-history` `1.0.0` | `meta`, `configuration`, `time`, `source` |
+| source history | `aion.source-history` `2.0.0` | `meta`, `configuration`, `time`, `source` |
 | checkpoint | `aion.checkpoint` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `state`, `events`, `restart` |
 
 Every dataset must declare `unit` and `physical_dimension`. Direct generic
@@ -157,11 +160,15 @@ prepare_reference  load_reference  build_simulation
 run                resume          load_trajectory
 ```
 
-`prepare_reference` and `load_reference` are implemented by WP2. Preparation
+`prepare_reference` and `load_reference` are implemented by WP2, and
+`build_simulation` by WP3. Preparation
 runs one validated RKS calculation; loading authenticates the portable data and
 runtime dependency contract without rerunning SCF. Each later simulation gets
 a separate backend workspace, which reconstructs PySCF/GPU4PySCF and transfers
-the reference exactly once. The remaining workflow functions are typed shells
+the reference exactly once. A built simulation binds the compiled source,
+selected gauge/formulation, initial AO density, backend workspace, event
+schedule, and typed observable calculators without starting propagation. The
+remaining workflow functions are typed shells
 that raise `FeatureNotImplementedError` with their responsible future work
 package, preventing fallback to the archived draft.
 

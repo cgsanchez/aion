@@ -26,6 +26,8 @@ class PhysicalDimension(StrEnum):
     ELECTRIC_FIELD = "electric_field"
     VECTOR_POTENTIAL_REDUCED = "vector_potential_reduced"
     DIPOLE = "electric_dipole"
+    CHARGE = "electric_charge"
+    CHARGE_FLOW_RATE = "electric_charge_flow_rate"
     CURRENT = "electric_current"
     POWER = "power"
     DENSITY_MATRIX = "ao_density_matrix"
@@ -41,6 +43,8 @@ class AtomicUnit(StrEnum):
     ELECTRIC_FIELD = "atomic_unit_of_electric_field"
     VECTOR_POTENTIAL_REDUCED = "atomic_unit_of_reduced_vector_potential"
     DIPOLE = "electron_bohr"
+    CHARGE = "elementary_charge"
+    CHARGE_FLOW_RATE = "elementary_charge_per_atomic_unit_of_time"
     CURRENT = "electron_per_atomic_unit_of_time_times_bohr"
     POWER = "hartree_per_atomic_unit_of_time"
 

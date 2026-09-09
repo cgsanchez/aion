@@ -23,6 +23,8 @@ CORE_OPERATOR_SCHEMA = "aion.core-operators"
 CORE_OPERATOR_VERSION = "1.0.0"
 ANCHOR_TOPOLOGY_SCHEMA = "aion.anchor-topology"
 ANCHOR_TOPOLOGY_VERSION = "1.0.0"
+E1_OPERATOR_SCHEMA = "aion.e1-operators"
+E1_OPERATOR_VERSION = "1.0.0"
 GRID_SCHEMA = "aion.pyscf-grid"
 GRID_VERSION = "1.0.0"
 
@@ -329,6 +331,40 @@ class AnchorTopologyBundle:
     @property
     def natom(self) -> int:
         return int(self.site_projector_diagonals.shape[0])
+
+
+@dataclass(frozen=True, slots=True)
+class E1OperatorBundle:
+    """Independently fingerprinted field-free central-dipole operators."""
+
+    central_dipoles: np.ndarray
+    source_operator_fingerprint_sha256: str
+    fingerprint_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        dipoles = immutable_array(
+            self.central_dipoles,
+            dtype=np.complex128,
+            ndim=3,
+            name="E1 central dipoles",
+        )
+        if dipoles.shape[0] != 3 or dipoles.shape[1] != dipoles.shape[2]:
+            raise ReferencePreparationError("E1 central dipoles must have shape (3, nao, nao)")
+        if _hermiticity_residual(dipoles) > 1.0e-12:
+            raise ReferencePreparationError("E1 central dipoles are not Hermitian")
+        object.__setattr__(self, "central_dipoles", dipoles)
+        object.__setattr__(
+            self,
+            "fingerprint_sha256",
+            canonical_sha256(
+                {
+                    "schema": E1_OPERATOR_SCHEMA,
+                    "version": E1_OPERATOR_VERSION,
+                    "central_dipoles": dipoles,
+                    "source_operator_fingerprint_sha256": (self.source_operator_fingerprint_sha256),
+                }
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

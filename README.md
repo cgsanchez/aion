@@ -1,11 +1,12 @@
 # Aion
 
 Aion is a reusable Python library for gauge-covariant real-time TDDFT in
-finite molecular atomic-orbital bases. Version `0.2.0.dev2` is a clean break
+finite molecular atomic-orbital bases. Version `0.2.0.dev3` is a clean break
 from the archived research prototype.
 
-WP1 established the strict package/configuration/storage contracts. WP2 now
-implements the common static electronic problem and prescribed EM input:
+WP1 established the strict package/configuration/storage contracts, WP2 the
+common static electronic problem and prescribed EM input, and WP3 the complete
+instantaneous formulation physics:
 
 - immutable, strictly validated Python configurations;
 - deterministic normalized TOML and lossless scientific identities;
@@ -19,13 +20,29 @@ implements the common static electronic problem and prescribed EM input:
 - transactional immutable `reference.h5` and compiled-source HDF5 I/O;
 - potential-first uniform sources, additive composition, analytic envelopes,
   sin² pulses normalized to peak electric field, exact endpoint/midpoint
-  compilation, consistent LG/VG/P0 node-link data, and exact kick definitions;
+  compilation through the analytic field derivative, consistent LG/VG/P0
+  node-link data, and exact kick definitions;
+- explicit `(S, H_eom, omega)` implementations of bare LG, bare VG, P0, and
+  P0+E1 in selectable covariant length/velocity representations;
+- Wilson metrics and projected connections, inverse-dressed pure-DFT matrix
+  builds, independently fingerprinted E1 tensors, and the E1 potential placed
+  exactly once in the connection;
+- formulation-owned dipoles and primary/source currents, separately named
+  full-continuity and action-split P0+E1 pair currents, variational E1 current
+  pieces, and ambient mechanical diagnostics;
+- generic and uniform local mechanical-current contractions with explicit
+  paramagnetic/diamagnetic pieces;
+- qualified matter/generator energy ledgers, complete bare-VG mechanical
+  kinetic terms, source couplings, analytic matter rates, Ward residuals, and
+  analytic length-gauge generator rates; and
+- dependency-declared observable calculators with independent schedules and
+  persistent formulation-qualified definitions;
 - independently versioned HDF5 schemas, typed observable records, and a strict
   `status.json` record; and
 - a thin CLI whose `prepare` command now publishes a complete reference.
 
-Formulations, observables, propagators, runners, and spectroscopy remain owned
-by WP3--WP6. Their public shells fail explicitly instead of importing or
+Propagation, trajectory/checkpoint storage, runners, and spectroscopy remain
+owned by WP4--WP6. Their public shells fail explicitly instead of importing or
 executing archived draft code.
 
 ## Validated domain

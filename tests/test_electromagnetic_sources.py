@@ -60,6 +60,17 @@ def test_pulse_duration_endpoints_peak_and_aligned_grid() -> None:
     grid = pulse_aligned_time_grid(pulse, 0.05)
     assert grid.step_au <= 0.05
     assert grid.end_au == pytest.approx(pulse.end_time_au, abs=2.0e-14)
+    time = 0.371 * pulse.duration_au
+    epsilon = 1.0e-5
+    field_dot_fd = (
+        pulse.sample(time + epsilon).electric_field - pulse.sample(time - epsilon).electric_field
+    ) / (2.0 * epsilon)
+    assert np.allclose(
+        pulse.sample(time).electric_field_dot,
+        field_dot_fd,
+        rtol=2.0e-8,
+        atol=2.0e-10,
+    )
 
 
 def test_compilation_derives_identical_lg_vg_field_and_emf_at_all_samples() -> None:
@@ -73,6 +84,7 @@ def test_compilation_derives_identical_lg_vg_field_and_emf_at_all_samples() -> N
     ):
         expected = physical.electric_field @ displacements.T
         assert np.array_equal(physical.electric_field, -physical.vector_potential_reduced_dot)
+        assert np.array_equal(physical.electric_field_dot, -physical.vector_potential_reduced_ddot)
         assert np.allclose(length.pair_electromotive_potential, expected, atol=2.0e-15)
         assert np.allclose(velocity.pair_electromotive_potential, expected, atol=2.0e-15)
         assert np.array_equal(length.pair_link, np.zeros_like(length.pair_link))
@@ -95,6 +107,9 @@ class LinearEnvelope:
     def derivative(self, time_au: float) -> float:
         return 3.0
 
+    def second_derivative(self, time_au: float) -> float:
+        return 0.0
+
 
 @dataclass(frozen=True)
 class ConstantPotential:
@@ -106,7 +121,7 @@ class ConstantPotential:
 
     def sample(self, time_au: float) -> UniformPotentialSample:
         del time_au
-        return UniformPotentialSample(np.asarray(self.vector), np.zeros(3))
+        return UniformPotentialSample(np.asarray(self.vector), np.zeros(3), np.zeros(3))
 
     def scientific_mapping(self) -> dict[str, object]:
         return {"kind": "test.constant", "vector": list(self.vector)}
@@ -121,6 +136,7 @@ def test_addition_and_temporal_gate_apply_before_projection_with_product_rule() 
     assert np.array_equal(sample.vector_potential_reduced, np.asarray((3.5, 7.0, 0.0)))
     assert np.array_equal(sample.vector_potential_reduced_dot, np.asarray((3.0, 6.0, 0.0)))
     assert np.array_equal(sample.electric_field, np.asarray((-3.0, -6.0, 0.0)))
+    assert np.array_equal(sample.electric_field_dot, np.zeros(3))
 
 
 def test_off_grid_pulse_boundary_is_rejected() -> None:
@@ -142,7 +158,9 @@ def test_stateful_provider_is_rejected_during_precompilation() -> None:
         def sample(self, time_au: float) -> UniformPotentialSample:
             del time_au
             self.calls += 1
-            return UniformPotentialSample(np.asarray((float(self.calls), 0.0, 0.0)), np.zeros(3))
+            return UniformPotentialSample(
+                np.asarray((float(self.calls), 0.0, 0.0)), np.zeros(3), np.zeros(3)
+            )
 
         def scientific_mapping(self) -> dict[str, object]:
             return {"kind": "test.stateful"}

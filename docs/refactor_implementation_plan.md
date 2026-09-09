@@ -1,6 +1,6 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0, WP1, and WP2 complete; formulation implementation has not started
+Status: WP0--WP3 complete; propagation implementation has not started
 
 Last design review: 2026-09-08
 
@@ -664,6 +664,8 @@ Milestone M2: trustworthy common static problem and EM input.
 
 Dependencies: WP2.
 
+Status: complete on 2026-09-09.
+
 Work:
 
 - implement the explicit Formulation triple and bare LG/VG;
@@ -695,6 +697,40 @@ Acceptance:
 - P0+E1 contains V_E1 exactly once in the EOM;
 - primary and diagnostic currents have unambiguous stored names;
 - all analytic identities pass stated tolerances on CPU and physical GPU.
+
+Completion record:
+
+- implemented backend-resident AO-density, gauge-resolved source-sample,
+  explicit EOM-triple, instantaneous-evaluation, current-ledger, and
+  energy-ledger types;
+- added an explicit covariant length/velocity representation to formulation
+  configuration and scientific identity;
+- implemented bare LG/VG and covariant P0/P0+E1 formulation builders over one
+  reconstructed pure-RKS model, with the E1 potential present only as
+  `(i/hbar) V_E1` in the connection;
+- implemented Wilson metric/derivative/connection, inverse density dressing,
+  independently fingerprinted central-dipole bundles, dressed E1 tensors and
+  vector-potential derivatives, analytic density/dipole derivatives, and
+  formulation-owned source power;
+- distinguished full-dynamical P0+E1 pair currents (site continuity) from the
+  action-split P0 source pair currents (variational Cartesian source-current
+  decomposition); this distinction was exposed by the LiH positive-control
+  test and both arrays now have separate persistent names;
+- implemented generic local and uniform mechanical-current contractions,
+  paramagnetic/diamagnetic storage, and the covariant ambient projection with
+  explicit vector-potential cancellation;
+- implemented the qualified kinetic, electron--nuclear, Hartree, XC,
+  nuclear-repulsion, scalar-source, E1-coupling, matter, generator, absorbed,
+  accumulated-work, analytic-rate, source-power, and Ward fields; energy
+  calculation remains independently scheduled;
+- extended analytic potential samples and source-history schema 2.0 to carry
+  the second vector-potential derivative and electric-field derivative needed
+  by the analytic LG generator-energy rate;
+- implemented formulation-qualified persistent observable definitions and
+  dependency-declared calculators with independent schedules;
+- CPU fast gate: 56 tests; molecular CPU gate: 14 H2/LiH tests; physical-GPU
+  gate: 5 tests, including full bare-VG and P0+E1 density, triple, current,
+  dipole, energy-component, invariant, residency, and no-fallback parity.
 
 Estimate: 8–12 developer days; hours of compact CPU/GPU validation.
 
@@ -928,10 +964,11 @@ reason.
 | 2026-09-08 | Completed WP0 archive, migration, and audit | Establish an immutable recovery point and separate reusable code from calculations before refactoring |
 | 2026-09-08 | Completed WP1 package, configuration, identity, schema, observable-record, status, API, CLI, and quality contracts | Establish the clean typed 0.2 boundary and remove active access to unreviewed draft numerics before porting physics |
 | 2026-09-09 | Completed WP2 references, backends, operators, exact-grid reconstruction, compiled sources, events, and transactional static/source I/O | Establish a single authenticated static problem and EM input shared by all later formulations; physical-GPU testing also found and eliminated backend-specific grid rebuilding |
+| 2026-09-09 | Completed WP3 formulations, currents, dipoles, energy ledgers, analytic rates, and scheduled observable definitions | Make all instantaneous physics reusable and independently testable; LiH validation required separating full continuity pair currents from action-split P0 source pairs |
 
 ## 16. Present authorization
 
-Creation of this plan, the companion LaTeX note/PDF, and execution of WP0,
-WP1, and WP2 were authorized and are complete. WP3 through WP7 remain proposed
+Creation of this plan, the companion LaTeX note/PDF, and execution of WP0
+through WP3 were authorized and are complete. WP4 through WP7 remain proposed
 future actions. This document does not itself authorize further numerical
 implementation, new calculation campaigns, or release.

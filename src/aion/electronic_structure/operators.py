@@ -9,6 +9,7 @@ import numpy as np
 from aion.electronic_structure.data import (
     AnchorTopologyBundle,
     CoreOperatorBundle,
+    E1OperatorBundle,
     NuclearData,
 )
 from aion.errors import ReferencePreparationError
@@ -74,6 +75,23 @@ def build_anchor_topology(molecule: Any, nuclei: NuclearData) -> AnchorTopologyB
         pair_displacements_au=pair_displacements,
         incidence=incidence,
         site_projector_diagonals=projectors,
+    )
+
+
+def build_e1_operators(
+    core: CoreOperatorBundle, topology: AnchorTopologyBundle, *, charge: float = -1.0
+) -> E1OperatorBundle:
+    """Build the field-free pair-central dipoles from immutable core data."""
+
+    ao_coordinates = core.nuclei.coordinates_au[topology.ao_to_atom]
+    centers = 0.5 * (ao_coordinates[:, None, :] + ao_coordinates[None, :, :])
+    central = np.empty_like(core.position, dtype=np.complex128)
+    for axis in range(3):
+        raw = float(charge) * (core.position[axis] - centers[:, :, axis] * core.overlap)
+        central[axis] = 0.5 * (raw + raw.conj().T)
+    return E1OperatorBundle(
+        central_dipoles=central,
+        source_operator_fingerprint_sha256=core.fingerprint_sha256,
     )
 
 

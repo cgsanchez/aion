@@ -47,3 +47,7 @@ class ReferencePreparationError(AionError, RuntimeError):
 
 class SourceCompilationError(AionError, ValueError):
     """An electromagnetic source violates its compilation contract."""
+
+
+class FormulationError(AionError, RuntimeError):
+    """A formulation input or instantaneous identity is invalid."""

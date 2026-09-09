@@ -20,7 +20,7 @@ from aion.electromagnetism.sources import (
 from aion.errors import SourceCompilationError
 
 COMPILED_SOURCE_SCHEMA = "aion.compiled-uniform-source"
-COMPILED_SOURCE_VERSION = "1.0.0"
+COMPILED_SOURCE_VERSION = "2.0.0"
 
 
 def _immutable(value: object, dtype: Any, name: str) -> np.ndarray:
@@ -55,30 +55,42 @@ def _normalized_definition(value: object) -> object:
 class PhysicalSourceSeries:
     times_au: np.ndarray
     electric_field: np.ndarray
+    electric_field_dot: np.ndarray
     vector_potential_reduced: np.ndarray
     vector_potential_reduced_dot: np.ndarray
+    vector_potential_reduced_ddot: np.ndarray
 
     def __post_init__(self) -> None:
         times = _immutable(self.times_au, np.float64, "source times")
         field = _immutable(self.electric_field, np.float64, "electric field")
+        field_dot = _immutable(self.electric_field_dot, np.float64, "electric-field derivative")
         vector = _immutable(self.vector_potential_reduced, np.float64, "reduced vector potential")
         vector_dot = _immutable(
             self.vector_potential_reduced_dot,
             np.float64,
             "reduced vector-potential derivative",
         )
+        vector_ddot = _immutable(
+            self.vector_potential_reduced_ddot,
+            np.float64,
+            "reduced vector-potential second derivative",
+        )
         expected = (times.size, 3)
         if (
             times.ndim != 1
             or field.shape != expected
+            or field_dot.shape != expected
             or vector.shape != expected
             or vector_dot.shape != expected
+            or vector_ddot.shape != expected
         ):
             raise SourceCompilationError("physical source-series shapes are inconsistent")
         object.__setattr__(self, "times_au", times)
         object.__setattr__(self, "electric_field", field)
+        object.__setattr__(self, "electric_field_dot", field_dot)
         object.__setattr__(self, "vector_potential_reduced", vector)
         object.__setattr__(self, "vector_potential_reduced_dot", vector_dot)
+        object.__setattr__(self, "vector_potential_reduced_ddot", vector_ddot)
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,12 +221,16 @@ class CompiledUniformSource:
         arrays: dict[str, np.ndarray] = {
             "endpoint.times_au": self.endpoint.times_au,
             "endpoint.electric_field": self.endpoint.electric_field,
+            "endpoint.electric_field_dot": self.endpoint.electric_field_dot,
             "endpoint.vector_potential_reduced": self.endpoint.vector_potential_reduced,
             "endpoint.vector_potential_reduced_dot": self.endpoint.vector_potential_reduced_dot,
+            "endpoint.vector_potential_reduced_ddot": self.endpoint.vector_potential_reduced_ddot,
             "midpoint.times_au": self.midpoint.times_au,
             "midpoint.electric_field": self.midpoint.electric_field,
+            "midpoint.electric_field_dot": self.midpoint.electric_field_dot,
             "midpoint.vector_potential_reduced": self.midpoint.vector_potential_reduced,
             "midpoint.vector_potential_reduced_dot": self.midpoint.vector_potential_reduced_dot,
+            "midpoint.vector_potential_reduced_ddot": self.midpoint.vector_potential_reduced_ddot,
         }
         for gauge_name, series in (
             ("length_endpoint", self.length_endpoint),
@@ -237,8 +253,10 @@ def _physical_mapping(series: PhysicalSourceSeries) -> dict[str, np.ndarray]:
     return {
         "times_au": series.times_au,
         "electric_field": series.electric_field,
+        "electric_field_dot": series.electric_field_dot,
         "vector_potential_reduced": series.vector_potential_reduced,
         "vector_potential_reduced_dot": series.vector_potential_reduced_dot,
+        "vector_potential_reduced_ddot": series.vector_potential_reduced_ddot,
     }
 
 
@@ -282,10 +300,15 @@ def _evaluate_reproducibly(
     first = [source.sample(float(time)) for time in times]
     second = [source.sample(float(time)) for time in times]
     for index, (left, right) in enumerate(zip(first, second, strict=True)):
-        if not np.array_equal(
-            left.vector_potential_reduced, right.vector_potential_reduced
-        ) or not np.array_equal(
-            left.vector_potential_reduced_dot, right.vector_potential_reduced_dot
+        if (
+            not np.array_equal(left.vector_potential_reduced, right.vector_potential_reduced)
+            or not np.array_equal(
+                left.vector_potential_reduced_dot, right.vector_potential_reduced_dot
+            )
+            or not np.array_equal(
+                left.vector_potential_reduced_ddot,
+                right.vector_potential_reduced_ddot,
+            )
         ):
             raise SourceCompilationError(
                 f"source is stateful or non-deterministic at compiled sample {index}"
@@ -299,11 +322,15 @@ def _physical_series(
     return PhysicalSourceSeries(
         times_au=times,
         electric_field=np.asarray([sample.electric_field for sample in samples]),
+        electric_field_dot=np.asarray([sample.electric_field_dot for sample in samples]),
         vector_potential_reduced=np.asarray(
             [sample.vector_potential_reduced for sample in samples]
         ),
         vector_potential_reduced_dot=np.asarray(
             [sample.vector_potential_reduced_dot for sample in samples]
+        ),
+        vector_potential_reduced_ddot=np.asarray(
+            [sample.vector_potential_reduced_ddot for sample in samples]
         ),
     )
 
@@ -356,6 +383,16 @@ def _validate_gauge_identities(compiled: CompiledUniformSource) -> None:
         )
         if derivative_error != 0.0:
             raise SourceCompilationError(f"{location} potential/field identity is inconsistent")
+        second_derivative_error = float(
+            np.max(
+                np.abs(physical.electric_field_dot + physical.vector_potential_reduced_ddot),
+                initial=0.0,
+            )
+        )
+        if second_derivative_error != 0.0:
+            raise SourceCompilationError(
+                f"{location} second potential/field identity is inconsistent"
+            )
 
 
 def compile_uniform_source(

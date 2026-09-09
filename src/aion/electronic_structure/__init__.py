@@ -1,15 +1,23 @@
 """Prepared molecular references, operator bundles, and PySCF reconstruction."""
 
+from aion.electronic_structure.adiabatic import (
+    AdiabaticPureRKS,
+    DFTInternalEnergy,
+    DFTMatrixBuild,
+    expectation,
+    hermitian_part,
+)
 from aion.electronic_structure.data import (
     AnchorTopologyBundle,
     CoreOperatorBundle,
     DependencyVersions,
+    E1OperatorBundle,
     GroundState,
     NuclearData,
     PreparedReference,
     QuadratureGrid,
 )
-from aion.electronic_structure.operators import momentum_grid_residual
+from aion.electronic_structure.operators import build_e1_operators, momentum_grid_residual
 from aion.electronic_structure.pyscf_rks import (
     create_reference_workspace,
     prepare_pyscf_reference,
@@ -19,14 +27,21 @@ from aion.electronic_structure.pyscf_rks import (
 from aion.electronic_structure.reference_io import load_reference_data, save_reference
 
 __all__ = [
+    "AdiabaticPureRKS",
     "AnchorTopologyBundle",
     "CoreOperatorBundle",
+    "DFTInternalEnergy",
+    "DFTMatrixBuild",
     "DependencyVersions",
+    "E1OperatorBundle",
     "GroundState",
     "NuclearData",
     "PreparedReference",
     "QuadratureGrid",
+    "build_e1_operators",
     "create_reference_workspace",
+    "expectation",
+    "hermitian_part",
     "load_reference_data",
     "momentum_grid_residual",
     "prepare_pyscf_reference",

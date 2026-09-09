@@ -60,6 +60,13 @@ class FormulationKind(StrEnum):
     P0_E1 = "p0_e1"
 
 
+class GaugeRepresentation(StrEnum):
+    """Gauge representation selected for one formulation simulation."""
+
+    LENGTH = "length"
+    VELOCITY = "velocity"
+
+
 class IntegratorKind(StrEnum):
     FIXED_METRIC_SCEM = "fixed_metric_scem"
     CONNECTION_AWARE_SCEM = "connection_aware_scem"
@@ -355,13 +362,33 @@ class ReferenceLinkConfig:
 @dataclass(frozen=True, slots=True)
 class FormulationConfig:
     kind: FormulationKind
+    gauge: GaugeRepresentation | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.kind, FormulationKind):
             raise ConfigurationError("formulation.kind is invalid")
+        gauge = self.gauge
+        if gauge is None:
+            gauge = (
+                GaugeRepresentation.VELOCITY
+                if self.kind is FormulationKind.BARE_VELOCITY_GAUGE
+                else GaugeRepresentation.LENGTH
+            )
+            object.__setattr__(self, "gauge", gauge)
+        if not isinstance(gauge, GaugeRepresentation):
+            raise ConfigurationError("formulation.gauge is invalid")
+        required = {
+            FormulationKind.BARE_LENGTH_GAUGE: GaugeRepresentation.LENGTH,
+            FormulationKind.BARE_VELOCITY_GAUGE: GaugeRepresentation.VELOCITY,
+        }.get(self.kind)
+        if required is not None and gauge is not required:
+            raise UnsupportedConfigurationError(
+                f"{self.kind.value} requires the {required.value}-gauge representation"
+            )
 
     def as_mapping(self) -> dict[str, object]:
-        return {"kind": self.kind.value}
+        assert self.gauge is not None
+        return {"kind": self.kind.value, "gauge": self.gauge.value}
 
 
 @dataclass(frozen=True, slots=True)

@@ -39,6 +39,15 @@ class Workspace:
         self.arrays[name] = resident
         return resident
 
+    def install_resident_array(self, name: str, value: Any) -> Any:
+        """Register an already-resident derived array without a host round trip."""
+
+        if name in self.arrays:
+            raise BackendError(f"workspace array {name!r} is already installed")
+        self.backend.assert_resident(value, name=name)
+        self.arrays[name] = value
+        return value
+
     def allocate(self, name: str, shape: tuple[int, ...], *, dtype: Any) -> Any:
         if name in self.scratch:
             raise BackendError(f"workspace scratch array {name!r} is already allocated")

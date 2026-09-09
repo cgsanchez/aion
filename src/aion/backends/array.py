@@ -20,6 +20,9 @@ class ArrayBackend(Protocol):
     @property
     def device_index(self) -> int | None: ...
 
+    @property
+    def namespace(self) -> Any: ...
+
     def asarray(self, value: object, *, dtype: Any | None = None) -> Any: ...
 
     def empty(self, shape: tuple[int, ...], *, dtype: Any) -> Any: ...
@@ -41,6 +44,10 @@ class NumPyBackend:
     kind: BackendKind = BackendKind.CPU
     device_index: int | None = None
 
+    @property
+    def namespace(self) -> Any:
+        return np
+
     def asarray(self, value: object, *, dtype: Any | None = None) -> np.ndarray:
         if hasattr(value, "get"):
             raise DeviceResidencyError(
@@ -59,11 +66,11 @@ class NumPyBackend:
         return np.asarray(value)
 
     def is_resident(self, value: object) -> bool:
-        return isinstance(value, np.ndarray)
+        return isinstance(value, np.ndarray | np.generic)
 
     def assert_resident(self, value: object, *, name: str = "array") -> None:
         if not self.is_resident(value):
-            raise DeviceResidencyError(f"{name} is not a NumPy host array")
+            raise DeviceResidencyError(f"{name} is not a NumPy host array or scalar")
 
     def synchronize(self) -> None:
         return None
@@ -98,6 +105,10 @@ class CuPyBackend:
             raise BackendError(
                 f"GPU device {device_index} cannot execute the required float64 operations"
             ) from exc
+
+    @property
+    def namespace(self) -> Any:
+        return self._cp
 
     def asarray(self, value: object, *, dtype: Any | None = None) -> Any:
         with self._cp.cuda.Device(self.device_index):

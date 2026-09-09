@@ -26,10 +26,11 @@ def _vector3(value: object, name: str) -> np.ndarray:
 
 @dataclass(frozen=True, slots=True)
 class UniformPotentialSample:
-    """Uniform reduced vector potential and analytic time derivative."""
+    """Uniform reduced vector potential and two analytic time derivatives."""
 
     vector_potential_reduced: np.ndarray
     vector_potential_reduced_dot: np.ndarray
+    vector_potential_reduced_ddot: np.ndarray
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -45,10 +46,24 @@ class UniformPotentialSample:
                 "vector_potential_reduced_dot",
             ),
         )
+        object.__setattr__(
+            self,
+            "vector_potential_reduced_ddot",
+            _vector3(
+                self.vector_potential_reduced_ddot,
+                "vector_potential_reduced_ddot",
+            ),
+        )
 
     @property
     def electric_field(self) -> np.ndarray:
         result = -self.vector_potential_reduced_dot
+        result.setflags(write=False)
+        return result
+
+    @property
+    def electric_field_dot(self) -> np.ndarray:
+        result = -self.vector_potential_reduced_ddot
         result.setflags(write=False)
         return result
 
@@ -74,7 +89,7 @@ class ZeroUniformSource:
     def sample(self, time_au: float) -> UniformPotentialSample:
         if not math.isfinite(float(time_au)):
             raise SourceCompilationError("source evaluation time must be finite")
-        return UniformPotentialSample(np.zeros(3), np.zeros(3))
+        return UniformPotentialSample(np.zeros(3), np.zeros(3), np.zeros(3))
 
     def scientific_mapping(self) -> dict[str, object]:
         return {"kind": "zero_uniform_source", "version": "1.0.0"}
@@ -137,9 +152,15 @@ class Sin2VectorPotentialPulse:
         if not math.isfinite(time):
             raise SourceCompilationError("source evaluation time must be finite")
         if time <= self.start_time_au or time >= self.end_time_au:
-            return UniformPotentialSample(np.zeros(3), np.zeros(3))
+            return UniformPotentialSample(np.zeros(3), np.zeros(3), np.zeros(3))
         relative = time - self.start_time_au
         value, derivative = _pulse_scalar_and_derivative(
+            relative,
+            self.duration_au,
+            self.config.angular_frequency_au,
+            self.config.carrier_phase_rad,
+        )
+        second_derivative = _pulse_second_derivative(
             relative,
             self.duration_au,
             self.config.angular_frequency_au,
@@ -148,6 +169,7 @@ class Sin2VectorPotentialPulse:
         return UniformPotentialSample(
             self.vector_potential_amplitude_au * value * self.polarization_unit,
             self.vector_potential_amplitude_au * derivative * self.polarization_unit,
+            self.vector_potential_amplitude_au * second_derivative * self.polarization_unit,
         )
 
     def scientific_mapping(self) -> dict[str, object]:
@@ -262,6 +284,7 @@ class AdditiveUniformSource:
         return UniformPotentialSample(
             sum((value.vector_potential_reduced for value in values), start=np.zeros(3)),
             sum((value.vector_potential_reduced_dot for value in values), start=np.zeros(3)),
+            sum((value.vector_potential_reduced_ddot for value in values), start=np.zeros(3)),
         )
 
     def scientific_mapping(self) -> dict[str, object]:
@@ -280,6 +303,8 @@ class ScalarEnvelope(Protocol):
 
     def derivative(self, time_au: float) -> float: ...
 
+    def second_derivative(self, time_au: float) -> float: ...
+
 
 @dataclass(frozen=True, slots=True)
 class GatedUniformSource:
@@ -296,12 +321,16 @@ class GatedUniformSource:
         sample = self.source.sample(time_au)
         value = float(self.envelope.value(time_au))
         derivative = float(self.envelope.derivative(time_au))
-        if not math.isfinite(value) or not math.isfinite(derivative):
+        second_derivative = float(self.envelope.second_derivative(time_au))
+        if not all(math.isfinite(item) for item in (value, derivative, second_derivative)):
             raise SourceCompilationError("temporal envelope returned a non-finite value")
         return UniformPotentialSample(
             value * sample.vector_potential_reduced,
             derivative * sample.vector_potential_reduced
             + value * sample.vector_potential_reduced_dot,
+            second_derivative * sample.vector_potential_reduced
+            + 2.0 * derivative * sample.vector_potential_reduced_dot
+            + value * sample.vector_potential_reduced_ddot,
         )
 
     def scientific_mapping(self) -> dict[str, object]:

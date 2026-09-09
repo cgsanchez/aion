@@ -58,7 +58,7 @@ TRAJECTORY_SCHEMA = ArtifactSchema(
 
 SOURCE_HISTORY_SCHEMA = ArtifactSchema(
     name="aion.source-history",
-    version=SchemaVersion(1, 0, 0),
+    version=SchemaVersion(2, 0, 0),
     kind=ArtifactKind.SOURCE_HISTORY,
     required_groups=("meta", "configuration", "time", "source"),
 )

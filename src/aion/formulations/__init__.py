@@ -1,3 +1,71 @@
-"""Bare and gauge-covariant formulation contracts (implemented in WP3)."""
+"""Bare and gauge-covariant formulation contracts and implementations."""
 
-__all__: list[str] = []
+from aion.formulations.api import build_formulation
+from aion.formulations.bare import BareLengthGauge, BareVelocityGauge
+from aion.formulations.base import FormulationContext
+from aion.formulations.covariant import P0, P0E1
+from aion.formulations.kernels import (
+    E1Tensors,
+    MechanicalCurrent,
+    P0Geometry,
+    central_dipole_matrices,
+    covariant_ambient_mechanical_current,
+    density_derivative,
+    e1_tensors,
+    generic_mechanical_current,
+    inverse_dressed_density,
+    inverse_dressed_density_dot,
+    p0_continuity_residual,
+    p0_geometry,
+    p0_graph_current,
+    p0_pair_currents,
+    p0_source_power,
+    site_charge_derivatives,
+    site_charges,
+    uniform_mechanical_current,
+)
+from aion.formulations.types import (
+    AODensity,
+    CurrentLedger,
+    EnergyLedger,
+    EOMTriple,
+    Formulation,
+    FormulationSourceSample,
+    InstantaneousEvaluation,
+    SourceSampling,
+)
+
+__all__ = [
+    "P0",
+    "P0E1",
+    "AODensity",
+    "BareLengthGauge",
+    "BareVelocityGauge",
+    "CurrentLedger",
+    "E1Tensors",
+    "EOMTriple",
+    "EnergyLedger",
+    "Formulation",
+    "FormulationContext",
+    "FormulationSourceSample",
+    "InstantaneousEvaluation",
+    "MechanicalCurrent",
+    "P0Geometry",
+    "SourceSampling",
+    "build_formulation",
+    "central_dipole_matrices",
+    "covariant_ambient_mechanical_current",
+    "density_derivative",
+    "e1_tensors",
+    "generic_mechanical_current",
+    "inverse_dressed_density",
+    "inverse_dressed_density_dot",
+    "p0_continuity_residual",
+    "p0_geometry",
+    "p0_graph_current",
+    "p0_pair_currents",
+    "p0_source_power",
+    "site_charge_derivatives",
+    "site_charges",
+    "uniform_mechanical_current",
+]

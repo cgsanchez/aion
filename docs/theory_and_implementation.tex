@@ -65,8 +65,9 @@ reusable API, storage schema, and validation hierarchy. This is primarily a
 normative design document. Its package, configuration, identity, schema,
 status, and API contracts were implemented in WP1. WP2 implements the common
 prepared electronic reference, backend workspaces, AO operators, and compiled
-electromagnetic source; formulations and propagation remain gated future work
-unless explicitly identified.
+electromagnetic source. WP3 implements all four formulations and their
+instantaneous dipoles, currents, energy ledgers, analytic rates, and observable
+definitions; propagation remains gated future work unless explicitly identified.
 \end{abstract}
 
 \tableofcontents
@@ -287,6 +288,11 @@ times, including every SCEM midpoint. A field-first convenience input is
 compiled to consistent potentials before propagation; \(\vect a\) is never
 constructed by incremental numerical integration inside the electronic hot
 loop.
+The compiled uniform specialization retains \(\vect a\), \(\dot{\vect a}\),
+and \(\ddot{\vect a}\), and therefore \(\vect E=-\dot{\vect a}\) and
+\(\dot{\vect E}=-\ddot{\vect a}\), at every endpoint and midpoint. This
+supports analytic matter- and generator-energy derivatives without finite
+differences of the source.
 
 \subsection{Projected node/link sample}
 
@@ -596,7 +602,7 @@ coefficient-velocity equation after the non-metric connection terms have been
 moved to its right-hand side. Thus \(H_{\mathrm{dyn}}=H_{\Pzero}\) for P0 and
 \(H_{\mathrm{dyn}}=H_{\Pzero}+V_{\Eone}\) for P0+E1. This algebraic definition
 does not alter the normative connection split in Eq.~\eqref{eq:e1-split}.
-The variational graph-current expression used by the covariant model is
+The common pair-current kernel used by the covariant model is
 \begin{align}
  I_{ab}
  &=\frac q\hbar\ImTr\!\left[
@@ -608,10 +614,19 @@ The variational graph-current expression used by the covariant model is
  +\frac{2q}{\hbar}\ImTr\!\left(PH_{\mathrm{source},ba}\right).
  \label{eq:p0-pair-current}
 \end{align}
-Together with Eqs.~\eqref{eq:continuity}--\eqref{eq:graph-power}, this gives
-the P0 charge, current vector, and source power. The pair orientation and the
-definition of the source block are part of the data model, not choices made by
-individual analysis scripts.
+At P0, \(H_{\mathrm{source}}=H_{\mathrm{dyn}}=H_{\Pzero}\), and one pair
+array provides both charge continuity and source response. At P0+E1 two
+distinct contractions of Eq.~\eqref{eq:p0-pair-current} are required. The
+full-dynamical array \(I_{ab}^{\mathrm{cont}}\) uses
+\(H_{\mathrm{source}}=H_{\mathrm{dyn}}=H_{\Pzero}+V_{\Eone}\) and satisfies
+the site-charge continuity identity. The action-split source array
+\(I_{ab}^{(\Pzero\mid\Eone)}\) uses the same full \(K_{\mathrm{dyn}}\), but
+sets \(H_{\mathrm{source}}=H_{\Pzero}\); its Cartesian graph current is the
+P0 component to which Eq.~\eqref{eq:e1-current} is added. Conflating the two
+arrays either breaks the site-continuity diagnostic or double counts the E1
+phase response. They are therefore stored separately as
+\code{pair\_currents\_continuity} and
+\code{pair\_currents\_p0\_source}.
 
 \section{P0+E1 correction}
 
@@ -698,7 +713,7 @@ P0 source contribution. This separation prevents E1 double counting.
 
 The defining checks are
 \begin{align}
- \dot Q_a+\sum_b I_{ab}&=0,\label{eq:cov-continuity}\\
+ \dot Q_a+\sum_b I_{ab}^{\mathrm{cont}}&=0,\label{eq:cov-continuity}\\
  \vect J_{\mathrm{src}}
    &=\frac{\dd\vect\mu_{\Pzero+\Eone}}{\dd t},\label{eq:j-mu}\\
  \frac{\dd U_{\mathrm{cov}}}{\dd t}
@@ -706,11 +721,12 @@ The defining checks are
  \label{eq:cov-ward}
 \end{align}
 
-\begin{statusbox}{Draft-validated}
-The current research tree contains the P0/P0+E1 tensors, connection split,
-site charges, pair-current expression, and analytic E1-current pieces. Their
-clean typed integration with the complete energy ledger and storage schema is
-planned, not yet complete.
+\begin{statusbox}{Implemented and validated in WP3}
+The active 0.2 tree implements the P0/P0+E1 tensors, connection split, site
+charges, both pair-current contractions, and analytic E1-current pieces as
+backend-resident reusable kernels. Synthetic, H2, LiH, and physical-GPU tests
+check metric compatibility, continuity, variational source response,
+current--dipole agreement, gauge covariance, and the E1-once EOM split.
 \end{statusbox}
 
 \section{Mechanical-current diagnostics}
@@ -786,6 +802,22 @@ Eq.~\eqref{eq:cov-energy}. This is necessary for the Ward identity
 Eq.~\eqref{eq:cov-ward}. Equivalent dressed-frame contractions are valuable
 independent validation identities, not alternative user-facing definitions.
 
+The representation-dependent instantaneous generator energy is stored as a
+different qualified quantity,
+\begin{equation}
+ E_{\mathrm{generator}}^{\mathrm{cov}}
+ =U_{\mathrm{cov}}
+  +\sum_a \phi_a Q_a
+  +\sum_a Z_a\phi_a
+  +U_{\Eone,\mathrm{coupling}},
+ \label{eq:cov-generator-energy}
+\end{equation}
+where the final term is absent for P0.  Equation~\eqref{eq:cov-generator-energy}
+records the explicit source coupling appearing in the chosen representation;
+it is not used as the absorbed energy.  Absorption and the covariant Ward test
+use the gauge-invariant matter energy in Eq.~\eqref{eq:cov-energy} and the
+formulation-owned variational source current.
+
 \subsection{Qualified totals}
 
 The energy observable records, when meaningful for a formulation:
@@ -848,11 +880,12 @@ there. A robust normalized Ward residual reports both absolute and relative
 scales and should decrease quadratically with \(\Delta t\) in the asymptotic
 regime.
 
-\begin{statusbox}{Planned/unvalidated}
-The draft tree has partial aggregate energy methods and ad hoc reconstruction
-of missing bare-VG kinetic terms. The complete qualified ledger and analytic
-functional energy derivative described here are not yet a reusable
-implementation.
+\begin{statusbox}{Implemented and validated in WP3}
+The qualified ledger, complete bare-VG kinetic decomposition, covariant energy,
+source couplings, analytic DFT functional derivative, source power, Ward
+residual, and analytic length-gauge generator rate are reusable backend-
+resident implementations. Energy remains independently scheduled and is not
+contracted at every step by default.
 \end{statusbox}
 
 \section{Self-consistent exponential midpoint propagation}
@@ -1168,18 +1201,20 @@ derived bundles with their own invalidation boundaries.
 
 \section{Present implementation versus the 0.2 target}
 
-\begin{statusbox}{Current-tree assessment after WP2}
+\begin{statusbox}{Current-tree assessment after WP3}
 The research draft was archived and verified on 8 September 2026. Its
 molecule-specific campaigns, runners, postprocessing, historical notes, and
 large results were moved with checksum manifests to the separate
 \path{CALCULATIONS} repository. WP1 then removed the active flat prototype
 modules and established the clean 0.2 package contracts. WP2 implements the
-common static electronic problem and prescribed electromagnetic input. Draft
-equations and kernels remain available through the immutable archive and
-calculation repository, but none is silently reachable through the 0.2 API.
+common static electronic problem and prescribed electromagnetic input. WP3
+implements the four formulation and instantaneous-observable layers after
+re-deriving and independently testing the archived equations. Draft equations
+and kernels remain available through the immutable archive and calculation
+repository, but none is silently reachable through the 0.2 API.
 \end{statusbox}
 
-The reusable layers implemented through WP2 are:
+The reusable layers implemented through WP3 are:
 
 \begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
 \toprule
@@ -1204,8 +1239,9 @@ construction reconstructs PySCF/GPU4PySCF without another SCF calculation.\\
 \code{aion.electromagnetism} &
 Potential-first uniform providers, additive composition, product-rule temporal
 gates, peak-field-normalized compact pulses, fixed-grid endpoint/midpoint
-compilation, mutually consistent LG/VG/P0 node-link data, compiled-source
-persistence, and exact restart-idempotent kick definitions.\\
+compilation through \(\ddot{\vect a}\), mutually consistent LG/VG/P0 node-link
+data, compiled-source persistence, and exact restart-idempotent kick
+definitions.\\
 \code{aion.io} &
 Independent semantic schema versions, structural validators and skeletons for
 reference, trajectory, source-history, and checkpoint HDF5 artifacts, plus the
@@ -1214,12 +1250,19 @@ compiled sources use same-directory partial construction, complete validation,
 and atomic no-overwrite publication. Appendable trajectory/checkpoint writers
 remain WP5 work.\\
 \code{aion.observables} &
-Definition-specific immutable observable metadata and sampled records. The
-physical dipole, current, energy, power, Ward, and continuity calculators are
-not yet implemented.\\
+Definition-specific immutable metadata and sampled records, plus typed,
+dependency-declared calculators with independent schedules and persistent
+formulation-qualified identities for dipoles, currents, energies, power,
+Ward, and continuity quantities.\\
+\code{aion.formulations} &
+Explicit bare LG/VG and covariant P0/P0+E1 triples, Wilson geometry, inverse-
+dressed pure-DFT builds, E1 tensors, formulation-owned dipoles/source currents,
+mechanical diagnostics, graph continuity, source power, and qualified energy
+ledgers. All arrays remain resident on the selected NumPy/CuPy backend.\\
 \code{aion.workflows} and \code{aion} &
 Typed top-level interfaces and CLI commands. \code{prepare\_reference},
-\code{load\_reference}, and CLI \code{prepare} are functional; later numerical
+\code{load\_reference}, \code{build\_simulation}, and CLI \code{prepare} are
+functional; later numerical
 entry points fail explicitly with their owning future work package.\\
 \bottomrule
 \end{longtable}
@@ -1227,13 +1270,6 @@ entry points fail explicitly with their owning future work package.\\
 Important missing reusable layers are:
 
 \begin{itemize}
-\item formulation and simulation builders binding the implemented reference
-  and compiled source to explicit \((S,H_{\mathrm{eom}},\omega)\) models;
-\item formulation-owned physical primary and diagnostic observable
-  calculators behind the established record types;
-\item the generic mechanical-current operator API;
-\item the complete qualified energy ledger and independent analytic
-  \(\dd U/\dd t\);
 \item a single shared SCEM nonlinear engine behind both transports;
 \item transactional trajectory/checkpoint writers with exact restart lineage;
 \item completed numerical CLI commands and reusable spectroscopy outputs.
@@ -1349,9 +1385,10 @@ auditable. It separates immutable reference preparation, physical sources,
 formulations, propagation, observables, and storage; it records qualified
 energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
-repository-separation gate WP0, contract gate WP1, and common-reference/source
-gate WP2 are complete. Formulations and their instantaneous physics begin in
-WP3 and remain subject to its separate acceptance gates.
+repository-separation gate WP0, contract gate WP1, common-reference/source gate
+WP2, and instantaneous-physics gate WP3 are complete. Connection-aware and
+fixed-metric propagation begin in WP4 and remain subject to its separate
+acceptance gates.
 
 \section*{Rebuilding this document}
 

@@ -15,6 +15,7 @@ from aion.config import (
     FixedTimeGrid,
     FormulationConfig,
     FormulationKind,
+    GaugeRepresentation,
     IntegratorKind,
     KickEventConfig,
     MetadataConfig,
@@ -153,6 +154,13 @@ def test_unknown_and_source_irrelevant_fields_fail() -> None:
 def test_backend_rejects_unused_device_for_cpu() -> None:
     with pytest.raises(ConfigurationError, match="unused"):
         BackendConfig(BackendKind.CPU, device_index=0)
+
+
+def test_formulation_gauge_is_explicit_and_bare_mismatches_fail() -> None:
+    covariant = FormulationConfig(FormulationKind.P0_E1, GaugeRepresentation.VELOCITY)
+    assert covariant.as_mapping() == {"kind": "p0_e1", "gauge": "velocity"}
+    with pytest.raises(UnsupportedConfigurationError, match="requires the length"):
+        FormulationConfig(FormulationKind.BARE_LENGTH_GAUGE, GaugeRepresentation.VELOCITY)
 
 
 def test_programmatic_boundary_rejects_untyped_nested_values() -> None:

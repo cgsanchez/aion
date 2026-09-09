@@ -23,6 +23,7 @@ from aion.config.models import (
     ElectronicStructureConfig,
     FormulationConfig,
     FormulationKind,
+    GaugeRepresentation,
     IntegratorKind,
     KickEventConfig,
     MetadataConfig,
@@ -245,9 +246,22 @@ def _parse_simulation(root: Mapping[str, object]) -> SimulationConfig:
         path=Path(_string(reference_data.get("path", "reference.h5"), "reference.path")),
     )
     formulation_data = _table(root["formulation"], "formulation")
-    _fields(formulation_data, "formulation", {"kind"}, {"kind"})
+    _fields(formulation_data, "formulation", {"kind", "gauge"}, {"kind"})
+    formulation_kind = _enum(FormulationKind, formulation_data["kind"], "formulation.kind")
     formulation = FormulationConfig(
-        _enum(FormulationKind, formulation_data["kind"], "formulation.kind")
+        formulation_kind,
+        _enum(
+            GaugeRepresentation,
+            formulation_data.get(
+                "gauge",
+                (
+                    GaugeRepresentation.VELOCITY.value
+                    if formulation_kind is FormulationKind.BARE_VELOCITY_GAUGE
+                    else GaugeRepresentation.LENGTH.value
+                ),
+            ),
+            "formulation.gauge",
+        ),
     )
     source = _parse_source(root["source"])
     propagation = _parse_propagation(root["propagation"])

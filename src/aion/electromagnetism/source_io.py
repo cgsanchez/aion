@@ -35,8 +35,10 @@ _REQUIRED_SOURCE_PATHS = (
                 "physical",
                 (
                     "electric_field",
+                    "electric_field_dot",
                     "vector_potential_reduced",
                     "vector_potential_reduced_dot",
+                    "vector_potential_reduced_ddot",
                 ),
             ),
             (
@@ -82,6 +84,12 @@ def _write_physical(group: h5py.Group, series: PhysicalSourceSeries) -> None:
             "electric_field",
         ),
         (
+            "electric_field_dot",
+            series.electric_field_dot,
+            "atomic_unit_of_electric_field_per_time",
+            "electric_field_time_derivative",
+        ),
+        (
             "vector_potential_reduced",
             series.vector_potential_reduced,
             "atomic_unit_of_reduced_vector_potential",
@@ -92,6 +100,12 @@ def _write_physical(group: h5py.Group, series: PhysicalSourceSeries) -> None:
             series.vector_potential_reduced_dot,
             "atomic_unit_of_electric_field",
             "vector_potential_reduced_time_derivative",
+        ),
+        (
+            "vector_potential_reduced_ddot",
+            series.vector_potential_reduced_ddot,
+            "atomic_unit_of_electric_field_per_time",
+            "vector_potential_reduced_second_time_derivative",
         ),
     ):
         write_dataset(group, name, value, unit=unit, physical_dimension=dimension)
@@ -216,8 +230,10 @@ def _physical(group: h5py.Group, times: np.ndarray) -> PhysicalSourceSeries:
     return PhysicalSourceSeries(
         times_au=times,
         electric_field=group["electric_field"][...],
+        electric_field_dot=group["electric_field_dot"][...],
         vector_potential_reduced=group["vector_potential_reduced"][...],
         vector_potential_reduced_dot=group["vector_potential_reduced_dot"][...],
+        vector_potential_reduced_ddot=group["vector_potential_reduced_ddot"][...],
     )
 
 

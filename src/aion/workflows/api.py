@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from os import PathLike
-from typing import Protocol
+from typing import Any, Protocol
 
 from aion.config import BackendConfig, ReferenceConfig, SimulationConfig
+from aion.electromagnetism import (
+    CompiledUniformSource,
+    EventSchedule,
+    compile_event_schedule,
+    compile_source_for_reference,
+)
 from aion.electronic_structure import PreparedReference as PreparedReference
-from aion.errors import FeatureNotImplementedError
+from aion.errors import FeatureNotImplementedError, FormulationError
+from aion.formulations import (
+    AODensity,
+    Formulation,
+    FormulationSourceSample,
+    InstantaneousEvaluation,
+    SourceSampling,
+    build_formulation,
+)
+from aion.observables import ObservableCalculators, build_observable_calculators
 
 type PathInput = str | PathLike[str]
 
@@ -21,6 +36,42 @@ class Simulation(Protocol):
 class Trajectory(Protocol):
     @property
     def run_id(self) -> str: ...
+
+
+@dataclass(slots=True)
+class BuiltSimulation:
+    """Validated WP3 simulation binding, ready for a later propagator."""
+
+    config: SimulationConfig
+    reference: PreparedReference
+    source: CompiledUniformSource
+    formulation: Formulation
+    density: AODensity
+    calculators: ObservableCalculators
+    events: EventSchedule
+
+    @property
+    def workspace(self) -> Any:
+        return self.formulation.context.workspace
+
+    @property
+    def simulation_id(self) -> str:
+        return self.config.scientific_id
+
+    def source_sample(self, location: SourceSampling, index: int) -> FormulationSourceSample:
+        return FormulationSourceSample.from_workspace(
+            self.workspace,
+            gauge=self.formulation.gauge,
+            location=location,
+            index=index,
+        )
+
+    def evaluate(
+        self, location: SourceSampling, index: int, density: AODensity | None = None
+    ) -> InstantaneousEvaluation:
+        state = self.density if density is None else density
+        source = self.source_sample(location, index)
+        return self.formulation.evaluate(state, source)
 
 
 def prepare_reference(config: ReferenceConfig) -> PreparedReference:
@@ -60,11 +111,37 @@ def load_reference(
 def build_simulation(
     config: SimulationConfig,
     reference: PreparedReference,
-) -> Simulation:
-    """Build a validated independent simulation (implementation: WP3)."""
+) -> BuiltSimulation:
+    """Build an independent source/formulation/state/workspace binding."""
 
-    del config, reference
-    raise FeatureNotImplementedError("simulation construction is scheduled for WP3")
+    if not isinstance(config, SimulationConfig):
+        raise TypeError("config must be SimulationConfig")
+    if not isinstance(reference, PreparedReference):
+        raise TypeError("reference must be PreparedReference")
+    if config.reference.fingerprint_sha256 != reference.fingerprint_sha256:
+        raise FormulationError("simulation reference fingerprint does not match the reference")
+    workspace = reference.create_workspace(config.backend)
+    source = compile_source_for_reference(config.source, config.propagation.time_grid, reference)
+    source.install(workspace)
+    formulation = build_formulation(config.formulation, reference, workspace)
+    density = AODensity.from_matrix(workspace.require("ground_state.density"), workspace.backend)
+    calculators = build_observable_calculators(
+        config.output.schedules,
+        config.formulation.kind,
+        natom=reference.anchor_topology.natom,
+        npair=reference.anchor_topology.pair_indices.shape[0],
+    )
+    events = compile_event_schedule(config.events, config.propagation.time_grid)
+    workspace.assert_all_resident()
+    return BuiltSimulation(
+        config=config,
+        reference=reference,
+        source=source,
+        formulation=formulation,
+        density=density,
+        calculators=calculators,
+        events=events,
+    )
 
 
 def run(simulation: Simulation) -> Trajectory:

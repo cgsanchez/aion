@@ -1,6 +1,7 @@
 """Reusable preparation, simulation, execution, and loading workflows."""
 
 from aion.workflows.api import (
+    BuiltSimulation,
     PreparedReference,
     Simulation,
     Trajectory,
@@ -13,6 +14,7 @@ from aion.workflows.api import (
 )
 
 __all__ = [
+    "BuiltSimulation",
     "PreparedReference",
     "Simulation",
     "Trajectory",
