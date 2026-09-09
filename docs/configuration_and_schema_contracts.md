@@ -1,8 +1,8 @@
 # Aion 0.2 configuration and schema contracts
 
 Status: contracts through reusable execution, observation, checkpoint/restart,
-and monitoring are implemented by WP1--WP5 for Aion `0.2.0.dev5`.
-Spectroscopy workflows remain deliberately unavailable until WP6.
+monitoring, and spectroscopy are implemented by WP1--WP6 for Aion
+`0.2.0.dev6`.
 
 ## 1. Authority and strictness
 
@@ -126,6 +126,8 @@ than edit one in place.
 | trajectory | `aion.trajectory` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `observables`, `diagnostics`, `events`, `restart` |
 | source history | `aion.source-history` `2.0.0` | `meta`, `configuration`, `time`, `source` |
 | checkpoint | `aion.checkpoint` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `state`, `events`, `restart` |
+| Casida result | `aion.casida` `1.0.0` | `meta`, `configuration`, `reference`, `roots`, `selection` |
+| kick spectrum | `aion.kick-spectrum` `1.0.0` | `meta`, `configuration`, `source`, `time`, `frequency`, `response` |
 
 Every dataset must declare `unit` and `physical_dimension`. Direct generic
 datasets `/observables/current`, `/observables/dipole`, and
@@ -142,6 +144,18 @@ trajectory streams, resolved compression policy, immutable checkpoints,
 controlled failure artifacts, restart-boundary authentication, and lineage
 are implemented by WP5. Dense state arrays use gzip plus shuffle; small
 scalar/vector streams remain uncompressed.
+
+Casida artifacts store the prepared-reference fingerprint, optional reference
+artifact path and checksum, solver/version/configuration, every excitation
+energy, length-form oscillator strength, transition dipole and direction,
+convergence flag, and optional polarization-resolved resonance selection.
+Kick-spectrum artifacts store an exact trajectory or imported-parent checksum,
+source metadata, event and observable definition IDs, impulse and baseline,
+complete transform configuration, time/frequency resolution metadata, full
+complex dipole-domain polarizability, optional independently reconstructed
+current-domain polarizability and residual, directional absorption, and
+oscillator-strength density. Scientific identities exclude relocatable paths
+but include parent checksums and all numerical content.
 
 ## 6. `status.json`
 
@@ -187,6 +201,15 @@ runs RKS and transactionally publishes the configured reference artifact.
 writes one CSV per independently sampled observable plus a provenance manifest.
 Exit status 2 denotes configuration/schema failure, 130 denotes graceful
 cancellation, and 1 denotes another controlled Aion failure.
+
+Spectroscopy is an explicit named expert API in `aion.spectroscopy`; it is not
+silently run by propagation or added to the small top-level API. `run_casida`
+reconstructs the qualified CPU PySCF mean field from the prepared reference
+without rerunning SCF. `kick_spectrum_from_trajectory` accepts only a completed
+trajectory with exactly one kick and dipole/current samples at every
+post-event endpoint. `save_casida_result` and `save_kick_spectrum` publish new
+immutable HDF5 files and refuse overwrite. Legacy format knowledge remains in
+the separate `CALCULATIONS/legacy/conversion` scripts.
 
 ## 8. Quality and test tiers
 

@@ -40,7 +40,7 @@
 
 \title{Theory and implementation of reusable real-time TDDFT in Aion\\
 \large Bare length and velocity gauges, covariant P0/P0+E1 dynamics,\\
-currents, energies, and connection-aware propagation}
+currents, energies, connection-aware propagation, and spectroscopy}
 \author{Aion project}
 \date{9 September 2026}
 
@@ -72,6 +72,10 @@ metric propagation, and connection-aware covariant transport on both CPU and
 GPU. WP5 implements exact discrete-event execution, scheduled observers,
 interval power and work, transactional trajectories, checkpoint/restart,
 monitoring, export, and comparison manifests on both CPU and GPU.
+WP6 implements structured Casida response, polarized resonance selection,
+real-time kick spectra, dipole/current frequency-domain cross-checks, and
+immutable spectrum persistence; its kick propagation is qualified on the
+physical GPU.
 \end{abstract}
 
 \tableofcontents
@@ -1134,25 +1138,122 @@ selects a polarization-bright root by an explicit threshold or root choice and
 recomputes it for every basis; otherwise an on-resonance/off-resonance
 comparison would be physically ambiguous.
 
-For a kick \(\vect\kappa\), the canonical molecular response is
+For a converged excitation \(n\), let \(\Omega_n>0\) be its energy and
+\(\vect d_n=\langle 0|\hat{\vect\mu}|n\rangle\) its length-form transition
+dipole. The stored isotropic and polarization-resolved oscillator strengths
+are respectively
 \begin{equation}
- \alpha_{\alpha\beta}(\Omega)
- =\frac{\delta\widetilde\mu_\alpha(\Omega)}
-        {\kappa_\beta}.
+ f_n=\frac{2}{3}\Omega_n\lvert\vect d_n\rvert^2,
+ \qquad
+ f_n^{(\vect e)}=2\Omega_n\lvert\vect e\mathbin{\cdot}\vect d_n\rvert^2,
+ \qquad \lvert\vect e\rvert=1.
+ \label{eq:casida-strengths}
 \end{equation}
+The implementation calls PySCF's restricted real Casida-TDDFT solver on a
+CPU mean field reconstructed from the authenticated prepared reference; it
+does not rerun SCF. Every returned root stores \(\Omega_n\), \(f_n\),
+\(\vect d_n\), the associated unit direction (zero for a dark transition),
+and its convergence flag. Resonance selection is either an explicit zero-based
+root or the lowest-energy root satisfying a stored threshold on
+\(f_n^{(\vect e)}\). The complete candidate-strength vector is retained, so
+the decision can be audited.
+
+For an electric-field impulse
+\(\vect\kappa=\int\vect E(t)\,\dd t\), define
+\(\vect e=\vect\kappa/\lvert\vect\kappa\rvert\). One kick supplies the
+\(\vect e\)-directed column of the response tensor. The canonical molecular
+response is computed from the formulation-owned electronic dipole,
+\begin{equation}
+ \alpha_{\alpha\vect e}^{(\mu)}(\Omega)
+ =\frac{\delta\widetilde\mu_\alpha(\Omega)}
+        {\lvert\vect\kappa\rvert},
+ \qquad
+ \delta\vect\mu(t)=\vect\mu(t)-\vect\mu_{\rm base}.
+ \label{eq:kick-alpha}
+\end{equation}
+For native Aion trajectories the default baseline is the exact pre-event
+dipole stored with the kick. A first-sample or zero baseline is possible only
+when explicitly requested. Linear kick spectroscopy accepts exactly one event
+and requires a complete dipole/current sample at every post-event endpoint;
+this prevents an unrecorded second perturbation or sparse sampling from being
+silently interpreted as a linear response.
+
 The transform convention is
 \begin{equation}
  \widetilde f(\Omega)
- =\int_0^T w(t)f(t)\ee^{+\ii\Omega t}\,\dd t.
+ =\int_0^T f(\tau)\ee^{-\eta\tau}
+          \ee^{+\ii\Omega\tau}\,\dd\tau,
+ \qquad \tau=t-t_0,
  \label{eq:fft-convention}
 \end{equation}
-The full complex result, sign, normalization, time origin, quadrature, window,
-damping, and zero padding are metadata, not hidden plotting choices. The
-default window is rectangular. Optional exponential damping
-\(\ee^{-\eta t}\) stores \(\eta\) in energy units. The intrinsic frequency
-resolution is approximately \(2\pi/T\); zero padding interpolates the sampled
-spectrum but does not improve this resolution. A current-domain transform
-supplies an independent frequency-domain check.
+where the finite record contains \(N\) samples separated by \(\Delta t\), and
+\(T=(N-1)\Delta t\). Aion evaluates the continuous-time trapezoidal
+approximation
+\begin{equation}
+ \widetilde f(\Omega_k)\simeq\Delta t\left[
+ \frac12 f_0+\sum_{n=1}^{N-2}f_n
+ \ee^{(-\eta+\ii\Omega_k)n\Delta t}
+ +\frac12 f_{N-1}\ee^{(-\eta+\ii\Omega_k)T}\right]
+ \label{eq:discrete-transform}
+\end{equation}
+using the positive-exponent inverse FFT. With \(N_{\rm FFT}=zN\), the stored
+positive grid is \(\Omega_k=2\pi k/(N_{\rm FFT}\Delta t)\). The intrinsic
+finite-record resolution \(2\pi/T\), native FFT spacing
+\(2\pi/(N\Delta t)\), padded spacing
+\(2\pi/(N_{\rm FFT}\Delta t)\), and Nyquist energy \(\pi/\Delta t\) are
+distinct stored quantities. Padding only interpolates; it cannot improve
+\(2\pi/T\). The default finite-record window is rectangular. Optional
+exponential damping stores \(\eta\) in energy units and declares its isolated
+Lorentzian full width at half maximum \(2\eta\). The full complex transform,
+sign, normalization, time origin, quadrature, window, damping, maximum energy,
+and zero-padding factor are numerical data rather than plotting choices.
+
+The directional absorption and oscillator-strength density are
+\begin{equation}
+ A_{\vect e}(\Omega)=\Omega\,\Im\left[
+ \vect e^{\mathsf T}\vect\alpha_{\vect e}^{(\mu)}(\Omega)\right],
+ \qquad
+ \rho_f^{(\vect e)}(\Omega)=\frac{2}{\pi}A_{\vect e}(\Omega).
+ \label{eq:kick-strength}
+\end{equation}
+Thus an isolated positive-frequency line integrates to the polarized strength
+in Eq.~\eqref{eq:casida-strengths}.
+
+The independently evaluated formulation primary current obeys
+\(\vect J=\dot{\vect\mu}\). Integration by parts on the same damped finite
+record gives the exact continuum identity
+\begin{align}
+ \widetilde{\vect J}(\Omega)
+ &=\vect B(\Omega)+(\eta-\ii\Omega)
+   \delta\widetilde{\vect\mu}(\Omega),\\
+ \vect B(\Omega)
+ &=\delta\vect\mu(T)\ee^{(-\eta+\ii\Omega)T}
+   -\delta\vect\mu(0).
+ \label{eq:current-transform-identity}
+\end{align}
+The current-domain reconstruction is consequently
+\begin{equation}
+ \vect\alpha_{\vect e}^{(J)}(\Omega)=
+ \frac{\widetilde{\vect J}(\Omega)-\vect B(\Omega)}
+      {\lvert\vect\kappa\rvert(\eta-\ii\Omega)}.
+ \label{eq:current-alpha}
+\end{equation}
+Aion stores both \(\vect\alpha^{(J)}\) and the complex residual
+\(\vect\alpha^{(J)}-\vect\alpha^{(\mu)}\). This is an independent physics
+check because the current is evaluated by the formulation, not obtained by
+finite-differencing the dipole. Retaining both endpoint terms is essential;
+omitting them produces a finite-record error even for exact time signals.
+
+The expert API is the named package \code{aion.spectroscopy}. Casida and kick
+results are frozen validated numerical records. Their \code{aion.casida}
+and \code{aion.kick-spectrum} HDF5 artifacts are transactionally published,
+never overwritten, and content-authenticated. A spectrum identity includes
+its parent checksum, source/event/observable identities, transform choices,
+and numerical arrays but excludes the relocatable parent path. Knowledge of
+draft CSV/NPZ layouts is intentionally absent from Aion: the one-way importer
+in \path{CALCULATIONS/legacy/conversion} reads only numeric, atomic-unit data,
+records its complete field mapping and parent SHA-256, and creates a new
+immutable spectrum.
 
 \section{Reusable API and implementation boundaries}
 
@@ -1212,9 +1313,11 @@ calculators.\\
 \code{aion.io} &
 HDF5 schemas, transactional writers, checkpoints, lineage, readers, and
 export.\\
+\code{aion.spectroscopy} &
+Casida response, resonance selection, kick transforms, spectral observables,
+and immutable derived-result persistence.\\
 \code{aion.workflows} &
-Preparation, simulation building, run/resume, comparisons, Casida, and kick
-spectra.\\
+Preparation, simulation building, run/resume, and comparisons.\\
 \bottomrule
 \end{longtable}
 
@@ -1258,9 +1361,11 @@ shared propagator and both transport geometries. WP5 adds the clean reusable
 runner, exact events, observers, transactional persistence, safe cancellation,
 authenticated restart, and operational CLI without reviving an archived
 molecule-specific runner.
+WP6 adds the named spectroscopy API, immutable Casida/kick-spectrum artifacts,
+and a one-way legacy conversion boundary outside the package.
 \end{statusbox}
 
-The reusable layers implemented through WP5 are:
+The reusable layers implemented through WP6 are:
 
 \begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
 \toprule
@@ -1290,9 +1395,10 @@ data, compiled-source persistence, and exact restart-idempotent kick
 definitions.\\
 \code{aion.io} &
 Independent semantic schemas and validators; transactional reference, source,
-trajectory, failure, and checkpoint publication; appendable independently
-sampled streams; compressed dense state; lazy readers; authenticated lineage
-stitching; CSV export; and atomic non-authoritative \code{status.json}.\\
+trajectory, failure, checkpoint, Casida, and kick-spectrum publication;
+appendable independently sampled streams; compressed dense state; lazy
+readers; authenticated lineage stitching; CSV export; and atomic
+non-authoritative \code{status.json}.\\
 \code{aion.observables} &
 Definition-specific immutable metadata and sampled records, plus typed,
 dependency-declared calculators with independent schedules and persistent
@@ -1308,6 +1414,11 @@ Occupied-orbital state and diagnostics, shared damped-Picard SCEM fixed point,
 direct fixed-metric and analytic-connection transports, Cayley and Pad\'e maps,
 right-Cholesky cross-metric correction, roundoff-only cleanup, hard constraint
 failures, and persistent backend-resident scratch.\\
+\code{aion.spectroscopy} &
+Structured PySCF Casida-TDDFT roots, length-form and polarized oscillator
+strengths, explicit resonance selection, positive-frequency trapezoidal
+transforms, dipole/current kick response, resolution metadata, and immutable
+result I/O.\\
 \code{aion.workflows} and \code{aion} &
 Typed \code{prepare\_reference}, \code{load\_reference},
 \code{build\_simulation}, \code{run}, \code{resume}, and
@@ -1317,12 +1428,10 @@ process execution; independent-trajectory comparison manifests; and operational
 \bottomrule
 \end{longtable}
 
-The principal missing reusable layer is:
-
-\begin{itemize}
-\item reusable Casida and kick-spectrum outputs and the explicit legacy
-conversion boundary assigned to WP6.
-\end{itemize}
+The reusable implementation through spectroscopy is complete. Legacy
+CSV/NPZ knowledge remains outside this package table because it belongs to the
+separate \path{CALCULATIONS/legacy/conversion} tree rather than the Aion
+runtime.
 
 The physical-GPU WP2 gate caught a material scientific backend discrepancy.
 GPU4PySCF initially discarded the prebuilt PySCF quadrature grid and
@@ -1436,8 +1545,9 @@ energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
 repository-separation gate WP0, contract gate WP1, common-reference/source gate
 WP2, instantaneous-physics gate WP3, shared-propagation gate WP4, and reusable
-execution/persistence gate WP5 are complete. Spectroscopy begins in WP6 and
-remains separately gated.
+execution/persistence gate WP5, and spectroscopy/legacy-boundary gate WP6 are
+complete. Integrated validation, profiling, and release remain separately
+gated in WP7.
 
 \section*{Rebuilding this document}
 

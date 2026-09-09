@@ -21,7 +21,7 @@ pytestmark = pytest.mark.fast
 
 
 def test_public_api_is_small_and_versioned() -> None:
-    assert aion.__version__ == "0.2.0.dev5"
+    assert aion.__version__ == "0.2.0.dev6"
     assert set(aion.__all__) == {
         "BackendConfig",
         "FormulationConfig",
@@ -42,7 +42,7 @@ def test_public_api_is_small_and_versioned() -> None:
 
 def test_import_has_no_pyscf_or_gpu_side_effects() -> None:
     code = (
-        "import sys; import aion; "
+        "import sys; import aion; import aion.spectroscopy; "
         "assert 'pyscf' not in sys.modules; "
         "assert 'cupy' not in sys.modules; "
         "assert 'gpu4pyscf' not in sys.modules"

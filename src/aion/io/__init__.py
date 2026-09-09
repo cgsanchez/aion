@@ -1,7 +1,9 @@
 """Versioned artifact schema and status-record contracts."""
 
 from aion.io.schemas import (
+    CASIDA_SCHEMA,
     CHECKPOINT_SCHEMA,
+    KICK_SPECTRUM_SCHEMA,
     REFERENCE_SCHEMA,
     SCHEMAS,
     SOURCE_HISTORY_SCHEMA,
@@ -27,7 +29,9 @@ from aion.io.transaction import publish_hdf5, write_dataset
 from aion.io.versions import SchemaVersion
 
 __all__ = [
+    "CASIDA_SCHEMA",
     "CHECKPOINT_SCHEMA",
+    "KICK_SPECTRUM_SCHEMA",
     "REFERENCE_SCHEMA",
     "SCHEMAS",
     "SOURCE_HISTORY_SCHEMA",

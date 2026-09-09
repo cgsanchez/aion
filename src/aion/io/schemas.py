@@ -22,6 +22,8 @@ class ArtifactKind(StrEnum):
     TRAJECTORY = "trajectory"
     SOURCE_HISTORY = "source_history"
     CHECKPOINT = "checkpoint"
+    CASIDA = "casida"
+    KICK_SPECTRUM = "kick_spectrum"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,20 @@ CHECKPOINT_SCHEMA = ArtifactSchema(
     ),
 )
 
+CASIDA_SCHEMA = ArtifactSchema(
+    name="aion.casida",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.CASIDA,
+    required_groups=("meta", "configuration", "reference", "roots", "selection"),
+)
+
+KICK_SPECTRUM_SCHEMA = ArtifactSchema(
+    name="aion.kick-spectrum",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.KICK_SPECTRUM,
+    required_groups=("meta", "configuration", "source", "time", "frequency", "response"),
+)
+
 SCHEMAS: dict[str, ArtifactSchema] = {
     schema.name: schema
     for schema in (
@@ -86,6 +102,8 @@ SCHEMAS: dict[str, ArtifactSchema] = {
         TRAJECTORY_SCHEMA,
         SOURCE_HISTORY_SCHEMA,
         CHECKPOINT_SCHEMA,
+        CASIDA_SCHEMA,
+        KICK_SPECTRUM_SCHEMA,
     )
 }
 

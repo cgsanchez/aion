@@ -1,13 +1,13 @@
 # Aion
 
 Aion is a reusable Python library for gauge-covariant real-time TDDFT in
-finite molecular atomic-orbital bases. Version `0.2.0.dev5` is a clean break
+finite molecular atomic-orbital bases. Version `0.2.0.dev6` is a clean break
 from the archived research prototype.
 
 WP1 established the strict package/configuration/storage contracts, WP2 the
 common static electronic problem and prescribed EM input, WP3 the complete
-instantaneous formulation physics, WP4 the shared propagation layer, and WP5
-reusable execution and persistence:
+instantaneous formulation physics, WP4 the shared propagation layer, WP5
+reusable execution and persistence, and WP6 spectroscopy and legacy conversion:
 
 - immutable, strictly validated Python configurations;
 - deterministic normalized TOML and lossless scientific identities;
@@ -57,13 +57,24 @@ reusable execution and persistence:
 - streaming transactional trajectories, immutable compressed checkpoints,
   controlled failure artifacts, safe boundary cancellation, authenticated
   reconstruction-first restart, and lineage-aware observable stitching;
-- explicit CSV export and independent-trajectory comparison manifests; and
-- a thin operational `prepare`, `run`, `resume`, `inspect`, and `export` CLI.
+- explicit CSV export and independent-trajectory comparison manifests;
+- a thin operational `prepare`, `run`, `resume`, `inspect`, and `export` CLI;
+- a structured PySCF Casida-TDDFT wrapper with length-form oscillator
+  strengths, transition dipoles/directions, and explicit polarization-bright
+  resonance selection;
+- positive-frequency trapezoidal kick transforms with explicit baseline,
+  Fourier sign, normalization, rectangular window, exponential damping,
+  zero-padding, intrinsic resolution, grid spacing, and Nyquist metadata;
+- dipole-domain polarizability as the canonical kick response, independently
+  reconstructed current-domain polarizability with finite-record endpoint
+  terms, directional absorption, and oscillator-strength density; and
+- immutable `aion.casida` and `aion.kick-spectrum` HDF5 artifacts linked to
+  exact parent checksums, with one-way CSV/NPZ conversion confined to the
+  separate `CALCULATIONS/legacy/conversion` tree.
 
-Reusable spectroscopy remains owned by WP6. The in-memory
-`BuiltSimulation.step()` boundary remains available for expert use, while
-ordinary execution should use `run()` so events, work, schedules, status, and
-restart state are recorded consistently.
+The in-memory `BuiltSimulation.step()` boundary remains available for expert
+use, while ordinary execution should use `run()` so events, work, schedules,
+status, and restart state are recorded consistently.
 
 ## Validated domain
 
@@ -100,6 +111,7 @@ aion.formulations
 aion.propagation
 aion.observables
 aion.io
+aion.spectroscopy
 aion.workflows
 ```
 

@@ -1,6 +1,6 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0--WP5 complete; spectroscopy and legacy conversion have not started
+Status: WP0--WP6 complete; integrated release validation remains in WP7
 
 Last design review: 2026-09-09
 
@@ -900,6 +900,8 @@ Milestone M5: robust reusable execution and persistence.
 
 Dependencies: WP5.
 
+Status: complete on 2026-09-09.
+
 Work:
 
 - implement reusable Casida wrapper and structured output;
@@ -924,6 +926,48 @@ Acceptance:
   configuration;
 - no smoothing or normalization is hidden;
 - converted artifacts are new immutable files linked to parent checksums.
+
+Completion record:
+
+- implemented the named expert package `aion.spectroscopy` without enlarging
+  the deliberately small top-level API;
+- implemented a structured wrapper around PySCF `CasidaTDDFT()` reconstructed
+  from the authenticated prepared reference without rerunning SCF, storing
+  roots, convergence, length-form oscillator strengths, transition dipoles,
+  and directions;
+- implemented explicit resonance selection either by a zero-based root or by
+  the lowest root meeting a polarization-projected strength threshold, while
+  retaining every candidate strength;
+- implemented the positive-exponent continuous-time trapezoidal transform,
+  rectangular finite-record window, optional exponential damping, zero
+  padding, maximum-energy selection, and separate intrinsic/native/padded/
+  Nyquist metadata;
+- made the formulation-owned dipole response canonical and implemented the
+  independent primary-current reconstruction with both finite-record endpoint
+  terms, storing the full complex residual as a validation observable;
+- implemented directional absorption and oscillator-strength density whose
+  isolated line area is the polarization-projected Casida strength;
+- implemented independently versioned immutable `aion.casida` and
+  `aion.kick-spectrum` artifacts with numerical content identities, exact
+  source checksums, relocatable path metadata, and no-overwrite publication;
+- restricted native kick analysis to completed, every-step trajectories with
+  one exact event and zero continuous source, preventing mixed/sparse records
+  from being silently treated as linear response;
+- kept legacy layout knowledge out of Aion and added a one-way numeric CSV/NPZ
+  importer under `CALCULATIONS/legacy/conversion`, including safe non-pickled
+  NPZ loading, complete field mapping, atomic-unit declaration, input SHA-256,
+  and immutable output;
+- analytic tests fix transform sign/normalization, endpoint quadrature,
+  Lorentzian damping width, and the non-improving role of zero padding. Compact
+  H2/LiH tests match polarization-selected Casida roots within one padded grid
+  interval, recover line strengths within the declared finite-record
+  tolerance, and give current/dipole residuals near `1e-3` at resonance;
+  the physical-GPU H2 kick and full complex spectrum agree with CPU while all
+  propagation arrays remain resident;
+- release gates pass: 71 fast CPU tests, 36 molecular CPU integration tests,
+  and 8 physical-GPU tests. Both legacy CSV/NPZ converter fixtures pass in the
+  separate calculations repository. A clean `0.2.0.dev6` wheel builds and its
+  installed spectroscopy/schema import smoke test passes.
 
 Estimate: 4–7 developer days; several hours of compact kick trajectories.
 
@@ -1045,10 +1089,11 @@ reason.
 | 2026-09-09 | Completed WP3 formulations, currents, dipoles, energy ledgers, analytic rates, and scheduled observable definitions | Make all instantaneous physics reusable and independently testable; LiH validation required separating full continuity pair currents from action-split P0 source pairs |
 | 2026-09-09 | Completed WP4 shared SCEM, direct fixed-metric propagation, and analytic-connection transport | Establish one geometry-correct nonlinear engine for all formulations; compact H2/LiH tests confirm second-order convergence, gauge covariance, metric preservation, and physical-GPU residency |
 | 2026-09-09 | Completed WP5 runners, exact events, scheduled observation, power/work accumulation, transactional trajectories, checkpoint/restart, CLI, monitoring, export, and comparison manifests | Establish robust reusable execution and persistence with accepted-boundary failure semantics and physical-GPU restart parity before adding spectroscopy |
+| 2026-09-09 | Completed WP6 structured Casida response, polarized resonance selection, kick transforms, immutable spectral artifacts, current-domain checks, and external legacy conversion | Establish auditable formulation-neutral spectroscopy with explicit transform conventions, parent checksums, H2/LiH Casida/kick agreement, and physical-GPU parity |
 
 ## 16. Present authorization
 
 Creation of this plan, the companion LaTeX note/PDF, and execution of WP0
-through WP5 were authorized and are complete. WP6 and WP7 remain proposed
-future actions. This document does not itself authorize further numerical
+through WP6 were authorized and are complete. WP7 remains a proposed future
+action. This document does not itself authorize further numerical
 implementation, new calculation campaigns, or release.

@@ -98,3 +98,7 @@ class TrajectoryError(AionError, RuntimeError):
 
 class CheckpointError(AionError, RuntimeError):
     """A checkpoint cannot authenticate or reconstruct its continuation state."""
+
+
+class SpectroscopyError(AionError, RuntimeError):
+    """A linear-response or real-time spectrum violates its declared contract."""
