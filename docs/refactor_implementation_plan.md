@@ -1,8 +1,8 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0--WP4 complete; production runner and persistence have not started
+Status: WP0--WP5 complete; spectroscopy and legacy conversion have not started
 
-Last design review: 2026-09-08
+Last design review: 2026-09-09
 
 Companion theory note: [theory_and_implementation.tex](theory_and_implementation.tex)
 
@@ -440,17 +440,19 @@ gzip and shuffle.
 
 ### 8.2 Transactional publication
 
-Writers create a .partial artifact, validate and flush it, set an internal
-complete flag, and atomically rename it. Completed artifacts are immutable.
+Writers create a private .partial artifact, validate and flush it, set an
+internal complete flag, and atomically create a no-overwrite final hard link
+before removing the private name. Completed artifacts are immutable.
 Controlled failures may publish trajectory.failed.h5 with complete=false;
 hard crashes leave only the partial artifact.
 
 ### 8.3 Restart
 
-Restart rebuilds and authenticates the prepared reference, restores state,
-occupations, global step, accumulated work, nonlinear continuation data when
-needed, and applied event identifiers. It first reconstructs and writes the
-shared boundary state before advancing. Child artifacts store parent run ID,
+Restart rebuilds and authenticates the prepared reference, restores occupied
+coefficients, the accepted density, occupations, global step, accumulated
+work, the initial matter-energy baseline, the runtime source offset, and
+applied event identifiers. It first reconstructs and writes the shared
+boundary state before advancing. Child artifacts store parent run ID,
 checkpoint hash, and global step offset. Stitching deduplicates only an
 authenticated shared boundary.
 
@@ -461,7 +463,9 @@ lossless normalized configuration and referenced artifacts. It excludes
 paths, timestamps, host names, and output schedules. A unique run ID
 identifies each execution attempt. Full software, repository, dependency,
 backend, GPU, and hardware provenance is stored. Dirty production campaigns
-are rejected by default.
+are outside this implementation package: ordinary runs record dirty status but
+do not reject it, and any future production-campaign policy will be decided
+separately.
 
 ## 9. Spectroscopy
 
@@ -815,6 +819,8 @@ Milestone M4: the production propagators satisfy their geometric contracts.
 
 Dependencies: WP4.
 
+Status: complete on 2026-09-09.
+
 Work:
 
 - implement build_simulation, run, and resume;
@@ -847,6 +853,43 @@ Acceptance:
 - no half-converged state is published;
 - every completed trajectory is self-describing and traceable;
 - GPU tests run on the physical device.
+
+Completion record:
+
+- implemented one-process typed `build_simulation`, `run`, and `resume`
+  workflows over independent per-run source, formulation, state, propagator,
+  calculator, event, and workspace bindings;
+- implemented formulation-owned exact boundary kicks: metric-unitary bare-LG
+  state maps, discontinuous bare-VG vector-potential jumps with continuous
+  coefficients, and covariant P0/P0+E1 state/gauge maps; pre/post state,
+  observables, event work, and idempotency identifiers are persistent;
+- implemented simulation-local runtime source histories so exact events change
+  only the active workspace while the authenticated compiled source remains
+  immutable;
+- implemented independent endpoint observable/source/matrix/checkpoint
+  schedules with forced segment endpoints, accepted-midpoint source histories,
+  SCEM diagnostics, analytic Ward data, and a lightweight `PowerLedger` that
+  accumulates source work without forcing complete energy contractions or an
+  extra Fock build at every step;
+- implemented appendable transactional trajectories, immutable gzip/shuffle
+  checkpoints and dense event state, lazy typed readers, explicit access to
+  controlled-failure artifacts, and no-overwrite publication;
+- implemented safe signal/test-hook cancellation at accepted boundaries,
+  reconstruction-first restart, authenticated coefficient/density/source/
+  metric checks, restart-event idempotence, parent/checkpoint lineage, and
+  observable stitching, including a restart immediately before an event;
+- completed operational `prepare`, `run`, `resume`, `inspect`, and `export`
+  CLI paths, atomic `status.json`, per-stream CSV export with provenance, and
+  immutable comparison manifests over independently propagated trajectories;
+- the physical-GPU restart test exposed that recomputing a host density from
+  GPU-produced coefficients is not necessarily bitwise identical; checkpoints
+  now preserve and authenticate the accepted backend-produced density while
+  also validating its numerical consistency with the occupied orbitals;
+- release gates pass: 64 fast CPU tests, 33 molecular CPU integration tests,
+  and 7 physical-GPU tests. The GPU gate covers bare-VG H2 and P0+E1 LiH
+  trajectory/output/event parity, persistent residency, safe cancellation,
+  and resumed-versus-uninterrupted equivalence. A clean wheel builds and its
+  installed public API and CLI smoke tests pass.
 
 Estimate: 6–9 developer days; hours of restart/failure-injection CPU/GPU
 compute.
@@ -1001,10 +1044,11 @@ reason.
 | 2026-09-09 | Completed WP2 references, backends, operators, exact-grid reconstruction, compiled sources, events, and transactional static/source I/O | Establish a single authenticated static problem and EM input shared by all later formulations; physical-GPU testing also found and eliminated backend-specific grid rebuilding |
 | 2026-09-09 | Completed WP3 formulations, currents, dipoles, energy ledgers, analytic rates, and scheduled observable definitions | Make all instantaneous physics reusable and independently testable; LiH validation required separating full continuity pair currents from action-split P0 source pairs |
 | 2026-09-09 | Completed WP4 shared SCEM, direct fixed-metric propagation, and analytic-connection transport | Establish one geometry-correct nonlinear engine for all formulations; compact H2/LiH tests confirm second-order convergence, gauge covariance, metric preservation, and physical-GPU residency |
+| 2026-09-09 | Completed WP5 runners, exact events, scheduled observation, power/work accumulation, transactional trajectories, checkpoint/restart, CLI, monitoring, export, and comparison manifests | Establish robust reusable execution and persistence with accepted-boundary failure semantics and physical-GPU restart parity before adding spectroscopy |
 
 ## 16. Present authorization
 
 Creation of this plan, the companion LaTeX note/PDF, and execution of WP0
-through WP4 were authorized and are complete. WP5 through WP7 remain proposed
+through WP5 were authorized and are complete. WP6 and WP7 remain proposed
 future actions. This document does not itself authorize further numerical
 implementation, new calculation campaigns, or release.

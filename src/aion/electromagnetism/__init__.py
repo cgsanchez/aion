@@ -14,6 +14,7 @@ from aion.electromagnetism.events import (
     compile_event_schedule,
 )
 from aion.electromagnetism.gauge import UniformGauge, UniformGaugeSample
+from aion.electromagnetism.runtime import RuntimeSourceController
 from aion.electromagnetism.source_io import load_compiled_source, save_compiled_source
 from aion.electromagnetism.sources import (
     AdditiveUniformSource,
@@ -33,6 +34,7 @@ __all__ = [
     "GatedUniformSource",
     "PhysicalSourceSeries",
     "ProjectedGaugeSeries",
+    "RuntimeSourceController",
     "ScalarEnvelope",
     "Sin2VectorPotentialPulse",
     "UniformGauge",

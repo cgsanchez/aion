@@ -1,8 +1,8 @@
 # Aion 0.2 configuration and schema contracts
 
-Status: contracts through connection-aware and fixed-metric propagation were
-implemented by WP1--WP4 for Aion `0.2.0.dev4`. Production runners, trajectory,
-checkpoint, and spectroscopy workflows remain deliberately unavailable.
+Status: contracts through reusable execution, observation, checkpoint/restart,
+and monitoring are implemented by WP1--WP5 for Aion `0.2.0.dev5`.
+Spectroscopy workflows remain deliberately unavailable until WP6.
 
 ## 1. Authority and strictness
 
@@ -107,7 +107,7 @@ validation settings. It excludes:
 
 Changing a field, frequency, amplitude, event, timestep, formulation,
 integrator, convergence rule, reference digest, or CPU/GPU algorithm therefore
-changes the ID. A unique run ID, introduced with the runner, will distinguish
+changes the ID. A unique run ID distinguishes
 execution attempts sharing one scientific ID.
 
 ## 5. HDF5 schemas
@@ -138,8 +138,10 @@ immutable float64 or complex128 value.
 `stamp_artifact` creates only a schema skeleton. WP2 adds same-directory
 transactional `.partial` construction and no-overwrite atomic publication for
 complete prepared references and compiled source histories. Appendable
-trajectory streams, compression policy, checkpoints, failure artifacts, and
-restart publication remain WP5 responsibilities.
+trajectory streams, resolved compression policy, immutable checkpoints,
+controlled failure artifacts, restart-boundary authentication, and lineage
+are implemented by WP5. Dense state arrays use gzip plus shuffle; small
+scalar/vector streams remain uncompressed.
 
 ## 6. `status.json`
 
@@ -148,8 +150,8 @@ The non-authoritative monitoring record has schema `aion.status` version
 accepted step, total steps, latest checkpoint, wall time, ETA, update time,
 host, PID, and an optional structured failure. Step ordering, nonnegative
 times, SHA-256 syntax, phase names, and exact field sets are validated.
-Completed HDF5 artifacts remain authoritative. Atomic periodic status
-publication is implemented with the runner in WP5.
+Completed HDF5 artifacts remain authoritative. The runner atomically publishes
+status at phase changes and approximately every 30 seconds during propagation.
 
 ## 7. API and CLI boundary
 
@@ -161,7 +163,8 @@ run                resume          load_trajectory
 ```
 
 `prepare_reference` and `load_reference` are implemented by WP2, formulation
-construction by WP3, and the propagation-bound `build_simulation` by WP4. Preparation
+construction by WP3, the propagation-bound `build_simulation` by WP4, and
+`run`, `resume`, and `load_trajectory` by WP5. Preparation
 runs one validated RKS calculation; loading authenticates the portable data and
 runtime dependency contract without rerunning SCF. Each later simulation gets
 a separate backend workspace, which reconstructs PySCF/GPU4PySCF and transfers
@@ -169,18 +172,21 @@ the reference exactly once. A built simulation binds the compiled source,
 selected gauge/formulation, occupied-orbital state, common SCEM propagator,
 backend workspace, event schedule, and typed observable calculators without
 starting propagation. Its `step()` method advances one accepted interval in
-memory; it performs no event handling or persistent I/O. The remaining workflow functions are typed shells
-that raise `FeatureNotImplementedError` with their responsible future work
-package, preventing fallback to the archived draft.
+memory; it performs no event handling or persistent I/O. `run` is the normal
+one-process execution boundary. It applies exact events, evaluates independent
+schedules, accumulates every accepted interval's source work, publishes status
+and checkpoints, and emits either `trajectory.h5` or a controlled
+`trajectory.failed.h5`. `resume` authenticates and reconstructs the saved
+reference, source, state, work, and event IDs before advancing a child segment.
 
 The `aion` command exposes `prepare`, `run`, `resume`, `inspect`, and `export`.
 `prepare` and `run` accept `--validate-only`, print the fully resolved TOML and
 scientific ID, and perform no numerical work in that mode. Ordinary `prepare`
 runs RKS and transactionally publishes the configured reference artifact.
-`inspect` validates and reports a completed HDF5 artifact header. Exit status 2
-denotes configuration/schema failure, 3 denotes a contract whose numerical
-implementation is not yet available, and 1 is reserved for another controlled
-Aion failure.
+`inspect` validates and reports a completed HDF5 artifact header. `export`
+writes one CSV per independently sampled observable plus a provenance manifest.
+Exit status 2 denotes configuration/schema failure, 130 denotes graceful
+cancellation, and 1 denotes another controlled Aion failure.
 
 ## 8. Quality and test tiers
 

@@ -245,7 +245,11 @@ class CompiledUniformSource:
                 series.pair_electromotive_potential
             )
         for name, value in arrays.items():
-            workspace.install_host_array(f"{prefix}.{name}", value)
+            # A compiled source is immutable, while a simulation-local exact
+            # event may add a persistent potential offset.  Give every
+            # workspace its own mutable resident copy without altering the
+            # authenticated compiled artifact.
+            workspace.install_host_array(f"{prefix}.{name}", np.array(value, copy=True))
         workspace.caches[f"{prefix}.fingerprint_sha256"] = self.fingerprint_sha256
 
 

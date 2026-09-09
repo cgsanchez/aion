@@ -5,13 +5,28 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
-from aion.config import ReferenceConfig, SimulationConfig, load_config
-from aion.errors import AionError, ConfigurationError, FeatureNotImplementedError, SchemaError
+from aion.config import (
+    CompiledSourceConfig,
+    ReferenceConfig,
+    ReferenceOutputConfig,
+    SimulationConfig,
+    dumps_config,
+    load_config,
+)
+from aion.errors import AionError, ConfigurationError, RunCancelledError, SchemaError
 from aion.io import validate_artifact
-from aion.workflows import prepare_reference
+from aion.io.export import export_trajectory_csv
+from aion.workflows import (
+    build_simulation,
+    load_reference,
+    prepare_reference,
+    resume,
+    run,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     resume_parser = subparsers.add_parser("resume", help="resume an immutable checkpoint")
     resume_parser.add_argument("checkpoint", type=Path)
+    resume_parser.add_argument("--output", type=Path)
 
     inspect_parser = subparsers.add_parser("inspect", help="validate an Aion HDF5 header")
     inspect_parser.add_argument("artifact", type=Path)
@@ -39,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser("export", help="export a completed artifact")
     export_parser.add_argument("artifact", type=Path)
     export_parser.add_argument("output", type=Path)
+    export_parser.add_argument(
+        "--observable",
+        action="append",
+        dest="observables",
+        help="export only this definition ID (repeatable)",
+    )
     return parser
 
 
@@ -64,36 +86,88 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if command == "resume":
-            raise FeatureNotImplementedError("checkpoint restart is scheduled for WP5")
+            trajectory = resume(
+                cast(Path, args.checkpoint),
+                output=cast(Path | None, args.output),
+            )
+            print(f"run_id = {trajectory.run_id}")
+            print(f"trajectory = {trajectory.path}")
+            return 0
         if command == "export":
-            raise FeatureNotImplementedError("artifact export is scheduled for WP5")
+            selected = cast(list[str] | None, args.observables)
+            outputs = export_trajectory_csv(
+                cast(Path, args.artifact),
+                cast(Path, args.output),
+                observable_ids=None if selected is None else tuple(selected),
+            )
+            for output in outputs:
+                print(output)
+            return 0
         raise AssertionError(f"unhandled command {command!r}")
     except (ConfigurationError, SchemaError) as exc:
         print(f"aion: {exc}", file=sys.stderr)
         return 2
-    except FeatureNotImplementedError as exc:
+    except RunCancelledError as exc:
         print(f"aion: {exc}", file=sys.stderr)
-        return 3
+        return 130
     except AionError as exc:
         print(f"aion: {exc}", file=sys.stderr)
         return 1
 
 
 def _configuration_command(command: str, args: argparse.Namespace) -> int:
-    resolved = load_config(cast(Path, args.configuration))
-    print(resolved.normalized_toml, end="")
-    print(f"scientific_id = {resolved.scientific_id}")
+    configuration_path = cast(Path, args.configuration).expanduser().resolve()
+    resolved = load_config(configuration_path)
+    config = _resolve_operational_paths(resolved.config, configuration_path.parent)
+    print(dumps_config(config), end="")
+    print(f"scientific_id = {config.scientific_id}")
     if cast(bool, args.validate_only):
         return 0
     if command == "prepare":
-        if not isinstance(resolved.config, ReferenceConfig):
+        if not isinstance(config, ReferenceConfig):
             raise ConfigurationError("prepare requires an aion.reference-input document")
-        reference = prepare_reference(resolved.config)
+        reference = prepare_reference(config)
         reference.save()
+        print(f"reference = {config.output.artifact_path}")
         return 0
-    if not isinstance(resolved.config, SimulationConfig):
+    if not isinstance(config, SimulationConfig):
         raise ConfigurationError("run requires an aion.simulation-input document")
-    raise FeatureNotImplementedError("simulation execution is scheduled for WP5")
+    reference = load_reference(config.reference.path, backend=config.backend)
+    simulation = build_simulation(
+        config,
+        reference,
+        original_toml=resolved.original_toml,
+    )
+    trajectory = run(simulation)
+    print(f"run_id = {trajectory.run_id}")
+    print(f"trajectory = {trajectory.path}")
+    return 0
+
+
+def _resolve_operational_paths(
+    config: ReferenceConfig | SimulationConfig,
+    base: Path,
+) -> ReferenceConfig | SimulationConfig:
+    """Resolve only path-like execution fields relative to the input document."""
+
+    def resolve(path: Path) -> Path:
+        expanded = path.expanduser()
+        return expanded.resolve() if expanded.is_absolute() else (base / expanded).resolve()
+
+    if isinstance(config, ReferenceConfig):
+        return replace(
+            config,
+            output=ReferenceOutputConfig(resolve(config.output.artifact_path)),
+        )
+    source = config.source
+    if isinstance(source, CompiledSourceConfig):
+        source = replace(source, path=resolve(source.path))
+    return replace(
+        config,
+        reference=replace(config.reference, path=resolve(config.reference.path)),
+        source=source,
+        output=replace(config.output, directory=resolve(config.output.directory)),
+    )
 
 
 if __name__ == "__main__":

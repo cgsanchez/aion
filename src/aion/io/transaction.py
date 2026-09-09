@@ -61,12 +61,18 @@ def write_dataset(
     *,
     unit: str,
     physical_dimension: str,
+    compressed: bool = False,
 ) -> h5py.Dataset:
     """Create one dataset carrying mandatory physical metadata."""
 
     if name in group:
         raise SchemaError(f"dataset {group.name}/{name} already exists")
-    dataset = group.create_dataset(name, data=data)
+    kwargs: dict[str, object] = {}
+    if compressed:
+        shape = getattr(data, "shape", ())
+        if shape:
+            kwargs.update(compression="gzip", compression_opts=4, shuffle=True)
+    dataset = group.create_dataset(name, data=data, **kwargs)
     dataset.attrs["unit"] = unit
     dataset.attrs["physical_dimension"] = physical_dimension
     return dataset

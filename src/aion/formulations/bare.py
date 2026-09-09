@@ -8,6 +8,7 @@ from typing import Any
 from aion.config import FormulationKind, GaugeRepresentation
 from aion.electronic_structure import expectation, hermitian_part
 from aion.formulations.base import FormulationContext
+from aion.formulations.events import apply_electric_kick
 from aion.formulations.kernels import density_derivative, uniform_mechanical_current
 from aion.formulations.types import (
     AODensity,
@@ -16,6 +17,7 @@ from aion.formulations.types import (
     EOMTriple,
     FormulationSourceSample,
     InstantaneousEvaluation,
+    PowerLedger,
 )
 
 
@@ -130,10 +132,7 @@ class BareLengthGauge:
         scalar_total = electronic_scalar + nuclear_scalar
         matter = internal.energy_internal_total
         generator = matter + scalar_total
-        matter_rate = self.context.electronic_model.energy_rate(
-            evaluation.field_free_dft, evaluation.field_free_density_dot
-        )
-        source_rate = currents.source_work_rate
+        rates = self._power_with_currents(evaluation, source, currents)
         initial = _baseline(initial_matter_energy, self.context)
         accumulated = _baseline(accumulated_source_work, self.context)
         return EnergyLedger(
@@ -153,12 +152,55 @@ class BareLengthGauge:
             energy_generator_total=generator,
             energy_absorbed=None if initial is None else matter - initial,
             source_work_accumulated=accumulated,
+            energy_matter_rate_analytic=rates.energy_matter_rate_analytic,
+            energy_generator_rate_analytic=rates.energy_generator_rate_analytic,
+            source_work_rate=rates.source_work_rate,
+            energy_ward_residual=rates.energy_ward_residual,
+        )
+
+    def _power_with_currents(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+        currents: CurrentLedger,
+    ) -> PowerLedger:
+        xp = self.context.namespace
+        matter_rate = self.context.electronic_model.energy_rate(
+            evaluation.field_free_dft, evaluation.field_free_density_dot
+        )
+        return PowerLedger(
             energy_matter_rate_analytic=matter_rate,
             energy_generator_rate_analytic=-xp.dot(
                 source.electric_field_dot, currents.total_dipole
             ),
-            source_work_rate=source_rate,
-            energy_ward_residual=matter_rate - source_rate,
+            source_work_rate=currents.source_work_rate,
+            energy_ward_residual=matter_rate - currents.source_work_rate,
+        )
+
+    def power(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+    ) -> PowerLedger:
+        return self._power_with_currents(evaluation, source, self.currents(evaluation, source))
+
+    def apply_kick(
+        self,
+        coefficients: Any,
+        impulse_au: tuple[float, float, float],
+        evaluation_before: InstantaneousEvaluation,
+        source_before: FormulationSourceSample,
+        source_after: FormulationSourceSample,
+    ) -> Any:
+        return apply_electric_kick(
+            kind=self.kind,
+            gauge=self.gauge,
+            context=self.context,
+            coefficients=coefficients,
+            impulse_au=impulse_au,
+            evaluation_before=evaluation_before,
+            source_before=source_before,
+            source_after=source_after,
         )
 
 
@@ -284,21 +326,7 @@ class BareVelocityGauge:
         mechanical = internal.energy_kinetic_canonical + linear + diamagnetic
         matter = internal.energy_internal_total + linear + diamagnetic
         zero = self.context.zero_scalar()
-        # Functional derivative with respect to P is exactly H_VG.  The final
-        # two terms are the explicit source-time derivative at fixed P.
-        matter_rate = (
-            expectation(
-                evaluation.density_dot,
-                evaluation.hamiltonian_dynamic,
-                xp,
-            )
-            - (self.context.charge / self.context.mass)
-            * xp.dot(source.vector_potential_reduced_dot, momentum_expectation)
-            + (self.context.charge**2 / self.context.mass)
-            * electron_count
-            * xp.dot(vector, source.vector_potential_reduced_dot)
-        )
-        source_rate = currents.source_work_rate
+        rates = self._power_with_currents(evaluation, source, currents)
         initial = _baseline(initial_matter_energy, self.context)
         accumulated = _baseline(accumulated_source_work, self.context)
         return EnergyLedger(
@@ -318,8 +346,63 @@ class BareVelocityGauge:
             energy_generator_total=matter,
             energy_absorbed=None if initial is None else matter - initial,
             source_work_accumulated=accumulated,
+            energy_matter_rate_analytic=rates.energy_matter_rate_analytic,
+            energy_generator_rate_analytic=rates.energy_generator_rate_analytic,
+            source_work_rate=rates.source_work_rate,
+            energy_ward_residual=rates.energy_ward_residual,
+        )
+
+    def _power_with_currents(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+        currents: CurrentLedger,
+    ) -> PowerLedger:
+        xp = self.context.namespace
+        rho = evaluation.density.matrix
+        momentum = self.context.workspace.require("operators.canonical_momentum")
+        momentum_expectation = xp.real(xp.einsum("ij,xji->x", rho, momentum, optimize=True))
+        electron_count = self.context.electron_count(rho, evaluation.triple.metric)
+        vector = source.vector_potential_reduced
+        # Functional derivative with respect to P is exactly H_VG.  The final
+        # two terms are the explicit source-time derivative at fixed P.
+        matter_rate = (
+            expectation(evaluation.density_dot, evaluation.hamiltonian_dynamic, xp)
+            - (self.context.charge / self.context.mass)
+            * xp.dot(source.vector_potential_reduced_dot, momentum_expectation)
+            + (self.context.charge**2 / self.context.mass)
+            * electron_count
+            * xp.dot(vector, source.vector_potential_reduced_dot)
+        )
+        return PowerLedger(
             energy_matter_rate_analytic=matter_rate,
             energy_generator_rate_analytic=matter_rate,
-            source_work_rate=source_rate,
-            energy_ward_residual=matter_rate - source_rate,
+            source_work_rate=currents.source_work_rate,
+            energy_ward_residual=matter_rate - currents.source_work_rate,
+        )
+
+    def power(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+    ) -> PowerLedger:
+        return self._power_with_currents(evaluation, source, self.currents(evaluation, source))
+
+    def apply_kick(
+        self,
+        coefficients: Any,
+        impulse_au: tuple[float, float, float],
+        evaluation_before: InstantaneousEvaluation,
+        source_before: FormulationSourceSample,
+        source_after: FormulationSourceSample,
+    ) -> Any:
+        return apply_electric_kick(
+            kind=self.kind,
+            gauge=self.gauge,
+            context=self.context,
+            coefficients=coefficients,
+            impulse_au=impulse_au,
+            evaluation_before=evaluation_before,
+            source_before=source_before,
+            source_after=source_after,
         )

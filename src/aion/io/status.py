@@ -10,6 +10,7 @@ from pathlib import Path
 
 from aion.config.units import finite_float
 from aion.errors import SchemaError
+from aion.io.util import atomic_write_text
 from aion.io.versions import SchemaVersion
 
 STATUS_SCHEMA = "aion.status"
@@ -180,6 +181,12 @@ def loads_status(text: str) -> RunStatus:
 
 def read_status(path: str | Path) -> RunStatus:
     return loads_status(Path(path).read_text(encoding="utf-8"))
+
+
+def publish_status(path: str | Path, status: RunStatus) -> None:
+    """Atomically replace the small non-authoritative monitoring record."""
+
+    atomic_write_text(path, dumps_status(status))
 
 
 def _parse_failure(value: object) -> FailureSummary | None:

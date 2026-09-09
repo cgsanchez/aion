@@ -229,6 +229,16 @@ class EnergyLedger:
     energy_ward_residual: Any
 
 
+@dataclass(frozen=True, slots=True)
+class PowerLedger:
+    """Interval-centered analytic rates without complete energy components."""
+
+    energy_matter_rate_analytic: Any
+    energy_generator_rate_analytic: Any | None
+    source_work_rate: Any
+    energy_ward_residual: Any
+
+
 @runtime_checkable
 class Formulation(Protocol):
     @property
@@ -256,6 +266,21 @@ class Formulation(Protocol):
         initial_matter_energy: Any | None = None,
         accumulated_source_work: Any | None = None,
     ) -> EnergyLedger: ...
+
+    def power(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+    ) -> PowerLedger: ...
+
+    def apply_kick(
+        self,
+        coefficients: Any,
+        impulse_au: tuple[float, float, float],
+        evaluation_before: InstantaneousEvaluation,
+        source_before: FormulationSourceSample,
+        source_after: FormulationSourceSample,
+    ) -> Any: ...
 
     @property
     def observable_dependencies(self) -> frozenset[str]: ...

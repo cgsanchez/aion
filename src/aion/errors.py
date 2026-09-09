@@ -82,3 +82,19 @@ class MidpointConvergenceError(PropagationError):
         self.iterations = iterations
         self.density_residual = density_residual
         self.hamiltonian_residual = hamiltonian_residual
+
+
+class RunnerError(AionError, RuntimeError):
+    """A production run cannot be constructed, advanced, or published safely."""
+
+
+class RunCancelledError(RunnerError):
+    """A run stopped at an accepted boundary after a cancellation request."""
+
+
+class TrajectoryError(AionError, RuntimeError):
+    """A trajectory is incomplete, inconsistent, or cannot be published."""
+
+
+class CheckpointError(AionError, RuntimeError):
+    """A checkpoint cannot authenticate or reconstruct its continuation state."""

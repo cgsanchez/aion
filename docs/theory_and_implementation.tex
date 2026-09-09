@@ -69,7 +69,9 @@ electromagnetic source. WP3 implements all four formulations and their
 instantaneous dipoles, currents, energy ledgers, analytic rates, and observable
 definitions. WP4 implements the common nonlinear SCEM engine, direct fixed-
 metric propagation, and connection-aware covariant transport on both CPU and
-GPU. Persistent runners and trajectory/checkpoint I/O remain later work.
+GPU. WP5 implements exact discrete-event execution, scheduled observers,
+interval power and work, transactional trajectories, checkpoint/restart,
+monitoring, export, and comparison manifests on both CPU and GPU.
 \end{abstract}
 
 \tableofcontents
@@ -364,8 +366,11 @@ post-event records at the same physical time, distinguished by side and
 sequence. The exact map is formulation-owned:
 
 \begin{itemize}
-\item bare LG applies the coefficient-space representation of
-  \(\exp(\ii\vect\kappa\cdot\vect r)\);
+\item for \(\vect\kappa=\int\vect E\,dt\), bare LG applies the exact
+  metric-unitary projected event
+  \(\exp[-\ii S^{-1}H_{\rm int}/\hbar]\), with
+  \(H_{\rm int}=-q\vect\kappa\cdot(\vect r-\vect O S)\); for an electron
+  this has the continuum sign \(\exp(-\ii\vect\kappa\cdot\vect r)\);
 \item bare VG leaves coefficients continuous and makes the discontinuous
   change \(\vect a(0^+)=-\vect\kappa\) in the adopted electronic sign
   convention;
@@ -1048,7 +1053,10 @@ An observable declares:
 Unsupported observables fail during simulation construction. Energy is not
 computed every step by default. Energy, dipole/current, step diagnostics,
 checkpoints, and dense-matrix snapshots have independent schedules, while
-initial and final requested observables are always captured.
+initial and final requested observables are always captured. The lightweight
+\code{PowerLedger} is evaluated from the already converged midpoint state on
+every accepted interval; it does not contract the complete energy-component
+ledger or rebuild the Fock matrix.
 
 \subsection{Canonical artifacts}
 
@@ -1087,15 +1095,17 @@ dimension attributes. Scalar streams are uncompressed; dense/checkpoint arrays
 are chunked on record boundaries with low-level gzip and shuffle.
 
 Writers publish transactionally: write a \code{.partial} file, validate and
-flush it, set an internal completion marker, and atomically rename it.
+flush it, set an internal completion marker, and atomically create the final
+no-overwrite link before removing the private name.
 Completed artifacts are immutable. Controlled failures may publish
 \code{trajectory.failed.h5} with \code{complete=false}; a hard crash leaves
 only the partial artifact.
 
 \subsection{Restart and lineage}
 
-A checkpoint contains the dynamic state, occupations, global step/time,
-accumulated work, relevant nonlinear continuation data, and applied-event IDs.
+A checkpoint contains occupied coefficients, their accepted density,
+occupations, global step/time, accumulated work, the initial matter-energy
+baseline, runtime vector-potential offset, and applied-event IDs.
 It contains no pickled PySCF or GPU object. Restart reconstructs the prepared
 reference from normalized input and verifies all fingerprints.
 
@@ -1233,7 +1243,7 @@ derived bundles with their own invalidation boundaries.
 
 \section{Present implementation versus the 0.2 target}
 
-\begin{statusbox}{Current-tree assessment after WP4}
+\begin{statusbox}{Current-tree assessment after WP5}
 The research draft was archived and verified on 8 September 2026. Its
 molecule-specific campaigns, runners, postprocessing, historical notes, and
 large results were moved with checksum manifests to the separate
@@ -1244,11 +1254,13 @@ implements the four formulation and instantaneous-observable layers after
 re-deriving and independently testing the archived equations. Draft equations
 and kernels remain available through the immutable archive and calculation
 repository, but none is silently reachable through the 0.2 API. WP4 adds the
-shared in-memory propagator and both transport geometries without reviving an
-archived runner.
+shared propagator and both transport geometries. WP5 adds the clean reusable
+runner, exact events, observers, transactional persistence, safe cancellation,
+authenticated restart, and operational CLI without reviving an archived
+molecule-specific runner.
 \end{statusbox}
 
-The reusable layers implemented through WP4 are:
+The reusable layers implemented through WP5 are:
 
 \begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
 \toprule
@@ -1277,12 +1289,10 @@ compilation through \(\ddot{\vect a}\), mutually consistent LG/VG/P0 node-link
 data, compiled-source persistence, and exact restart-idempotent kick
 definitions.\\
 \code{aion.io} &
-Independent semantic schema versions, structural validators and skeletons for
-reference, trajectory, source-history, and checkpoint HDF5 artifacts, plus the
-strict non-authoritative \code{status.json} record. Prepared references and
-compiled sources use same-directory partial construction, complete validation,
-and atomic no-overwrite publication. Appendable trajectory/checkpoint writers
-remain WP5 work.\\
+Independent semantic schemas and validators; transactional reference, source,
+trajectory, failure, and checkpoint publication; appendable independently
+sampled streams; compressed dense state; lazy readers; authenticated lineage
+stitching; CSV export; and atomic non-authoritative \code{status.json}.\\
 \code{aion.observables} &
 Definition-specific immutable metadata and sampled records, plus typed,
 dependency-declared calculators with independent schedules and persistent
@@ -1299,19 +1309,19 @@ direct fixed-metric and analytic-connection transports, Cayley and Pad\'e maps,
 right-Cholesky cross-metric correction, roundoff-only cleanup, hard constraint
 failures, and persistent backend-resident scratch.\\
 \code{aion.workflows} and \code{aion} &
-Typed top-level interfaces and CLI commands. \code{prepare\_reference},
-\code{load\_reference}, \code{build\_simulation}, and CLI \code{prepare} are
-functional; a built simulation can advance accepted steps in memory. Production
-run/resume and later numerical entry points fail explicitly with their owning
-future work package.\\
+Typed \code{prepare\_reference}, \code{load\_reference},
+\code{build\_simulation}, \code{run}, \code{resume}, and
+\code{load\_trajectory} workflows; exact runtime source events; one-run-per-
+process execution; independent-trajectory comparison manifests; and operational
+\code{prepare|run|resume|inspect|export} commands.\\
 \bottomrule
 \end{longtable}
 
-Important missing reusable layers are:
+The principal missing reusable layer is:
 
 \begin{itemize}
-\item transactional trajectory/checkpoint writers with exact restart lineage;
-\item completed numerical CLI commands and reusable spectroscopy outputs.
+\item reusable Casida and kick-spectrum outputs and the explicit legacy
+conversion boundary assigned to WP6.
 \end{itemize}
 
 The physical-GPU WP2 gate caught a material scientific backend discrepancy.
@@ -1425,9 +1435,9 @@ formulations, propagation, observables, and storage; it records qualified
 energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
 repository-separation gate WP0, contract gate WP1, common-reference/source gate
-WP2, instantaneous-physics gate WP3, and shared-propagation gate WP4 are
-complete. Persistent runners, checkpoint/restart, and output scheduling begin
-in WP5 and remain separately gated.
+WP2, instantaneous-physics gate WP3, shared-propagation gate WP4, and reusable
+execution/persistence gate WP5 are complete. Spectroscopy begins in WP6 and
+remains separately gated.
 
 \section*{Rebuilding this document}
 

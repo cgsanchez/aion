@@ -4,17 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from os import PathLike
-from typing import Any, Protocol
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol
 
-from aion.config import BackendConfig, ReferenceConfig, SimulationConfig
+from aion.config import (
+    BackendConfig,
+    OutputConfig,
+    ReferenceConfig,
+    SimulationConfig,
+    dumps_config,
+)
 from aion.electromagnetism import (
     CompiledUniformSource,
     EventSchedule,
+    RuntimeSourceController,
     compile_event_schedule,
     compile_source_for_reference,
 )
 from aion.electronic_structure import PreparedReference as PreparedReference
-from aion.errors import FeatureNotImplementedError, FormulationError
+from aion.errors import FormulationError
 from aion.formulations import (
     AODensity,
     Formulation,
@@ -23,6 +31,7 @@ from aion.formulations import (
     SourceSampling,
     build_formulation,
 )
+from aion.io.trajectory import Trajectory as Trajectory
 from aion.observables import ObservableCalculators, build_observable_calculators
 from aion.propagation import (
     OrbitalState,
@@ -32,6 +41,9 @@ from aion.propagation import (
     build_propagator,
 )
 
+if TYPE_CHECKING:
+    from aion.workflows.runner import RunControl
+
 type PathInput = str | PathLike[str]
 
 
@@ -40,14 +52,9 @@ class Simulation(Protocol):
     def simulation_id(self) -> str: ...
 
 
-class Trajectory(Protocol):
-    @property
-    def run_id(self) -> str: ...
-
-
 @dataclass(slots=True)
 class BuiltSimulation:
-    """Validated simulation binding with a reusable in-memory WP4 stepper."""
+    """Validated simulation binding with independent mutable run state."""
 
     config: SimulationConfig
     reference: PreparedReference
@@ -57,6 +64,8 @@ class BuiltSimulation:
     propagator: SCEMPropagator
     calculators: ObservableCalculators
     events: EventSchedule
+    runtime_source: RuntimeSourceController
+    original_toml: str
 
     @property
     def workspace(self) -> Any:
@@ -86,7 +95,7 @@ class BuiltSimulation:
         return self.formulation.evaluate(state, source)
 
     def step(self, state: OrbitalState | None = None) -> PropagationStepResult:
-        """Advance one in-memory step without starting the WP5 runner."""
+        """Advance one in-memory accepted step without invoking observers."""
 
         current = self.state if state is None else state
         result = self.propagator.step(current)
@@ -132,6 +141,8 @@ def load_reference(
 def build_simulation(
     config: SimulationConfig,
     reference: PreparedReference,
+    *,
+    original_toml: str | None = None,
 ) -> BuiltSimulation:
     """Build an independent source/formulation/state/workspace binding."""
 
@@ -144,6 +155,8 @@ def build_simulation(
     workspace = reference.create_workspace(config.backend)
     source = compile_source_for_reference(config.source, config.propagation.time_grid, reference)
     source.install(workspace)
+    events = compile_event_schedule(config.events, config.propagation.time_grid)
+    runtime_source = RuntimeSourceController(workspace, events)
     formulation = build_formulation(config.formulation, reference, workspace)
     state = build_initial_orbital_state(formulation, workspace)
     propagator = build_propagator(formulation, config.propagation, workspace)
@@ -153,7 +166,6 @@ def build_simulation(
         natom=reference.anchor_topology.natom,
         npair=reference.anchor_topology.pair_indices.shape[0],
     )
-    events = compile_event_schedule(config.events, config.propagation.time_grid)
     workspace.assert_all_resident()
     return BuiltSimulation(
         config=config,
@@ -164,25 +176,40 @@ def build_simulation(
         propagator=propagator,
         calculators=calculators,
         events=events,
+        runtime_source=runtime_source,
+        original_toml=dumps_config(config) if original_toml is None else original_toml,
     )
 
 
-def run(simulation: Simulation) -> Trajectory:
-    """Execute one simulation process (implementation: WP5)."""
+def run(
+    simulation: BuiltSimulation,
+    *,
+    control: RunControl | None = None,
+) -> Trajectory:
+    """Execute one validated simulation in the current process."""
 
-    del simulation
-    raise FeatureNotImplementedError("simulation execution is scheduled for WP5")
+    from aion.workflows.runner import execute_simulation
+
+    return execute_simulation(simulation, control=control)
 
 
-def resume(checkpoint: PathInput) -> Trajectory:
-    """Resume from an immutable checkpoint (implementation: WP5)."""
+def resume(
+    checkpoint: PathInput,
+    *,
+    output: OutputConfig | PathInput | None = None,
+) -> Trajectory:
+    """Reconstruct a checkpoint and publish a child trajectory segment."""
 
-    del checkpoint
-    raise FeatureNotImplementedError("checkpoint restart is scheduled for WP5")
+    from aion.workflows.runner import resume_simulation
+
+    resolved_output: OutputConfig | str | Path | None
+    resolved_output = Path(output) if isinstance(output, PathLike) else output
+    return resume_simulation(Path(checkpoint), output=resolved_output)
 
 
 def load_trajectory(path: PathInput) -> Trajectory:
-    """Load a completed trajectory (implementation: WP5)."""
+    """Load and validate a completed trajectory lazily."""
 
-    del path
-    raise FeatureNotImplementedError("trajectory loading is scheduled for WP5")
+    from aion.io.trajectory import load_trajectory as load
+
+    return load(Path(path))

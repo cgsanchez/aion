@@ -10,6 +10,7 @@ from aion.electronic_structure import expectation, hermitian_part
 from aion.errors import FormulationError
 from aion.formulations.bare import _baseline
 from aion.formulations.base import FormulationContext
+from aion.formulations.events import apply_electric_kick
 from aion.formulations.kernels import (
     covariant_ambient_mechanical_current,
     density_derivative,
@@ -31,6 +32,7 @@ from aion.formulations.types import (
     EOMTriple,
     FormulationSourceSample,
     InstantaneousEvaluation,
+    PowerLedger,
 )
 
 
@@ -274,10 +276,7 @@ def _energy(
     )
     matter = internal.energy_internal_total
     generator = matter + scalar_total + e1_coupling
-    matter_rate = context.electronic_model.energy_rate(
-        evaluation.field_free_dft, evaluation.field_free_density_dot
-    )
-    source_rate = currents.source_work_rate
+    rates = _power_from_currents(context, evaluation, currents)
     initial = _baseline(initial_matter_energy, context)
     accumulated = _baseline(accumulated_source_work, context)
     return EnergyLedger(
@@ -297,11 +296,39 @@ def _energy(
         energy_generator_total=generator,
         energy_absorbed=None if initial is None else matter - initial,
         source_work_accumulated=accumulated,
+        energy_matter_rate_analytic=rates.energy_matter_rate_analytic,
+        energy_generator_rate_analytic=rates.energy_generator_rate_analytic,
+        source_work_rate=rates.source_work_rate,
+        energy_ward_residual=rates.energy_ward_residual,
+    )
+
+
+def _power_from_currents(
+    context: FormulationContext,
+    evaluation: InstantaneousEvaluation,
+    currents: CurrentLedger,
+) -> PowerLedger:
+    matter_rate = context.electronic_model.energy_rate(
+        evaluation.field_free_dft, evaluation.field_free_density_dot
+    )
+    return PowerLedger(
         energy_matter_rate_analytic=matter_rate,
         energy_generator_rate_analytic=None,
-        source_work_rate=source_rate,
-        energy_ward_residual=matter_rate - source_rate,
+        source_work_rate=currents.source_work_rate,
+        energy_ward_residual=matter_rate - currents.source_work_rate,
     )
+
+
+def _power(
+    context: FormulationContext,
+    gauge: GaugeRepresentation,
+    evaluation: InstantaneousEvaluation,
+    source: FormulationSourceSample,
+    *,
+    include_e1: bool,
+) -> PowerLedger:
+    currents = _currents(context, gauge, evaluation, source, include_e1=include_e1)
+    return _power_from_currents(context, evaluation, currents)
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,6 +371,32 @@ class P0:
             include_e1=False,
             initial_matter_energy=initial_matter_energy,
             accumulated_source_work=accumulated_source_work,
+        )
+
+    def power(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+    ) -> PowerLedger:
+        return _power(self.context, self.gauge, evaluation, source, include_e1=False)
+
+    def apply_kick(
+        self,
+        coefficients: Any,
+        impulse_au: tuple[float, float, float],
+        evaluation_before: InstantaneousEvaluation,
+        source_before: FormulationSourceSample,
+        source_after: FormulationSourceSample,
+    ) -> Any:
+        return apply_electric_kick(
+            kind=self.kind,
+            gauge=self.gauge,
+            context=self.context,
+            coefficients=coefficients,
+            impulse_au=impulse_au,
+            evaluation_before=evaluation_before,
+            source_before=source_before,
+            source_after=source_after,
         )
 
 
@@ -397,4 +450,30 @@ class P0E1:
             include_e1=True,
             initial_matter_energy=initial_matter_energy,
             accumulated_source_work=accumulated_source_work,
+        )
+
+    def power(
+        self,
+        evaluation: InstantaneousEvaluation,
+        source: FormulationSourceSample,
+    ) -> PowerLedger:
+        return _power(self.context, self.gauge, evaluation, source, include_e1=True)
+
+    def apply_kick(
+        self,
+        coefficients: Any,
+        impulse_au: tuple[float, float, float],
+        evaluation_before: InstantaneousEvaluation,
+        source_before: FormulationSourceSample,
+        source_after: FormulationSourceSample,
+    ) -> Any:
+        return apply_electric_kick(
+            kind=self.kind,
+            gauge=self.gauge,
+            context=self.context,
+            coefficients=coefficients,
+            impulse_au=impulse_au,
+            evaluation_before=evaluation_before,
+            source_before=source_before,
+            source_after=source_after,
         )

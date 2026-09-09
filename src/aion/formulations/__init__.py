@@ -4,6 +4,7 @@ from aion.formulations.api import build_formulation
 from aion.formulations.bare import BareLengthGauge, BareVelocityGauge
 from aion.formulations.base import FormulationContext
 from aion.formulations.covariant import P0, P0E1
+from aion.formulations.events import apply_electric_kick, metric_unitary_impulse
 from aion.formulations.kernels import (
     E1Tensors,
     MechanicalCurrent,
@@ -32,6 +33,7 @@ from aion.formulations.types import (
     Formulation,
     FormulationSourceSample,
     InstantaneousEvaluation,
+    PowerLedger,
     SourceSampling,
 )
 
@@ -51,7 +53,9 @@ __all__ = [
     "InstantaneousEvaluation",
     "MechanicalCurrent",
     "P0Geometry",
+    "PowerLedger",
     "SourceSampling",
+    "apply_electric_kick",
     "build_formulation",
     "central_dipole_matrices",
     "covariant_ambient_mechanical_current",
@@ -60,6 +64,7 @@ __all__ = [
     "generic_mechanical_current",
     "inverse_dressed_density",
     "inverse_dressed_density_dot",
+    "metric_unitary_impulse",
     "p0_continuity_residual",
     "p0_geometry",
     "p0_graph_current",
