@@ -88,7 +88,8 @@ def _configuration_command(command: str, args: argparse.Namespace) -> int:
     if command == "prepare":
         if not isinstance(resolved.config, ReferenceConfig):
             raise ConfigurationError("prepare requires an aion.reference-input document")
-        prepare_reference(resolved.config)
+        reference = prepare_reference(resolved.config)
+        reference.save()
         return 0
     if not isinstance(resolved.config, SimulationConfig):
         raise ConfigurationError("run requires an aion.simulation-input document")

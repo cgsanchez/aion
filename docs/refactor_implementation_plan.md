@@ -1,6 +1,6 @@
 # Aion 0.2 reusable real-time TDDFT refactor
 
-Status: WP0 and WP1 complete; numerical implementation has not started
+Status: WP0, WP1, and WP2 complete; formulation implementation has not started
 
 Last design review: 2026-09-08
 
@@ -599,6 +599,8 @@ Milestone M1: stable contracts on which numerical work can proceed.
 
 Dependencies: WP1.
 
+Status: complete on 2026-09-09.
+
 Work:
 
 - implement CPU/GPU backend protocols and residency assertions;
@@ -627,6 +629,31 @@ Acceptance:
   SCF;
 - the compiled source is identical across backend paths within precision;
 - GPU tests run on the physical GPU and pass; no fallback is possible.
+
+Completion record:
+
+- implemented strict NumPy/CuPy backends, wrong-device/host-leak assertions,
+  and independent mutable workspaces;
+- implemented CPU and direct GPU4PySCF RKS preparation with pure-LDA/GGA,
+  declared-family, closed-shell, local/all-electron, and convergence checks;
+- implemented immutable ground-state, exact-grid, core-operator, nuclear, and
+  AO-anchor/topology bundles with independent construction fingerprints;
+- qualified (p=i(\nabla\phi_\mu|\phi_\nu)) Hermiticity and sign against an
+  independent real-space ket-derivative quadrature on H2 and LiH;
+- implemented no-overwrite transactional reference and compiled-source HDF5
+  publication, authenticated loading, exact live-model reconstruction, and
+  dependency verification without another SCF call;
+- implemented potential-first uniform sources, deterministic additive and
+  gated composition, peak-field-normalized compact sin2 pulses, aligned-grid
+  construction, endpoint/midpoint freezing, common LG/VG/P0 samples, and
+  restart-idempotent boundary events;
+- the first expanded GPU parity test exposed GPU4PySCF silently rebuilding a
+  different quadrature grid; preparation and reconstruction now explicitly
+  install the canonical PySCF coordinates and weights on device before any
+  effective-potential build;
+- CPU fast gate: 48 tests; molecular CPU gate: 5 H2/LiH tests; physical-GPU
+  gate: 4 tests covering direct preparation, effective-potential parity,
+  exact source transfer, residency, and no fallback.
 
 Estimate: 5–8 developer days; minutes to a few hours of H2/LiH CPU/GPU test
 compute.
@@ -900,10 +927,11 @@ reason.
 | 2026-09-08 | Removed special-purpose pulse terminology | Pulses are source objects; their scientific use belongs to a simulation or workflow |
 | 2026-09-08 | Completed WP0 archive, migration, and audit | Establish an immutable recovery point and separate reusable code from calculations before refactoring |
 | 2026-09-08 | Completed WP1 package, configuration, identity, schema, observable-record, status, API, CLI, and quality contracts | Establish the clean typed 0.2 boundary and remove active access to unreviewed draft numerics before porting physics |
+| 2026-09-09 | Completed WP2 references, backends, operators, exact-grid reconstruction, compiled sources, events, and transactional static/source I/O | Establish a single authenticated static problem and EM input shared by all later formulations; physical-GPU testing also found and eliminated backend-specific grid rebuilding |
 
 ## 16. Present authorization
 
-Creation of this plan, the companion LaTeX note/PDF, and execution of WP0 and
-WP1 were authorized and are complete. WP2 through WP7 remain proposed future
-actions. This document does not itself authorize numerical implementation, new
-calculation campaigns, or release.
+Creation of this plan, the companion LaTeX note/PDF, and execution of WP0,
+WP1, and WP2 were authorized and are complete. WP3 through WP7 remain proposed
+future actions. This document does not itself authorize further numerical
+implementation, new calculation campaigns, or release.

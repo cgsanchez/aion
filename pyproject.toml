@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aion"
-version = "0.2.0.dev1"
+version = "0.2.0.dev2"
 description = "Gauge-covariant real-time TDDFT for finite molecular AO bases"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -77,16 +77,21 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 python_version = "3.12"
 strict = true
 files = [
-  "src/aion/__init__.py",
-  "src/aion/_version.py",
-  "src/aion/cli.py",
-  "src/aion/config",
-  "src/aion/io",
-  "src/aion/observables",
-  "src/aion/workflows",
+  "src/aion",
 ]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["h5py", "h5py.*"]
+module = [
+  "cupy",
+  "cupy.*",
+  "gpu4pyscf",
+  "gpu4pyscf.*",
+  "h5py",
+  "h5py.*",
+  "pyscf",
+  "pyscf.*",
+  "scipy",
+  "scipy.*",
+]
 ignore_missing_imports = true

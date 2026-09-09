@@ -1,3 +1,6 @@
-"""Backend protocols and workspaces (implemented in WP2)."""
+"""Array backends and explicitly mutable backend workspaces."""
 
-__all__: list[str] = []
+from aion.backends.array import ArrayBackend, CuPyBackend, NumPyBackend, make_backend
+from aion.backends.workspace import Workspace
+
+__all__ = ["ArrayBackend", "CuPyBackend", "NumPyBackend", "Workspace", "make_backend"]

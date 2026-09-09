@@ -1,24 +1,32 @@
 # Aion
 
 Aion is a reusable Python library for gauge-covariant real-time TDDFT in
-finite molecular atomic-orbital bases. Version `0.2.0.dev1` is a clean break
+finite molecular atomic-orbital bases. Version `0.2.0.dev2` is a clean break
 from the archived research prototype.
 
-WP1 establishes the non-numerical contracts on which the new implementation
-will be built:
+WP1 established the strict package/configuration/storage contracts. WP2 now
+implements the common static electronic problem and prescribed EM input:
 
 - immutable, strictly validated Python configurations;
 - deterministic normalized TOML and lossless scientific identities;
 - explicit atomic-unit, electromagnetic-origin, and fixed-time-grid types;
-- independently versioned HDF5 artifact schemas and typed observables;
-- a strict `status.json` record;
-- physics-oriented package domains and a small typed public API;
-- a thin `aion` CLI with `prepare`, `run`, `resume`, `inspect`, and `export`.
+- strict NumPy/CuPy backends, residency assertions, and mutable per-simulation
+  workspaces with no GPU fallback;
+- validated CPU/GPU PySCF RKS preparation for pure LDA/GGA all-electron
+  molecules;
+- portable read-only references containing ground state, exact DFT grid, AO
+  operators, nuclei, atomic anchors/topology, and authenticated fingerprints;
+- transactional immutable `reference.h5` and compiled-source HDF5 I/O;
+- potential-first uniform sources, additive composition, analytic envelopes,
+  sin² pulses normalized to peak electric field, exact endpoint/midpoint
+  compilation, consistent LG/VG/P0 node-link data, and exact kick definitions;
+- independently versioned HDF5 schemas, typed observable records, and a strict
+  `status.json` record; and
+- a thin CLI whose `prepare` command now publishes a complete reference.
 
-The numerical reference builder, formulations, propagators, runners, and
-spectroscopy workflows are intentionally unavailable at this milestone. Their
-public shells fail explicitly instead of importing or executing archived draft
-code.
+Formulations, observables, propagators, runners, and spectroscopy remain owned
+by WP3--WP6. Their public shells fail explicitly instead of importing or
+executing archived draft code.
 
 ## Validated domain
 
@@ -93,3 +101,15 @@ Quality gates are:
 Fast tests use at most eight workers. Molecular CPU integrations will run
 serially with up to eight numerical-library threads, while physical-GPU tests
 will run serially through `tools/gpu-python`.
+
+The molecular and physical-GPU gates are respectively:
+
+```bash
+OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8 MKL_NUM_THREADS=8 \
+  /home/cgs/01_TOOLS/EasyBuild/conda/bin/conda run \
+  -p /home/cgs/01_TOOLS/EasyBuild/conda/envs/aion \
+  pytest -q -m integration
+
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  tools/gpu-python -m pytest -q -m gpu
+```

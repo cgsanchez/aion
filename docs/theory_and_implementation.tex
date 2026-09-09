@@ -42,7 +42,7 @@
 \large Bare length and velocity gauges, covariant P0/P0+E1 dynamics,\\
 currents, energies, and connection-aware propagation}
 \author{Aion project}
-\date{8 September 2026}
+\date{9 September 2026}
 
 \begin{document}
 
@@ -62,9 +62,11 @@ algorithm is self-consistent exponential midpoint (SCEM), with a
 connection-aware transport for the covariant formulations and no
 time-dependent L\"owdin frame. The final sections map these definitions to a
 reusable API, storage schema, and validation hierarchy. This is primarily a
-normative design document. Its non-numerical package, configuration, identity,
-schema, status, and API contracts were implemented in WP1; the physical and
-numerical layers remain gated future work unless explicitly identified.
+normative design document. Its package, configuration, identity, schema,
+status, and API contracts were implemented in WP1. WP2 implements the common
+prepared electronic reference, backend workspaces, AO operators, and compiled
+electromagnetic source; formulations and propagation remain gated future work
+unless explicitly identified.
 \end{abstract}
 
 \tableofcontents
@@ -1158,25 +1160,28 @@ weights, and the core operator bundle
     \text{nuclear data},f\}.
 \]
 It does not store AO values on the grid and never pickles live objects.
-Loading reconstructs PySCF/backend models and verifies fingerprints.
+Loading authenticates all content and dependency fingerprints. Constructing a
+fresh backend \code{Workspace} then reconstructs PySCF/GPU4PySCF and transfers
+the immutable arrays exactly once, without rerunning SCF.
 Atomic projectors/topology and P0/E1 tensors are independently versioned
 derived bundles with their own invalidation boundaries.
 
 \section{Present implementation versus the 0.2 target}
 
-\begin{statusbox}{Current-tree assessment after WP1}
+\begin{statusbox}{Current-tree assessment after WP2}
 The research draft was archived and verified on 8 September 2026. Its
 molecule-specific campaigns, runners, postprocessing, historical notes, and
 large results were moved with checksum manifests to the separate
 \path{CALCULATIONS} repository. WP1 then removed the active flat prototype
-modules and established the clean 0.2 package contracts. Draft equations and
-kernels remain available through the immutable archive and calculation
-repository, but none is silently reachable through the 0.2 API.
+modules and established the clean 0.2 package contracts. WP2 implements the
+common static electronic problem and prescribed electromagnetic input. Draft
+equations and kernels remain available through the immutable archive and
+calculation repository, but none is silently reachable through the 0.2 API.
 \end{statusbox}
 
-The reusable layers implemented by WP1 are:
+The reusable layers implemented through WP2 are:
 
-\begin{longtable}{@{}p{0.31\textwidth}p{0.63\textwidth}@{}}
+\begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
 \toprule
 Current package & Implemented contract\\
 \midrule
@@ -1185,36 +1190,65 @@ Current package & Implemented contract\\
 Frozen reference and simulation dataclasses, atomic-unit origin and fixed-grid
 types, discriminated formulations/sources/events, strict TOML resolution, and
 lossless canonical SHA-256 identities.\\
+\code{aion.backends} &
+Strict NumPy and CuPy implementations of one array protocol, explicit host
+transfer, device-residency and wrong-device assertions, no GPU fallback, and a
+mutable per-simulation workspace for resident arrays, scratch, and live
+electronic-structure caches.\\
+\code{aion.electronic\_structure} &
+Validated CPU/GPU PySCF RKS preparation for the supported pure-LDA/GGA,
+all-electron, closed-shell domain. Immutable records contain the ground state,
+exact quadrature grid, core operators, nuclei, and independently fingerprinted
+AO-anchor/topology data. Loading authenticates portable arrays; workspace
+construction reconstructs PySCF/GPU4PySCF without another SCF calculation.\\
+\code{aion.electromagnetism} &
+Potential-first uniform providers, additive composition, product-rule temporal
+gates, peak-field-normalized compact pulses, fixed-grid endpoint/midpoint
+compilation, mutually consistent LG/VG/P0 node-link data, compiled-source
+persistence, and exact restart-idempotent kick definitions.\\
 \code{aion.io} &
 Independent semantic schema versions, structural validators and skeletons for
 reference, trajectory, source-history, and checkpoint HDF5 artifacts, plus the
-strict non-authoritative \code{status.json} record. Transactional writers are
-not yet implemented.\\
+strict non-authoritative \code{status.json} record. Prepared references and
+compiled sources use same-directory partial construction, complete validation,
+and atomic no-overwrite publication. Appendable trajectory/checkpoint writers
+remain WP5 work.\\
 \code{aion.observables} &
 Definition-specific immutable observable metadata and sampled records. The
 physical dipole, current, energy, power, Ward, and continuity calculators are
 not yet implemented.\\
 \code{aion.workflows} and \code{aion} &
-Typed top-level interfaces and CLI commands. Numerical entry points fail
-explicitly with their owning future work package; configuration validation and
-HDF5 header inspection are functional.\\
+Typed top-level interfaces and CLI commands. \code{prepare\_reference},
+\code{load\_reference}, and CLI \code{prepare} are functional; later numerical
+entry points fail explicitly with their owning future work package.\\
 \bottomrule
 \end{longtable}
 
 Important missing reusable layers are:
 
 \begin{itemize}
-\item a unified immutable prepared reference and compiled-source/simulation
-  builder behind the established configuration contracts;
+\item formulation and simulation builders binding the implemented reference
+  and compiled source to explicit \((S,H_{\mathrm{eom}},\omega)\) models;
 \item formulation-owned physical primary and diagnostic observable
   calculators behind the established record types;
 \item the generic mechanical-current operator API;
 \item the complete qualified energy ledger and independent analytic
   \(\dd U/\dd t\);
 \item a single shared SCEM nonlinear engine behind both transports;
-\item transactional HDF5 writers with exact restart lineage;
+\item transactional trajectory/checkpoint writers with exact restart lineage;
 \item completed numerical CLI commands and reusable spectroscopy outputs.
 \end{itemize}
+
+The physical-GPU WP2 gate caught a material scientific backend discrepancy.
+GPU4PySCF initially discarded the prebuilt PySCF quadrature grid and
+constructed a different point set. Energy agreement alone did not reveal the
+contract violation. Aion now installs the canonical stored coordinates and
+weights explicitly on the device before direct GPU SCF and before every live
+GPU reconstruction. H2 and LiH tests compare direct CPU/GPU preparation,
+ground-state densities, exact grids, reconstructed effective potentials, and
+the residency of every transferred reference and source array. The canonical
+momentum sign is additionally tested against an independent real-space
+ket-derivative quadrature, not only against libcint Hermiticity.
 
 At present, some comparison scripts reconstruct missing VG linear and
 diamagnetic kinetic energies, calculate bare-LG momentum current, or assemble
@@ -1315,9 +1349,9 @@ auditable. It separates immutable reference preparation, physical sources,
 formulations, propagation, observables, and storage; it records qualified
 energy/current definitions; and it treats conservation, Ward identities,
 convergence, restart, and CPU/GPU parity as release gates. The preservation and
-repository-separation gate WP0 and the non-numerical contract gate WP1 are
-complete. Numerical implementation begins with WP2 and remains subject to its
-separate acceptance gates.
+repository-separation gate WP0, contract gate WP1, and common-reference/source
+gate WP2 are complete. Formulations and their instantaneous physics begin in
+WP3 and remain subject to its separate acceptance gates.
 
 \section*{Rebuilding this document}
 

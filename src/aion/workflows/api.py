@@ -1,23 +1,16 @@
-"""Typed top-level workflow boundary.
-
-WP1 fixes these signatures without retaining any numerical draft behavior.
-Later work packages provide the concrete objects and implementations.
-"""
+"""Typed top-level workflow boundary introduced incrementally by work package."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from os import PathLike
 from typing import Protocol
 
 from aion.config import BackendConfig, ReferenceConfig, SimulationConfig
+from aion.electronic_structure import PreparedReference as PreparedReference
 from aion.errors import FeatureNotImplementedError
 
 type PathInput = str | PathLike[str]
-
-
-class PreparedReference(Protocol):
-    @property
-    def fingerprint_sha256(self) -> str: ...
 
 
 class Simulation(Protocol):
@@ -31,10 +24,13 @@ class Trajectory(Protocol):
 
 
 def prepare_reference(config: ReferenceConfig) -> PreparedReference:
-    """Prepare an immutable reference (numerical implementation: WP2)."""
+    """Run one validated RKS calculation and return an immutable reference."""
 
-    del config
-    raise FeatureNotImplementedError("reference preparation is scheduled for WP2")
+    from aion.electronic_structure import prepare_pyscf_reference
+
+    if not isinstance(config, ReferenceConfig):
+        raise TypeError("config must be ReferenceConfig")
+    return prepare_pyscf_reference(config)
 
 
 def load_reference(
@@ -42,10 +38,23 @@ def load_reference(
     *,
     backend: BackendConfig | None = None,
 ) -> PreparedReference:
-    """Load and authenticate a reference (numerical implementation: WP2)."""
+    """Load and authenticate a portable reference without rerunning SCF."""
 
-    del path, backend
-    raise FeatureNotImplementedError("reference loading is scheduled for WP2")
+    from aion.electronic_structure import load_reference_data, validate_reference_runtime
+
+    reference = load_reference_data(path)
+    validate_reference_runtime(reference)
+    if backend is None:
+        return reference
+    return PreparedReference(
+        config=replace(reference.config, backend=backend),
+        ground_state=reference.ground_state,
+        grid=reference.grid,
+        core_operators=reference.core_operators,
+        anchor_topology=reference.anchor_topology,
+        dependencies=reference.dependencies,
+        preparation_backend=reference.preparation_backend,
+    )
 
 
 def build_simulation(

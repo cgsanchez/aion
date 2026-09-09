@@ -31,3 +31,19 @@ class IncompleteArtifactError(SchemaError):
 
 class FeatureNotImplementedError(AionError, NotImplementedError):
     """A stable contract exists but its numerical implementation is a later milestone."""
+
+
+class BackendError(AionError, RuntimeError):
+    """An execution backend cannot satisfy its declared numerical contract."""
+
+
+class DeviceResidencyError(BackendError):
+    """An array is not resident on the backend/device where it is required."""
+
+
+class ReferencePreparationError(AionError, RuntimeError):
+    """A static electronic reference could not be prepared or authenticated."""
+
+
+class SourceCompilationError(AionError, ValueError):
+    """An electromagnetic source violates its compilation contract."""

@@ -16,13 +16,12 @@ from aion.config import (
     XCFamily,
     dumps_config,
 )
-from aion.errors import FeatureNotImplementedError
 
 pytestmark = pytest.mark.fast
 
 
 def test_public_api_is_small_and_versioned() -> None:
-    assert aion.__version__ == "0.2.0.dev1"
+    assert aion.__version__ == "0.2.0.dev2"
     assert set(aion.__all__) == {
         "BackendConfig",
         "FormulationConfig",
@@ -37,7 +36,7 @@ def test_public_api_is_small_and_versioned() -> None:
         "resume",
         "run",
     }
-    with pytest.raises(FeatureNotImplementedError, match="WP2"):
+    with pytest.raises(TypeError, match="ReferenceConfig"):
         aion.prepare_reference(None)  # type: ignore[arg-type]
 
 

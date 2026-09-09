@@ -23,6 +23,7 @@ from aion.io.status import (
     loads_status,
     read_status,
 )
+from aion.io.transaction import publish_hdf5, write_dataset
 from aion.io.versions import SchemaVersion
 
 __all__ = [
@@ -42,8 +43,10 @@ __all__ = [
     "SchemaVersion",
     "dumps_status",
     "loads_status",
+    "publish_hdf5",
     "read_status",
     "stamp_artifact",
     "validate_artifact",
     "validate_open_artifact",
+    "write_dataset",
 ]

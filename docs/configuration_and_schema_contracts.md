@@ -1,7 +1,8 @@
 # Aion 0.2 configuration and schema contracts
 
-Status: implemented by WP1 for Aion `0.2.0.dev1`; numerical workflows remain
-deliberately unavailable.
+Status: configuration contracts were implemented by WP1 and prepared-reference
+and compiled-source contracts by WP2 for Aion `0.2.0.dev2`. Formulation,
+propagation, runner, and spectroscopy workflows remain deliberately unavailable.
 
 ## 1. Authority and strictness
 
@@ -75,11 +76,14 @@ Bare formulations require `fixed_metric_scem`; P0 and P0+E1 require
 Padé `[2/2]`; Cayley `[1/1]` is explicit. The fixed time grid treats integer
 step as authoritative: `N` intervals always produce `N+1` endpoints.
 
-Sources are potential-first contracts. WP1 defines zero, compactly supported
-sin² vector-potential pulse, authenticated compiled-source, and reproducible
-Python-provider records. Their compilation and physics are WP2 work. A pulse
-is simply a source object; its scientific use belongs to a workflow. Kicks are
-separate exact events and must lie on a state boundary.
+Sources are potential-first contracts. Zero, compactly supported sin²
+vector-potential pulse, authenticated compiled-source, and reproducible
+Python-provider records are discriminated inputs. WP2 implements physical
+uniform providers, additive composition, product-rule analytic envelopes,
+peak-electric-field pulse normalization, endpoint/midpoint compilation, and
+LG/VG/P0 node-link gauge derivation. A pulse is simply a source object; its
+scientific use belongs to a workflow. Kicks are separate exact events and must
+lie on a state boundary.
 
 ## 4. Scientific identity
 
@@ -128,9 +132,11 @@ dimension, atomic unit, tensor shape, sampling location, and decomposition
 labels. Each record carries exact integer step, atomic-unit time, and an
 immutable float64 or complex128 value.
 
-`stamp_artifact` creates only a schema skeleton for tests and future writers;
-it does not publish files. Transactional `.partial` publication, compression,
-append streams, checksums, and restart writers are WP5 responsibilities.
+`stamp_artifact` creates only a schema skeleton. WP2 adds same-directory
+transactional `.partial` construction and no-overwrite atomic publication for
+complete prepared references and compiled source histories. Appendable
+trajectory streams, compression policy, checkpoints, failure artifacts, and
+restart publication remain WP5 responsibilities.
 
 ## 6. `status.json`
 
@@ -151,16 +157,22 @@ prepare_reference  load_reference  build_simulation
 run                resume          load_trajectory
 ```
 
-At WP1 these functions are typed shells that raise
-`FeatureNotImplementedError` with the responsible future work package. This
-prevents accidental fallback to the archived draft.
+`prepare_reference` and `load_reference` are implemented by WP2. Preparation
+runs one validated RKS calculation; loading authenticates the portable data and
+runtime dependency contract without rerunning SCF. Each later simulation gets
+a separate backend workspace, which reconstructs PySCF/GPU4PySCF and transfers
+the reference exactly once. The remaining workflow functions are typed shells
+that raise `FeatureNotImplementedError` with their responsible future work
+package, preventing fallback to the archived draft.
 
 The `aion` command exposes `prepare`, `run`, `resume`, `inspect`, and `export`.
 `prepare` and `run` accept `--validate-only`, print the fully resolved TOML and
-scientific ID, and perform no numerical work. `inspect` validates and reports
-a completed HDF5 artifact header. Exit status 2 denotes configuration/schema
-failure, 3 denotes a contract whose numerical implementation is not yet
-available, and 1 is reserved for another controlled Aion failure.
+scientific ID, and perform no numerical work in that mode. Ordinary `prepare`
+runs RKS and transactionally publishes the configured reference artifact.
+`inspect` validates and reports a completed HDF5 artifact header. Exit status 2
+denotes configuration/schema failure, 3 denotes a contract whose numerical
+implementation is not yet available, and 1 is reserved for another controlled
+Aion failure.
 
 ## 8. Quality and test tiers
 
