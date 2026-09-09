@@ -28,6 +28,7 @@ def run_casida(reference: PreparedReference, config: CasidaConfig) -> CasidaResu
         response = mean_field.CasidaTDDFT()
         response.nstates = config.nstates
         response.conv_tol = config.convergence_tolerance
+        response.max_cycle = config.max_iterations
         response.singlet = config.singlet
         energies, _amplitudes = response.kernel()
         converged = np.asarray(response.converged, dtype=np.bool_)

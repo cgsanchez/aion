@@ -410,6 +410,7 @@ class CasidaConfig:
 
     nstates: int
     convergence_tolerance: float = 1.0e-9
+    max_iterations: int = 100
     singlet: bool = True
 
     def __post_init__(self) -> None:
@@ -424,6 +425,12 @@ class CasidaConfig:
                 positive=True,
             ),
         )
+        if (
+            isinstance(self.max_iterations, bool)
+            or not isinstance(self.max_iterations, int)
+            or self.max_iterations < 1
+        ):
+            raise SpectroscopyError("Casida max_iterations must be a positive integer")
         if self.singlet is not True:
             raise SpectroscopyError("only singlet Casida response is validated in Aion 0.2")
 
@@ -433,6 +440,7 @@ class CasidaConfig:
             "version": "1.0.0",
             "nstates": self.nstates,
             "convergence_tolerance": self.convergence_tolerance,
+            "max_iterations": self.max_iterations,
             "singlet": self.singlet,
             "oscillator_strength_gauge": "length",
         }

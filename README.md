@@ -1,7 +1,7 @@
 # Aion
 
 Aion is a reusable Python library for gauge-covariant real-time TDDFT in
-finite molecular atomic-orbital bases. Version `0.2.0.dev6` is a clean break
+finite molecular atomic-orbital bases. Version `0.2.0.dev7` is a clean break
 from the archived research prototype.
 
 WP1 established the strict package/configuration/storage contracts, WP2 the
@@ -15,7 +15,7 @@ reusable execution and persistence, and WP6 spectroscopy and legacy conversion:
 - strict NumPy/CuPy backends, residency assertions, and mutable per-simulation
   workspaces with no GPU fallback;
 - validated CPU/GPU PySCF RKS preparation for pure LDA/GGA all-electron
-  molecules;
+  molecules, with optional scientifically identified RI density fitting;
 - portable read-only references containing ground state, exact DFT grid, AO
   operators, nuclei, atomic anchors/topology, and authenticated fingerprints;
 - transactional immutable `reference.h5` and compiled-source HDF5 I/O;
@@ -115,7 +115,9 @@ aion.spectroscopy
 aion.workflows
 ```
 
-See [configuration_and_schema_contracts.md](docs/configuration_and_schema_contracts.md)
+Start with the [Aion 0.2 user guide](docs/user_guide.md) and the three
+[runnable examples](examples/README.md). See
+[configuration_and_schema_contracts.md](docs/configuration_and_schema_contracts.md)
 for the exact configuration, identity, artifact, observable, and CLI contracts.
 The physics and planned implementation are specified in
 [theory_and_implementation.pdf](docs/theory_and_implementation.pdf) and

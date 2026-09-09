@@ -57,6 +57,33 @@ def test_h2_lih_reference_cpu_gpu_workspace_and_rks_parity(name: str) -> None:
     assert np.allclose(cp.asnumpy(veff_gpu), veff_cpu, rtol=2.0e-9, atol=2.0e-9)
 
 
+def test_density_fitted_reference_reconstructs_on_the_physical_gpu() -> None:
+    import cupy as cp
+
+    from aion.electronic_structure import prepare_pyscf_reference
+
+    base = molecular_config("h2")
+    reference = prepare_pyscf_reference(
+        replace(
+            base,
+            electronic_structure=replace(
+                base.electronic_structure,
+                density_fitting=True,
+                auxiliary_basis="weigend",
+            ),
+        )
+    )
+    cpu = reference.create_workspace(BackendConfig())
+    gpu = reference.create_workspace(BackendConfig(BackendKind.GPU, device_index=0))
+    density_cpu = cpu.require("ground_state.density")
+    density_gpu = gpu.require("ground_state.density")
+    veff_cpu = np.asarray(cpu.electronic_model.get_veff(cpu.electronic_model.mol, density_cpu))
+    veff_gpu = gpu.electronic_model.get_veff(gpu.electronic_model.mol, density_gpu)
+    gpu.backend.assert_resident(veff_gpu, name="density-fitted effective potential")
+    assert gpu.electronic_model.with_df.auxbasis == "weigend"
+    assert np.allclose(cp.asnumpy(veff_gpu), veff_cpu, rtol=2.0e-8, atol=2.0e-8)
+
+
 def test_compiled_source_gpu_residency_and_no_fallback() -> None:
     import cupy as cp
 

@@ -160,6 +160,8 @@ class ElectronicStructureConfig:
     functional: str
     xc_family: XCFamily
     grid_level: int = 3
+    density_fitting: bool = False
+    auxiliary_basis: str | None = None
     scf_energy_tolerance_au: float = 1.0e-10
     scf_max_iterations: int = 100
     spin_treatment: SpinTreatment = SpinTreatment.RESTRICTED
@@ -180,6 +182,18 @@ class ElectronicStructureConfig:
             raise ConfigurationError("electronic_structure.grid_level must be an integer")
         if self.grid_level < 0:
             raise ConfigurationError("electronic_structure.grid_level cannot be negative")
+        if not isinstance(self.density_fitting, bool):
+            raise ConfigurationError("electronic_structure.density_fitting must be a boolean")
+        if self.density_fitting:
+            if not isinstance(self.auxiliary_basis, str) or not self.auxiliary_basis.strip():
+                raise ConfigurationError(
+                    "electronic_structure.auxiliary_basis must be explicit when "
+                    "density fitting is enabled"
+                )
+        elif self.auxiliary_basis is not None:
+            raise ConfigurationError(
+                "electronic_structure.auxiliary_basis is unused when density fitting is disabled"
+            )
         tolerance = finite_float(
             self.scf_energy_tolerance_au,
             "electronic_structure.scf_energy_tolerance_au",
@@ -208,6 +222,8 @@ class ElectronicStructureConfig:
             "functional": self.functional,
             "xc_family": self.xc_family.value,
             "grid_level": self.grid_level,
+            "density_fitting": self.density_fitting,
+            "auxiliary_basis": self.auxiliary_basis,
             "scf_energy_tolerance_au": self.scf_energy_tolerance_au,
             "scf_max_iterations": self.scf_max_iterations,
             "spin_treatment": self.spin_treatment.value,

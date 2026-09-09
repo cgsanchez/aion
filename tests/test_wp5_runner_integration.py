@@ -158,22 +158,32 @@ def test_runner_records_exact_schedules_events_checkpoints_and_status(
         run(build_simulation(_config(reference, output, kind, gauge), reference))
 
 
+@pytest.mark.parametrize(
+    ("kind", "gauge"),
+    (
+        (FormulationKind.BARE_LENGTH_GAUGE, None),
+        (FormulationKind.BARE_VELOCITY_GAUGE, None),
+        (FormulationKind.P0_E1, GaugeRepresentation.LENGTH),
+        (FormulationKind.P0_E1, GaugeRepresentation.VELOCITY),
+    ),
+)
 def test_interruption_restart_event_idempotence_and_stitching_equal_full_run(
     runner_references: dict[str, object],
     tmp_path: Path,
+    kind: FormulationKind,
+    gauge: GaugeRepresentation | None,
 ) -> None:
-    reference = runner_references["lih"]
-    kind = FormulationKind.P0_E1
-    gauge = GaugeRepresentation.VELOCITY
+    reference = runner_references["lih" if kind is FormulationKind.P0_E1 else "h2"]
+    suffix = kind.value if gauge is None else f"{kind.value}-{gauge.value}"
 
-    full_config = _config(reference, tmp_path / "full", kind, gauge)
+    full_config = _config(reference, tmp_path / f"full-{suffix}", kind, gauge)
     full_simulation = build_simulation(full_config, reference)
     definition_id = full_simulation.calculators.definitions["electronic_dipole"].definition_id
     full = run(full_simulation)
 
     interrupted_config = replace(
         full_config,
-        output=replace(full_config.output, directory=tmp_path / "interrupted"),
+        output=replace(full_config.output, directory=tmp_path / f"interrupted-{suffix}"),
     )
     interrupted_simulation = build_simulation(interrupted_config, reference)
     control = RunControl()
@@ -196,14 +206,15 @@ def test_interruption_restart_event_idempotence_and_stitching_equal_full_run(
     checkpoint = load_checkpoint(checkpoint_path)
     assert checkpoint.applied_event_identifiers == frozenset()
 
-    child = resume(checkpoint_path, output=tmp_path / "resumed")
+    resumed_directory = tmp_path / f"resumed-{suffix}"
+    child = resume(checkpoint_path, output=resumed_directory)
     assert child.parent_run_id == parent.run_id
     assert child.parent_checkpoint_sha256 in parent.checkpoint_sha256
     assert child.event_steps == (2,)
-    assert load_checkpoint(tmp_path / "resumed/checkpoint_00000002.h5").applied_event_identifiers
+    assert load_checkpoint(resumed_directory / "checkpoint_00000002.h5").applied_event_identifiers
 
-    full_final = load_checkpoint(tmp_path / "full/checkpoint_00000004.h5")
-    child_final = load_checkpoint(tmp_path / "resumed/checkpoint_00000004.h5")
+    full_final = load_checkpoint(full_config.output.directory / "checkpoint_00000004.h5")
+    child_final = load_checkpoint(resumed_directory / "checkpoint_00000004.h5")
     assert np.allclose(child_final.coefficients, full_final.coefficients, atol=2.0e-12)
     assert np.allclose(
         (child_final.coefficients * child_final.occupations[None, :])
@@ -224,7 +235,7 @@ def test_interruption_restart_event_idempotence_and_stitching_equal_full_run(
 
     exported = export_trajectory_csv(
         full,
-        tmp_path / "csv",
+        tmp_path / f"csv-{suffix}",
         observable_ids=(definition_id,),
     )
     assert [path.name for path in exported] == [

@@ -230,3 +230,5 @@ def test_invalid_transform_and_ambiguous_resonance_policies_fail() -> None:
             brightness_threshold=0.0,
             root_index=0,
         )
+    with pytest.raises(SpectroscopyError, match="max_iterations"):
+        CasidaConfig(nstates=1, max_iterations=0)

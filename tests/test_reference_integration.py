@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import h5py
@@ -114,6 +115,27 @@ def test_reference_transactional_roundtrip_rebuild_and_tamper_detection(
         handle["reference/operators/kinetic"][0, 0] += 1.0e-6
     with pytest.raises(ReferencePreparationError, match="fingerprint mismatch"):
         load_reference_data(path)
+
+
+def test_density_fitted_reference_round_trip_reconstructs_the_declared_auxiliary_basis(
+    tmp_path: Path,
+) -> None:
+    base = molecular_config("h2", tmp_path / "density-fitted.reference.h5")
+    config = replace(
+        base,
+        electronic_structure=replace(
+            base.electronic_structure,
+            density_fitting=True,
+            auxiliary_basis="weigend",
+        ),
+    )
+    reference = prepare_pyscf_reference(config)
+    reference.save()
+    loaded = load_reference_data(config.output.artifact_path)
+    model = loaded.create_workspace(BackendConfig()).electronic_model
+    assert model.with_df.auxbasis == "weigend"
+    assert loaded.config.electronic_structure.density_fitting
+    assert loaded.config.electronic_structure.auxiliary_basis == "weigend"
 
 
 def test_declared_functional_family_and_hybrids_fail_before_scf() -> None:

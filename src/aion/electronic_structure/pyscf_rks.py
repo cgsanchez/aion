@@ -76,6 +76,10 @@ def _build_cpu_mean_field(config: ReferenceConfig, molecule: Any) -> Any:
     from pyscf import dft
 
     mean_field = dft.RKS(molecule)
+    if config.electronic_structure.density_fitting:
+        auxiliary_basis = config.electronic_structure.auxiliary_basis
+        assert auxiliary_basis is not None
+        mean_field = mean_field.density_fit(auxbasis=auxiliary_basis)
     mean_field.xc = config.electronic_structure.functional
     mean_field.grids.level = config.electronic_structure.grid_level
     mean_field.conv_tol = config.electronic_structure.scf_energy_tolerance_au

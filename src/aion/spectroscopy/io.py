@@ -213,6 +213,7 @@ def load_casida_result(path: str | Path) -> tuple[CasidaResult, ResonanceSelecti
         config = CasidaConfig(
             nstates=config_data["nstates"],
             convergence_tolerance=config_data["convergence_tolerance"],
+            max_iterations=config_data["max_iterations"],
             singlet=config_data["singlet"],
         )
         if config.as_mapping() != config_data:

@@ -167,6 +167,8 @@ def _parse_reference(root: Mapping[str, object]) -> ReferenceConfig:
             "functional",
             "xc_family",
             "grid_level",
+            "density_fitting",
+            "auxiliary_basis",
             "scf_energy_tolerance_au",
             "scf_max_iterations",
             "spin_treatment",
@@ -184,6 +186,18 @@ def _parse_reference(root: Mapping[str, object]) -> ReferenceConfig:
         ),
         grid_level=_integer(
             electronic_data.get("grid_level", 3), "electronic_structure.grid_level"
+        ),
+        density_fitting=_boolean(
+            electronic_data.get("density_fitting", False),
+            "electronic_structure.density_fitting",
+        ),
+        auxiliary_basis=(
+            None
+            if electronic_data.get("auxiliary_basis") is None
+            else _string(
+                electronic_data["auxiliary_basis"],
+                "electronic_structure.auxiliary_basis",
+            )
         ),
         scf_energy_tolerance_au=_number(
             electronic_data.get("scf_energy_tolerance_au", 1.0e-10),

@@ -1151,7 +1151,10 @@ are respectively
 \end{equation}
 The implementation calls PySCF's restricted real Casida-TDDFT solver on a
 CPU mean field reconstructed from the authenticated prepared reference; it
-does not rerun SCF. Every returned root stores \(\Omega_n\), \(f_n\),
+does not rerun SCF. The requested root count, convergence tolerance, and
+maximum solver-iteration count are explicit numerical configuration and are
+stored with the result rather than inherited silently from PySCF defaults.
+Every returned root stores \(\Omega_n\), \(f_n\),
 \(\vect d_n\), the associated unit direction (zero for a dark transition),
 and its convergence flag. Resonance selection is either an explicit zero-based
 root or the lowest-energy root satisfying a stored threshold on
@@ -1279,6 +1282,10 @@ trajectory = load_trajectory(path)
 
 One prepared reference is reused by all formulations in a gauge comparison,
 preventing repeated SCF work and guaranteeing a common initial problem.
+Optional RI density fitting is an explicit reference choice with a required
+auxiliary-basis name. It enters the scientific identity and is reconstructed
+for each live DFT build; it is never selected silently as a backend
+optimization because it changes the approximated Coulomb functional.
 References, configurations, operator bundles, sources, and formulation
 definitions are immutable. Backend caches and preallocated scratch arrays
 belong to a mutable \code{Workspace}; two simulations never share state or

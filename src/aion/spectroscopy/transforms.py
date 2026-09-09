@@ -218,9 +218,7 @@ def kick_spectrum_from_trajectory(
     dipole_id = _unique_definition(source_trajectory, "dipole.electronic.", dipole_definition_id)
     current_id = _unique_definition(source_trajectory, "current.primary.", current_definition_id)
     with h5py.File(source_trajectory.path, "r") as handle:
-        source_definition = json.loads(
-            bytes(handle["source/definition_json"][()]).decode("utf-8")
-        )
+        source_definition = json.loads(bytes(handle["source/definition_json"][()]).decode("utf-8"))
         if source_definition.get("kind") != "zero_uniform_source":
             raise SpectroscopyError(
                 "linear kick spectroscopy requires a zero continuous electromagnetic source"

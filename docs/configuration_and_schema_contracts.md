@@ -2,7 +2,7 @@
 
 Status: contracts through reusable execution, observation, checkpoint/restart,
 monitoring, and spectroscopy are implemented by WP1--WP6 for Aion
-`0.2.0.dev6`.
+`0.2.0.dev7`.
 
 ## 1. Authority and strictness
 
@@ -41,15 +41,16 @@ A resolved reference document contains:
 - `molecule`: fixed atoms in bohr, integer charge, zero spin, and an explicit
   electromagnetic origin in bohr;
 - `electronic_structure`: basis, functional, declared LDA/GGA family, grid,
-  SCF tolerance and iteration limit, restricted spin, and an all-electron
-  local nuclear model;
+  explicit density-fitting flag and auxiliary basis, SCF tolerance and
+  iteration limit, restricted spin, and an all-electron local nuclear model;
 - `backend`: CPU/GPU provenance and mandatory float64/complex128 precision;
 - `output.artifact_path`; and
 - optional human/execution metadata.
 
 Coordinates are preserved exactly; there is no implicit recentering. The
 reference scientific identity includes geometry, charge, spin, EM origin,
-electronic-structure settings, precision, and construction schema. It excludes
+electronic-structure settings (including density fitting), precision, and
+construction schema. It excludes
 the output path, label, timestamp, host, preparation backend kind, and GPU
 device index. The preparation backend is provenance unless it changes stored
 scientific content; the later reference fingerprint authenticates that actual
@@ -146,7 +147,8 @@ are implemented by WP5. Dense state arrays use gzip plus shuffle; small
 scalar/vector streams remain uncompressed.
 
 Casida artifacts store the prepared-reference fingerprint, optional reference
-artifact path and checksum, solver/version/configuration, every excitation
+artifact path and checksum, solver/version/configuration (including root
+count, convergence tolerance, and maximum iterations), every excitation
 energy, length-form oscillator strength, transition dipole and direction,
 convergence flag, and optional polarization-resolved resonance selection.
 Kick-spectrum artifacts store an exact trajectory or imported-parent checksum,

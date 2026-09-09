@@ -93,6 +93,23 @@ def test_reference_resolved_toml_round_trip_is_identical() -> None:
     assert second.scientific_id == first.scientific_id
 
 
+def test_density_fitting_requires_an_explicit_auxiliary_basis() -> None:
+    with pytest.raises(ConfigurationError, match="auxiliary_basis must be explicit"):
+        ElectronicStructureConfig(
+            basis="sto-3g",
+            functional="pbe",
+            xc_family=XCFamily.GGA,
+            density_fitting=True,
+        )
+    with pytest.raises(ConfigurationError, match="unused"):
+        ElectronicStructureConfig(
+            basis="sto-3g",
+            functional="pbe",
+            xc_family=XCFamily.GGA,
+            auxiliary_basis="weigend",
+        )
+
+
 def test_simulation_resolved_toml_round_trip_is_identical() -> None:
     original = simulation_config()
     first = loads_config(dumps_config(original))
