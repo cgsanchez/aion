@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0 complete; MB1 is the next work package
+Status: MB0--MB1 complete; MB2 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -726,6 +726,17 @@ legacy-evidence mapping, and frozen-GGA boundary. The oriented two-centre
 fixture in the contract checks all phase and anchored-vector signs against the
 current P0 row-minus-column endpoint convention.
 
-Proceed with MB1 by implementing the backend-neutral magnetic geometry and
-immutable value types, followed by fast NumPy tests and physical-CUDA CuPy
-parity/residency tests.
+MB1 is complete. `aion.electromagnetism.magnetic` provides immutable physical
+field and affine-gauge values, explicit tesla conversion, exact affine path
+integrals and endpoint derivatives, AO-pair geometry, endpoint links,
+triangle fluxes/phases/exact and B1/B2 factors, anchored curvature vectors,
+and analytic gauge-difference potentials. Ten fast NumPy tests cover the
+oriented fixture, reversals, same-anchor and bond-parallel identities, gauge
+relations, rotations, units, and invalid inputs. The physical-CUDA test passes
+and verifies CuPy residency and NumPy/CuPy parity for every geometry family.
+The complete fast suite passes with 82 tests; Ruff and strict mypy pass.
+
+Proceed with MB2 by adding reusable chunked AO value/first-derivative
+quadrature for authenticated stored and generated unpruned grids, with CPU
+and physical-GPU implementations and reconstruction tests that do not rerun
+SCF.
