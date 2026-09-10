@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB1 complete; MB2 is the next work package
+Status: MB0--MB2 complete; MB3 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -736,7 +736,19 @@ relations, rotations, units, and invalid inputs. The physical-CUDA test passes
 and verifies CuPy residency and NumPy/CuPy parity for every geometry family.
 The complete fast suite passes with 82 tests; Ruff and strict mypy pass.
 
-Proceed with MB2 by adding reusable chunked AO value/first-derivative
-quadrature for authenticated stored and generated unpruned grids, with CPU
-and physical-GPU implementations and reconstruction tests that do not rerun
-SCF.
+MB2 is complete. `aion.electronic_structure.ao_quadrature` reconstructs an
+authenticated PySCF/GPU4PySCF model without SCF and yields fresh backend-
+resident blocks with common `values (nblock,nao)` and `gradients
+(3,nblock,nao)` layouts. It supports exact stored-reference grids and
+fingerprinted unpruned qualification grids, explicit block and memory
+policies, dependency/thread provenance, and repeatable iteration. H2/LiH CPU
+tests recover analytic overlap and canonical momentum at the measured stored-
+grid floor and below `1e-7` on an unpruned level-4 grid. The full serial CPU
+integration gate passes with 47 tests. Physical-GPU tests pass and prove that
+GPU4PySCF—not CPU AO evaluation—produces resident CuPy values and gradients
+matching PySCF.
+
+Proceed with MB3 by implementing cancellation-aware exact/B1/B2 overlap,
+kinetic, and nuclear-attraction contractions over the reusable AO block
+stream, preserving every required kinetic sector and both independent exact
+assembly routes.

@@ -7,6 +7,16 @@ from aion.electronic_structure.adiabatic import (
     expectation,
     hermitian_part,
 )
+from aion.electronic_structure.ao_quadrature import (
+    AOBlock,
+    AOEvaluatorProvenance,
+    AOGridKind,
+    AOGridPolicy,
+    AOQuadrature,
+    AOQuadratureGrid,
+    estimate_ao_block_bytes,
+    prepare_ao_quadrature,
+)
 from aion.electronic_structure.data import (
     AnchorTopologyBundle,
     CoreOperatorBundle,
@@ -27,6 +37,12 @@ from aion.electronic_structure.pyscf_rks import (
 from aion.electronic_structure.reference_io import load_reference_data, save_reference
 
 __all__ = [
+    "AOBlock",
+    "AOEvaluatorProvenance",
+    "AOGridKind",
+    "AOGridPolicy",
+    "AOQuadrature",
+    "AOQuadratureGrid",
     "AdiabaticPureRKS",
     "AnchorTopologyBundle",
     "CoreOperatorBundle",
@@ -40,10 +56,12 @@ __all__ = [
     "QuadratureGrid",
     "build_e1_operators",
     "create_reference_workspace",
+    "estimate_ao_block_bytes",
     "expectation",
     "hermitian_part",
     "load_reference_data",
     "momentum_grid_residual",
+    "prepare_ao_quadrature",
     "prepare_pyscf_reference",
     "reconstruct_mean_field",
     "save_reference",
