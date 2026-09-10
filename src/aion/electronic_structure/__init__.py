@@ -47,6 +47,13 @@ from aion.electronic_structure.pyscf_rks import (
     validate_reference_runtime,
 )
 from aion.electronic_structure.reference_io import load_reference_data, save_reference
+from aion.electronic_structure.spatial_connection import (
+    MagneticSpatialConnectionResult,
+    SpatialConnectionDirectOracle,
+    SpatialConnectionHierarchy,
+    estimate_spatial_connection_block_bytes,
+    evaluate_magnetic_spatial_connections,
+)
 
 __all__ = [
     "AOBlock",
@@ -68,16 +75,21 @@ __all__ = [
     "KineticExactSectors",
     "KineticMagneticHierarchy",
     "MagneticOneElectronResult",
+    "MagneticSpatialConnectionResult",
     "NuclearData",
     "OneElectronLowerMatrices",
     "PreparedReference",
     "QuadratureGrid",
     "ScalarMagneticHierarchy",
+    "SpatialConnectionDirectOracle",
+    "SpatialConnectionHierarchy",
     "build_e1_operators",
     "create_reference_workspace",
     "estimate_ao_block_bytes",
     "estimate_magnetic_block_bytes",
+    "estimate_spatial_connection_block_bytes",
     "evaluate_magnetic_one_electron_matrices",
+    "evaluate_magnetic_spatial_connections",
     "expectation",
     "hermitian_part",
     "load_reference_data",

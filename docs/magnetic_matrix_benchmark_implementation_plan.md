@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB3 complete; MB4 is the next work package
+Status: MB0--MB4 complete (Milestone A); MB5 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -766,6 +766,22 @@ pass with 82 fast and 55 serial integration tests. All three MB1--MB3 physical-
 GPU tests pass with CuPy residency and CPU/GPU parity; Ruff and strict mypy
 pass.
 
-Proceed with MB4 by adding the independently contracted projected spatial-
-connection hierarchy and its direct covariant-derivative oracle, preserving
-Cartesian anti-Hermiticity and the separate `F`/`C` and `F2`/`FC` terms.
+MB4 is complete. `aion.electronic_structure.spatial_connection` independently
+contracts the Cartesian lower-index projected spatial connection; it does not
+differentiate or reuse an MB3 result. Exact, B1, and B2 output retains `F`,
+`C`, `F2`, and `FC` components, raw-grid and analytic-momentum-corrected
+matrices, exact-link lower views, an optional direct covariant-derivative
+oracle, and the independent E1 `C` closure.
+
+Tests establish anti-Hermiticity for every component and truncation,
+`omega_spatial(0)=i*p/hbar`, E1 closure on a level-4 unpruned LiH grid,
+direct/factorized agreement, reversal parity, finite-difference coefficients,
+B1/B2 remainder slopes of two/three, block invariance, and rigid-rotation
+covariance. The full gates pass with 82 fast, 60 serial integration, and four
+physical-GPU tests, with all GPU outputs CuPy-resident and CPU/GPU-parity
+qualified. Ruff and strict mypy pass. MB0--MB4 therefore satisfy Milestone A.
+
+Proceed with MB5 by defining the pointwise multiplicative local-potential
+provider protocol and routing the already qualified nuclear-attraction case
+through it. Frozen Hartree and LDA XC remain optional follow-on providers;
+GGA remains rejected pending a separately reviewed weak-form derivation.
