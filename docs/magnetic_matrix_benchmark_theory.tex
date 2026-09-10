@@ -1,0 +1,485 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\Ree}{\operatorname{Re}}
+\newcommand{\Immi}{\operatorname{Im}}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\norm}[1]{\left\lVert #1\right\rVert}
+
+\title{Initial Magnetic-Hierarchy Matrix-Element Benchmarks for Aion}
+\author{}
+\date{September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note proposes an initial validation program for extending Aion beyond the presently implemented P0 and E1 levels.  The immediate objective is not to modify the real-time propagator, but to use the existing fixed-nucleus Gaussian-AO reference and quadrature infrastructure as a static matrix-element laboratory.  For a magnetic field that is uniform on the scale of the molecule, or at least on the scale of each AO pair, the exact Wilson-dressed overlap, local-potential, kinetic, and projected-spatial-connection matrix elements can be evaluated numerically on the same grid used by Aion.  Their first- and second-order magnetic expansions can then be compared directly with the full Wilson expressions.  This provides quantitative evidence for the relative importance of the triangular-flux factor $F^B$ and the local curvature vectors $\vect C_\mu$, and therefore for deciding which pieces of the B1/B2 hierarchy merit implementation in the dynamical theory.
+\end{abstract}
+
+\section{Purpose and scope}
+
+Aion presently implements the covariant P0 and P0+E1 formulations for finite, fixed-nucleus, all-electron molecules in nonorthogonal Gaussian AO bases, with adiabatic LDA/GGA Kohn--Sham dynamics and spatially uniform electric fields.  The next step considered here is deliberately narrower than a new propagation model:
+
+\begin{quote}
+\emph{At a fixed electronic reference, measure the actual size and convergence of the Wilson magnetic hierarchy at the matrix-element level before adding new magnetic terms to the equation of motion.}
+\end{quote}
+
+The first targets are
+\begin{equation}
+S,\qquad T,\qquad V_{\rm loc},\qquad \vect\omega,
+\end{equation}
+where $V_{\rm loc}$ denotes any multiplicative local one-electron potential and $\vect\omega$ is the lower-index projected spatial connection.  In an initial calculation $V_{\rm loc}$ should be frozen at the zero-field reference.  This separates the explicit Wilson geometry from the separate problem of self-consistent magnetic density response.
+
+The proposed benchmark should therefore be implemented as an observation/analysis layer.  It should not initially alter the SCF reference, the P0/E1 formulations, or the real-time propagation algorithm.
+
+\section{Geometry for a uniform magnetic field}
+
+Let AO $\mu$ be anchored at $\vect R_\mu$ and AO $\nu$ at $\vect R_\nu$.  Define
+\begin{equation}
+\vect R_{\mu\nu}=\frac{\vect R_\mu+\vect R_\nu}{2},
+\qquad
+\Delta\vect R_{\mu\nu}=\vect R_\mu-\vect R_\nu,
+\qquad
+\vect\xi=\vect r-\vect R_{\mu\nu}.
+\end{equation}
+The center-to-center Wilson factor is denoted $\Theta_{\mu\nu}$.  It should be kept exact and factored out of all local matrix-element comparisons.  The remaining finite-spread magnetic geometry is described by
+\begin{equation}
+F^B_{\mu\nu}(\vect r)=\exp\!\left[\ii\phi_{\mu\nu}(\vect r)\right],
+\end{equation}
+with
+\begin{equation}
+\phi_{\mu\nu}(\vect r)
+=\frac{q}{2\hbar}\,
+\vect B\cdot\left(\vect\xi\times\Delta\vect R_{\mu\nu}\right),
+\label{eq:phi}
+\end{equation}
+and by the local radial-gauge curvature vector
+\begin{equation}
+\vect C_\mu(\vect r)
+=\frac12(\vect r-\vect R_\mu)\times\vect B.
+\label{eq:C}
+\end{equation}
+For a field that is uniform over the AO-pair region, Eq.~\eqref{eq:C} is exact.  The triangular factor admits the expansion
+\begin{equation}
+F^B_{\mu\nu}
+=1+\ii\phi_{\mu\nu}
+-\frac12\phi_{\mu\nu}^2
++O(B^3).
+\label{eq:Fexp}
+\end{equation}
+Since $\phi=O(B)$ and $\vect C=O(B)$, the magnetic order of every contribution is explicit.
+
+The benchmark should focus on the ``thick-link'' matrices after removal of $\Theta$:
+\begin{equation}
+M_{\mu\nu}(B)=\Theta_{\mu\nu}(B)\,\overline M_{\mu\nu}(B).
+\end{equation}
+This prevents the exact, potentially large, center-network Peierls phase from obscuring the much smaller finite-orbital corrections that are being assessed.
+
+\section{Overlap and general local scalar operators}
+
+For any multiplicative local scalar operator $O(\vect r)$,
+\begin{equation}
+\overline O_{\mu\nu}^{\rm exact}(B)
+=\int \dd^3r\,
+ g_\mu^*(\vect r)\,
+ O(\vect r)\,
+ e^{\ii\phi_{\mu\nu}(\vect r)}
+ g_\nu(\vect r).
+\label{eq:localexact}
+\end{equation}
+The overlap is obtained by setting $O=1$.  Nuclear attraction, a frozen Hartree potential, and a frozen local LDA/GGA exchange--correlation potential all have this same structure.
+
+Define
+\begin{equation}
+\rho_O^{\mu\nu}(\vect r)
+=g_\mu^*(\vect r)O(\vect r)g_\nu(\vect r).
+\end{equation}
+Then the hierarchy through second order is
+\begin{align}
+\overline O^{(0)}_{\mu\nu}
+&=\int \rho_O^{\mu\nu}(\vect r)\,\dd^3r,\\
+\overline O^{(1)}_{\mu\nu}
+&=\int \ii\phi_{\mu\nu}(\vect r)\,
+\rho_O^{\mu\nu}(\vect r)\,\dd^3r,\\
+\overline O^{(2)}_{\mu\nu}
+&=-\frac12\int \phi_{\mu\nu}^2(\vect r)\,
+\rho_O^{\mu\nu}(\vect r)\,\dd^3r.
+\end{align}
+Thus the B1 and B2 approximations are
+\begin{align}
+\overline O^{\rm B1}&=\overline O^{(0)}+\overline O^{(1)},\\
+\overline O^{\rm B2}&=\overline O^{(0)}+\overline O^{(1)}+\overline O^{(2)}.
+\end{align}
+
+For the overlap, the first-order term provides an especially important validation because it is already closed by the E1 projected-position matrix.  With
+\begin{equation}
+\vect d_{\mu\nu}
+=q\int \dd^3r\,
+\vect\xi\,g_\mu^*(\vect r)g_\nu(\vect r),
+\end{equation}
+one must recover
+\begin{equation}
+\boxed{
+\overline S^{(1)}_{\mu\nu}
+=\frac{\ii}{2\hbar}
+\vect B\cdot
+\left(\vect d_{\mu\nu}\times\Delta\vect R_{\mu\nu}\right).}
+\label{eq:S1dip}
+\end{equation}
+This should be one of the first unit-level checks because Aion already constructs $\vect d_{\mu\nu}$ for E1.
+
+\section{Kinetic-energy hierarchy}
+
+The Wilson-dressed kinetic matrix is qualitatively richer because the magnetic field enters both through $F^B$ and through the vectors $\vect C_\mu$ and $\vect C_\nu$:
+\begin{equation}
+\overline T_{\mu\nu}^{\rm exact}(B)
+=\frac{1}{2m}\int \dd^3r\,
+ e^{\ii\phi_{\mu\nu}}
+ \left[(\vect p+q\vect C_\mu)g_\mu\right]^*
+ \cdot
+ \left[(\vect p+q\vect C_\nu)g_\nu\right].
+\label{eq:Texact}
+\end{equation}
+Define
+\begin{align}
+K_0^{\mu\nu}
+&=(\vect p g_\mu)^*\cdot(\vect p g_\nu),\\
+K_C^{\mu\nu}
+&=q\left[
+(\vect C_\mu g_\mu)^*\cdot\vect p g_\nu
++(\vect p g_\mu)^*\cdot\vect C_\nu g_\nu
+\right],\\
+K_{CC}^{\mu\nu}
+&=q^2\,\vect C_\mu\cdot\vect C_\nu\,
+ g_\mu^*g_\nu.
+\end{align}
+Then $K_0=O(B^0)$, $K_C=O(B)$, and $K_{CC}=O(B^2)$, so Eq.~\eqref{eq:Texact} gives
+\begin{align}
+\overline T^{(0)}_{\mu\nu}
+&=\frac{1}{2m}\int K_0^{\mu\nu}\,\dd^3r,
+\label{eq:T0}\\
+\overline T^{(1)}_{\mu\nu}
+&=\frac{1}{2m}\int
+\left(\ii\phi K_0^{\mu\nu}+K_C^{\mu\nu}\right)\dd^3r,
+\label{eq:T1}\\
+\overline T^{(2)}_{\mu\nu}
+&=\frac{1}{2m}\int
+\left[-\frac12\phi^2K_0^{\mu\nu}
++\ii\phi K_C^{\mu\nu}
++K_{CC}^{\mu\nu}\right]\dd^3r.
+\label{eq:T2}
+\end{align}
+It is useful to retain the decomposition
+\begin{equation}
+\boxed{
+T^{(1)}=T_F^{(1)}+T_C^{(1)},
+}
+\end{equation}
+and
+\begin{equation}
+\boxed{
+T^{(2)}=T_{F^2}^{(2)}+T_{FC}^{(2)}+T_{C^2}^{(2)}.
+}
+\end{equation}
+The main purpose of the benchmark is to measure these terms separately.  In particular, the question whether one may safely approximate $F^B\simeq1$ while retaining the simpler $C$ contributions should be answered numerically from these decomposed matrices rather than from dimensional estimates alone.
+
+Onsite matrix elements provide a clean special case.  If $\vect R_\mu=\vect R_\nu$, then
+\begin{equation}
+\Delta\vect R_{\mu\nu}=0,
+\qquad
+\phi_{\mu\nu}=0,
+\qquad
+F^B_{\mu\nu}=1
+\end{equation}
+exactly, whereas $\vect C_\mu$ remains nonzero.  All onsite orbital magnetic contributions therefore isolate the $C$ hierarchy automatically.
+
+\section{Projected spatial connection}
+
+The lower-index projected spatial connection can be benchmarked at the same time because it requires only AO values and first derivatives.  In its manifestly anti-Hermitian form,
+\begin{equation}
+\overline{\vect\omega}_{\mu\nu}^{\rm exact}
+=\int \dd^3r\,e^{\ii\phi_{\mu\nu}}
+\left[
+\frac12 g_\mu^*\overleftrightarrow{\vect\nabla}g_\nu
++\frac{\ii q}{2\hbar}
+(\vect C_\mu+\vect C_\nu)g_\mu^*g_\nu
+\right].
+\label{eq:omegaexact}
+\end{equation}
+Define
+\begin{align}
+\vect D_0^{\mu\nu}
+&=\frac12 g_\mu^*\overleftrightarrow{\vect\nabla}g_\nu,\\
+\vect D_C^{\mu\nu}
+&=\frac{\ii q}{2\hbar}(\vect C_\mu+\vect C_\nu)g_\mu^*g_\nu.
+\end{align}
+Since $\vect D_C=O(B)$,
+\begin{align}
+\overline{\vect\omega}^{(0)}_{\mu\nu}
+&=\int \vect D_0^{\mu\nu}\,\dd^3r,\\
+\overline{\vect\omega}^{(1)}_{\mu\nu}
+&=\int\left(\ii\phi\vect D_0^{\mu\nu}+\vect D_C^{\mu\nu}\right)\dd^3r,\\
+\overline{\vect\omega}^{(2)}_{\mu\nu}
+&=\int\left(-\frac12\phi^2\vect D_0^{\mu\nu}
++\ii\phi\vect D_C^{\mu\nu}\right)\dd^3r.
+\end{align}
+There is no $C^2$ term in the spatial connection.
+
+For uniform $\vect B$,
+\begin{equation}
+\vect C_\mu+\vect C_\nu
+=(\vect r-\vect R_{\mu\nu})\times\vect B,
+\end{equation}
+so the explicit $C$ part of B1 is closed by the same E1 dipole matrix:
+\begin{equation}
+\boxed{
+\overline{\vect\omega}^{(1,C)}_{\mu\nu}
+=\frac{\ii}{2\hbar}\,
+\vect d_{\mu\nu}\times\vect B.}
+\label{eq:omegaCdip}
+\end{equation}
+Equation~\eqref{eq:omegaCdip}, together with Eq.~\eqref{eq:S1dip}, provides a second essentially parameter-free validation against quantities already present in Aion.
+
+\section{Numerically exact reference from the existing molecular grid}
+
+The most direct initial implementation is to use the same atom-centered quadrature grid already stored in the Aion reference.  At each grid point $\vect r_p$, the required information through B2 is only
+\begin{equation}
+g_\mu(\vect r_p),
+\qquad
+\vect\nabla g_\mu(\vect r_p),
+\end{equation}
+together with the grid weights and the local potential values.  No AO second derivatives are required for the overlap, local scalar potentials, kinetic energy in the gradient form, or projected spatial connection considered here.
+
+For each AO pair and field one evaluates
+\begin{equation}
+\phi_{\mu\nu,p},
+\qquad
+F_{\mu\nu,p}=e^{\ii\phi_{\mu\nu,p}},
+\qquad
+\vect C_{\mu,p},
+\qquad
+\vect C_{\nu,p},
+\end{equation}
+and performs the same quadrature contractions for the exact, B1, and B2 expressions.  The word ``exact'' in this benchmark means
+\begin{quote}
+exact with respect to the uniform-$B$ Wilson factors $F^B$ and $\vect C$ for the specified finite Gaussian basis, up to the numerical quadrature error of the chosen grid.
+\end{quote}
+It does not mean exact in the continuum-basis limit, nor does it include self-consistent magnetic relaxation of the Kohn--Sham potential.
+
+This numerical route is attractive initially because exact, B1, and B2 use precisely the same AO values, derivatives, grid points, and weights.  Only the field-dependent factor in the integrand changes.  This makes attribution of truncation errors unusually clean.
+
+\section{Use analytic zero-field matrices as baselines}
+
+The DFT quadrature grid is optimized for density-functional integration, not specifically for reproducing every analytic Gaussian one-electron integral.  Before interpreting small magnetic corrections, the zero-field numerical contractions should therefore be compared with the corresponding analytic PySCF matrices.
+
+A numerically more stable construction is to use
+\begin{equation}
+M(B)=M^{\rm analytic}(0)+\delta M^{\rm grid}(B),
+\end{equation}
+where the grid is asked only to evaluate the magnetic correction.
+
+For overlap or a local scalar operator,
+\begin{equation}
+\delta\overline O^{\rm exact}_{\mu\nu}(B)
+=\int \dd^3r\,
+\left(e^{\ii\phi_{\mu\nu}}-1\right)
+\rho_O^{\mu\nu}(\vect r).
+\label{eq:deltaO}
+\end{equation}
+For the kinetic energy,
+\begin{align}
+\delta\overline T^{\rm exact}_{\mu\nu}(B)
+=\frac{1}{2m}\int \dd^3r\,\Big[
+&\left(e^{\ii\phi}-1\right)K_0
+\nonumber\\
+&+e^{\ii\phi}\left(K_C+K_{CC}\right)
+\Big].
+\label{eq:deltaT}
+\end{align}
+This subtraction is particularly useful for nuclear attraction, where the large zero-field matrix element contains nuclear Coulomb singularities while the magnetic correction is much smoother.  The same principle may be used for all operators in order to reduce cancellation between a large baseline and a very small field-induced correction.
+
+\section{Frozen-potential first stage}
+
+The first benchmark should not mix explicit Wilson dressing with self-consistent density response.  Starting from the converged zero-field Aion reference, one should therefore examine separately
+\begin{equation}
+S,\qquad T,\qquad V_{\rm eN},
+\end{equation}
+and, if desired,
+\begin{equation}
+V_H[n_0],\qquad V_{\rm xc}[n_0]
+\end{equation}
+as frozen multiplicative potentials.
+
+For LDA/GGA, the frozen Hartree and XC matrix elements obey the same $F^B$ hierarchy as any other local scalar operator.  This stage answers a purely geometrical question: how large are the finite-spread magnetic corrections for the Gaussian reference actually used by Aion?
+
+Only after those corrections are understood should one introduce the additional effect
+\begin{equation}
+\delta n(B)\longrightarrow
+\delta V_H[n(B)]+\delta V_{\rm xc}[n(B)],
+\end{equation}
+which is a distinct self-consistency problem.
+
+\section{Validation identities}
+
+The benchmark should be overconstrained by symmetry and independent coefficient extraction.
+
+\subsection{Field-reversal symmetry}
+For the present real, spinless Gaussian AO reference,
+\begin{equation}
+\overline M(-\vect B)=\overline M(\vect B)^*
+\end{equation}
+for $S$, $T$, and real local scalar potentials.  Consequently, the linear correction should be purely imaginary and antisymmetric, while the quadratic correction should be real and symmetric:
+\begin{align}
+M^{(1)\dagger}&=M^{(1)},
+& M^{(1)*}&=-M^{(1)},\\
+M^{(2)\dagger}&=M^{(2)},
+& M^{(2)*}&=M^{(2)}.
+\end{align}
+The corresponding anti-Hermiticity condition should be checked for the spatial connection.
+
+\subsection{Independent finite-difference extraction of B1 and B2}
+Let
+\begin{equation}
+\vect B=\lambda\,\widehat{\vect B}
+\end{equation}
+and write
+\begin{equation}
+M(\lambda)=M_0+\lambda M_1+\lambda^2M_2+O(\lambda^3).
+\end{equation}
+The full numerical Wilson integrals provide independent estimates
+\begin{align}
+M_1^{\rm FD}
+&=\frac{M(+\lambda)-M(-\lambda)}{2\lambda}+O(\lambda^2),\\
+M_2^{\rm FD}
+&=\frac{M(+\lambda)+M(-\lambda)-2M(0)}{2\lambda^2}+O(\lambda^2).
+\end{align}
+These should agree with the directly integrated B1 and B2 expressions over a range of sufficiently small $\lambda$.
+
+\subsection{Dipole closure checks}
+The already implemented E1 central dipoles should reproduce both
+\begin{equation}
+S^{(1)}_{\mu\nu}
+=\frac{\ii}{2\hbar}\vect B\cdot
+\left(\vect d_{\mu\nu}\times\Delta\vect R_{\mu\nu}\right)
+\end{equation}
+and
+\begin{equation}
+\vect\omega^{(1,C)}_{\mu\nu}
+=\frac{\ii}{2\hbar}\vect d_{\mu\nu}\times\vect B.
+\end{equation}
+These identities connect the new magnetic benchmark directly to an existing and already validated Aion quantity.
+
+\subsection{Geometric isolation tests}
+For a diatomic molecule such as H$_2$, choosing
+\begin{equation}
+\vect B\parallel\Delta\vect R
+\end{equation}
+for the bond implies
+\begin{equation}
+\phi_{\mu\nu}(\vect r)=0
+\end{equation}
+for every AO pair whose anchors are on the two nuclei.  Thus $F^B=1$ exactly on that bond while $\vect C$ remains nonzero.  This provides an unusually clean numerical test of the $C$ terms.  A perpendicular field turns on the $F$ hierarchy and gives the complementary comparison.
+
+\section{Quantities to report}
+
+For each selected field magnitude and orientation, the benchmark should preserve the decomposition rather than only the total dressed matrix.  At minimum, it should report
+\begin{align}
+&S^{(0)},\quad S^{(1)},\quad S^{(2)},\quad S^{\rm exact},\\
+&T^{(0)},\quad T_F^{(1)},\quad T_C^{(1)},\quad
+T_{F^2}^{(2)},\quad T_{FC}^{(2)},\quad T_{C^2}^{(2)},\quad T^{\rm exact},\\
+&V_{\rm loc}^{(0)},\quad V_{\rm loc}^{(1)},\quad
+V_{\rm loc}^{(2)},\quad V_{\rm loc}^{\rm exact},\\
+&\vect\omega^{(0)},\quad \vect\omega_F^{(1)},\quad
+\vect\omega_C^{(1)},\quad
+\vect\omega_{F^2}^{(2)},\quad
+\vect\omega_{FC}^{(2)},\quad
+\vect\omega^{\rm exact}.
+\end{align}
+
+Useful global measures include
+\begin{equation}
+\frac{\norm{M^{(1)}}_F}{\norm{M^{(0)}}_F},
+\qquad
+\frac{\norm{M^{(2)}}_F}{\norm{M^{(0)}}_F},
+\end{equation}
+when the denominator is meaningful, and the actual truncation errors
+\begin{equation}
+\frac{\norm{M^{\rm exact}-M^{\rm B1}}_F}{\norm{M^{\rm exact}}_F},
+\qquad
+\frac{\norm{M^{\rm exact}-M^{\rm B2}}_F}{\norm{M^{\rm exact}}_F}.
+\end{equation}
+Elementwise maxima and block-resolved norms should also be retained because global norms can hide physically important onsite or symmetry-selected terms.
+
+For the kinetic matrix, the most informative B1 comparison is
+\begin{equation}
+\boxed{
+\frac{\norm{T_F^{(1)}}}{\norm{T_C^{(1)}}}
+}
+\end{equation}
+resolved into onsite and intersite AO blocks.  This directly tests the proposed reduced magnetic approximation in which the difficult $F$ correction might be neglected while the easier $C$ contribution is retained.
+
+\section{Suggested first systems and fields}
+
+A minimal progression is:
+\begin{enumerate}[leftmargin=*]
+\item H$_2$: symmetry, bond-parallel versus bond-perpendicular magnetic field, and clean isolation of $F$ versus $C$;
+\item LiH: heteronuclear system with nontrivial E1 dipoles, directly connecting to the existing Aion E1 validation path;
+\item NH$_3$: a less trivial multiorbital molecular test using a realistic basis already present in the Aion validation program.
+\end{enumerate}
+
+Physical field magnitudes such as
+\begin{equation}
+1,\ 10,\ 30,\ 100\ {\rm T}
+\end{equation}
+are useful for determining practical relevance.  Substantially larger fields may also be used purely as numerical stress tests: they amplify the B1 and B2 coefficients and make polynomial convergence easier to distinguish from quadrature noise.  Such large-field calculations should not be interpreted as physically representative.
+
+For each molecule, at least three independent field orientations should eventually be examined.  For the initial H$_2$ test, parallel and perpendicular orientations are more informative than an arbitrary Cartesian set.
+
+\section{Recommended order of work}
+
+The initial study can be organized in four stages without changing the dynamical formulations.
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Zero-field quadrature calibration.}  Reproduce the analytic $S$, $T$, and one-electron local-potential matrices on the stored Aion grid, and quantify the residual grid error.
+
+\item \textbf{Uniform-$B$ exact/B1/B2 matrix benchmark.}  Evaluate the full $e^{\ii\phi}$ and $\vect C$ expressions and their B1/B2 expansions on the same grid.  Use analytic zero-field matrices plus numerically integrated corrections whenever that improves stability.
+
+\item \textbf{Hierarchy validation.}  Check Hermiticity, field reversal, finite-difference extraction of B1/B2 coefficients, E1-dipole closure identities, and the H$_2$ geometric isolation tests.
+
+\item \textbf{Physical assessment.}  Compare the norms and selected matrix elements of $F$ and $C$ contributions at realistic fields.  Use these results to decide which terms should be promoted into the time-dependent Aion action and which can remain diagnostic or higher-order corrections.
+\end{enumerate}
+
+Only after this static hierarchy is quantitatively understood should the next step be a self-consistent static or time-dependent implementation at B1/B2.
+
+\section{Interpretation of the result}
+
+This benchmark is intended to answer several concrete questions before any new propagation model is committed:
+\begin{enumerate}[leftmargin=*]
+\item How accurate is $F^B\simeq1$ for overlap, local-potential, kinetic, and spatial-connection matrix elements at experimentally relevant magnetic fields?
+\item Are the B1 kinetic corrections dominated by $T_C^{(1)}$ or by $T_F^{(1)}$ for realistic Gaussian basis sets?
+\item How rapidly does the B1/B2 hierarchy converge to the full uniform-$B$ Wilson integral?
+\item Which contributions are primarily onsite, and which are genuinely intersite finite-overlap effects?
+\item Which B1 quantities are already closed by the existing E1 projected-position matrices, and which require new derivative or magnetic-moment matrix elements?
+\end{enumerate}
+
+The main methodological advantage is that the exact, B1, and B2 comparisons are performed within one fixed Gaussian reference and one fixed quadrature.  The study therefore tests the physical hierarchy itself rather than differences between electronic-structure implementations.  If the numerical evidence shows, for example,
+\begin{equation}
+\norm{T_F^{(1)}}\ll\norm{T_C^{(1)}}
+\end{equation}
+at realistic fields, then a reduced local-B1 model would have a quantitative basis.  If the opposite occurs for important AO blocks, the full B1 thick-link correction must be retained.
+
+\section{Summary}
+
+The proposed first extension of Aion should be diagnostic rather than dynamical.  Starting from an authenticated zero-field Gaussian reference, use the existing molecular quadrature to evaluate the full uniform-$B$ Wilson-dressed matrix elements and the first two terms of their magnetic hierarchy.  Factor out the exact Peierls link, preserve the $F$ and $C$ contributions separately, use analytic zero-field matrices as stable baselines, and overconstrain the calculation with field-reversal, finite-difference, and E1-dipole closure identities.  This will establish, with minimal additional physics assumptions, which parts of the B1/B2 hierarchy are numerically relevant enough to justify implementation in the real-time gauge-covariant action.
+
+\end{document}

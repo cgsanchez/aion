@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: approved implementation plan; no numerical implementation started
+Status: MB0 complete; MB1 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -8,8 +8,11 @@ Branch point: Aion commit `6acb975a8e63b0ddbd493430ad2eca9619756c45`
 
 Last updated: 2026-09-10
 
-Companion theory note in the shared working directory:
-`/home/cgs/00_WORK/Projection_Code/aion_magnetic_matrix_element_benchmark_note.tex`
+Reviewed branch-local theory note:
+`docs/magnetic_matrix_benchmark_theory.tex`
+
+Normative signs, shapes, units, and oracle contract:
+`docs/magnetic_matrix_benchmark_contract.md`
 
 ## 1. Objective
 
@@ -713,11 +716,16 @@ physics or numerical evidence.
 - **Contaminating the ongoing 0.2 validation:** use a separate Git worktree and
   do not repoint the managed editable installation.
 
-## 12. Immediate next action
+## 12. Current progress and immediate next action
 
-Begin MB0 by committing a branch-local reviewed theory specification that
-incorporates the two-grid qualification policy, the independent direct/GIAO
-oracles, the spatial-versus-temporal connection terminology, and the frozen-
-GGA boundary. No numerical implementation begins until that specification is
-internally consistent with Aion's current charge, momentum, endpoint-link,
-and array-index conventions.
+MB0 is complete. The branch-local theory note and normative implementation
+contract fix the endpoint orientation, charge and momentum signs, triangle
+orientation, exact direct/factorized oracle boundary, shapes, units,
+spatial-versus-temporal connection terminology, stable zero-field correction,
+legacy-evidence mapping, and frozen-GGA boundary. The oriented two-centre
+fixture in the contract checks all phase and anchored-vector signs against the
+current P0 row-minus-column endpoint convention.
+
+Proceed with MB1 by implementing the backend-neutral magnetic geometry and
+immutable value types, followed by fast NumPy tests and physical-CUDA CuPy
+parity/residency tests.
