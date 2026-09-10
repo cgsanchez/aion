@@ -17,8 +17,12 @@ from aion.electromagnetism.magnetic import (
     triangle_phases,
 )
 from aion.electronic_structure.ao_quadrature import AOQuadrature
+from aion.electronic_structure.local_potentials import (
+    NuclearAttractionProvider,
+    bind_local_potential,
+)
 from aion.electronic_structure.pyscf_rks import reconstruct_mean_field
-from aion.errors import ConfigurationError, ReferencePreparationError
+from aion.errors import ConfigurationError
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,20 +273,17 @@ def evaluate_magnetic_one_electron_matrices(
         (checked_hbar * checked_hbar / checked_mass) * reference.core_operators.kinetic,
         dtype=xp.complex128,
     )
-    analytic_nuclear = backend.asarray(
-        reference.core_operators.nuclear_attraction, dtype=xp.complex128
+    nuclear_provider = bind_local_potential(
+        NuclearAttractionProvider(), reference, backend
     )
-    nuclei = backend.asarray(reference.core_operators.nuclei.coordinates_au, dtype=xp.float64)
-    nuclear_charges = backend.asarray(reference.core_operators.nuclei.charges, dtype=xp.float64)
+    analytic_nuclear = nuclear_provider.zero_matrix_au
     accumulators = tuple(_new_accumulators(nao, backend) for _ in fields)
 
     for block in quadrature.blocks():
         values = block.values
         gradients = xp.moveaxis(block.gradients, 0, -1)
         bare_momentum = -1j * checked_hbar * gradients
-        nuclear_potential = _nuclear_attraction(
-            block.coordinates_au, nuclei, nuclear_charges, quadrature
-        )
+        nuclear_potential = nuclear_provider.values_au(block.coordinates_au)
         for field, gauge, accumulator in zip(fields, gauges, accumulators, strict=True):
             phase = triangle_phases(
                 block.coordinates_au,
@@ -588,18 +589,6 @@ def _factorized_vector_pair(
         factor,
         optimize=True,
     )
-
-
-def _nuclear_attraction(
-    points: Any, nuclei: Any, charges: Any, quadrature: AOQuadrature
-) -> Any:
-    xp = quadrature.backend.namespace
-    distances = xp.linalg.norm(points[:, None, :] - nuclei[None, :, :], axis=2)
-    if quadrature.backend.scalar_to_float(xp.any(distances == 0.0)):
-        raise ReferencePreparationError(
-            "quadrature grid contains a nuclear position where attraction is singular"
-        )
-    return -xp.sum(charges[None, :] / distances, axis=1)
 
 
 def _finite_parameter(value: float, name: str) -> float:

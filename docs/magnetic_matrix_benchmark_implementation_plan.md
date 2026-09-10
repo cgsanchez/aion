@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB4 complete (Milestone A); MB5 is the next work package
+Status: MB0--MB5 complete (Milestone A); MB6 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -781,7 +781,23 @@ covariance. The full gates pass with 82 fast, 60 serial integration, and four
 physical-GPU tests, with all GPU outputs CuPy-resident and CPU/GPU-parity
 qualified. Ruff and strict mypy pass. MB0--MB4 therefore satisfy Milestone A.
 
-Proceed with MB5 by defining the pointwise multiplicative local-potential
-provider protocol and routing the already qualified nuclear-attraction case
-through it. Frozen Hartree and LDA XC remain optional follow-on providers;
-GGA remains rejected pending a separately reviewed weak-form derivation.
+The required MB5 scope is complete. A stable identity/provenance contract,
+backend-bound pointwise provider protocol, all-electron nuclear-attraction
+provider, scaling composition, and generic multi-provider/multi-field exact/
+B1/B2 scalar evaluator are implemented. Nuclear attraction in the MB3 core is
+now evaluated through this provider rather than a private duplicate formula.
+The binder requires a backend-resident independently supplied zero-field AO
+matrix and rejects preassembled AO matrices and non-provider/nonlocal inputs.
+
+Tests cover semantic hashing, zero-matrix and pointwise recovery, exact
+agreement between the generic evaluator and MB3, potential scaling, field
+reversal, exact direct/factorized assembly, duplicate identities, and CPU/GPU
+residency/parity. The full gates pass with 82 fast, 65 serial integration, and
+five physical-GPU tests; Ruff and strict mypy pass. Frozen Hartree and LDA XC
+remain explicitly optional future providers. No GGA provider is present; the
+reviewed weak-form boundary remains in force.
+
+Proceed with MB6 by adding immutable workflow configuration/results,
+diagnostics, transactional versioned HDF5 storage, strict loading and tamper
+detection, and a reusable expert workflow that invokes neither SCF nor
+propagation.
