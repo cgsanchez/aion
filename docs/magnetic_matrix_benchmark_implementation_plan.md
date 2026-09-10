@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB2 complete; MB3 is the next work package
+Status: MB0--MB3 complete; MB4 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -748,7 +748,24 @@ integration gate passes with 47 tests. Physical-GPU tests pass and prove that
 GPU4PySCF—not CPU AO evaluation—produces resident CuPy values and gradients
 matching PySCF.
 
-Proceed with MB3 by implementing cancellation-aware exact/B1/B2 overlap,
-kinetic, and nuclear-attraction contractions over the reusable AO block
-stream, preserving every required kinetic sector and both independent exact
-assembly routes.
+MB3 is complete. `aion.electronic_structure.magnetic_matrices` traverses an AO
+stream once for any number of fields and returns backend-resident exact, B1,
+and B2 barred overlap, kinetic, and nuclear-attraction matrices. Raw-grid and
+analytic-zero-corrected exact matrices are distinct; scalar corrections use
+`expm1`. Kinetic `F`, `pC`, `Cp`, `F2`, both `FC`, and `C2` components and raw/
+corrected exact sectors remain authoritative. Exact-link lower views and an
+optional independently assembled direct-gauge oracle are provided.
+
+The MB3 CPU tests cover direct/factorized agreement, sector sums and adjoints,
+Hermiticity, reversal parity, zero field, bond-parallel `F=1`, affine-gauge
+congruence, multiple fields per AO traversal, block invariance, finite-
+difference coefficients, and B1/B2 remainder slopes of two/three. Displaced
+LiH B1 derivatives agree with independent libcint GIAO overlap, kinetic, and
+nuclear kernels within `3e-8` after explicit endpoint removal. The full gates
+pass with 82 fast and 55 serial integration tests. All three MB1--MB3 physical-
+GPU tests pass with CuPy residency and CPU/GPU parity; Ruff and strict mypy
+pass.
+
+Proceed with MB4 by adding the independently contracted projected spatial-
+connection hierarchy and its direct covariant-derivative oracle, preserving
+Cartesian anti-Hermiticity and the separate `F`/`C` and `F2`/`FC` terms.
