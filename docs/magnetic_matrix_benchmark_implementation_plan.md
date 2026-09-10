@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB5 complete (Milestone A); MB6 is the next work package
+Status: MB0--MB6 complete (Milestones A and B); MB7 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -797,7 +797,30 @@ five physical-GPU tests; Ruff and strict mypy pass. Frozen Hartree and LDA XC
 remain explicitly optional future providers. No GGA provider is present; the
 reviewed weak-form boundary remains in force.
 
-Proceed with MB6 by adding immutable workflow configuration/results,
-diagnostics, transactional versioned HDF5 storage, strict loading and tamper
-detection, and a reusable expert workflow that invokes neither SCF nor
-propagation.
+MB6 is complete. `aion.workflows.magnetic_benchmark` provides normalized,
+semantically hashed configuration, immutable path-addressable matrix records,
+predeclared validation policy, synchronous block progress, scalar inspection,
+and an expert workflow accepting only an existing `PreparedReference`. Every
+requested kernel remains backend-resident through contraction; the workflow
+makes its host transfer explicitly at immutable result finalization.
+
+`aion.io.magnetic_benchmark` publishes schema-versioned HDF5 results through
+the existing transactional no-overwrite mechanism. The artifact stores the
+full normalized configuration, reference and grid fingerprints, AO evaluator
+and dependency provenance, every matrix with units and definitions, and all
+diagnostics. Loading reconstructs typed records and authenticates numerical
+content against both result and artifact fingerprints. Tests prove round-trip
+identity, no-overwrite behavior, corruption detection, controlled failure
+without partial publication, provider/config matching, callback progress, and
+that neither SCF nor propagation is invoked.
+
+The gates pass with 82 fast tests, 69 serial integration tests, and 15
+physical-GPU tests. The GPU workflow artifact agrees with the CPU result to
+`3e-11`, records GPU4PySCF AO provenance, and executes with explicit host
+thread limits. Ruff and strict mypy pass. MB5--MB6 therefore satisfy
+Milestone B.
+
+Proceed with MB7 by adding the remaining independent analytic Gaussian
+overlap oracle, porting the useful archived qualification cases, completing
+the richer norm/reversal/grid diagnostics, and running the overconstrained
+release gate.

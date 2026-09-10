@@ -24,6 +24,7 @@ class ArtifactKind(StrEnum):
     CHECKPOINT = "checkpoint"
     CASIDA = "casida"
     KICK_SPECTRUM = "kick_spectrum"
+    MAGNETIC_BENCHMARK = "magnetic_benchmark"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +96,20 @@ KICK_SPECTRUM_SCHEMA = ArtifactSchema(
     required_groups=("meta", "configuration", "source", "time", "frequency", "response"),
 )
 
+MAGNETIC_BENCHMARK_SCHEMA = ArtifactSchema(
+    name="aion.magnetic-benchmark",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.MAGNETIC_BENCHMARK,
+    required_groups=(
+        "meta",
+        "configuration",
+        "reference",
+        "grid",
+        "fields",
+        "diagnostics",
+    ),
+)
+
 SCHEMAS: dict[str, ArtifactSchema] = {
     schema.name: schema
     for schema in (
@@ -104,6 +119,7 @@ SCHEMAS: dict[str, ArtifactSchema] = {
         CHECKPOINT_SCHEMA,
         CASIDA_SCHEMA,
         KICK_SPECTRUM_SCHEMA,
+        MAGNETIC_BENCHMARK_SCHEMA,
     )
 }
 

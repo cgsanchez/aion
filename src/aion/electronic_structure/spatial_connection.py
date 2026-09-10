@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -104,6 +104,7 @@ def evaluate_magnetic_spatial_connections(
     hbar: float = 1.0,
     memory_budget_bytes: int | None = None,
     include_direct_oracle: bool = True,
+    block_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[MagneticSpatialConnectionResult, ...]:
     """Contract the spatial hierarchy independently of one-electron MB3 output."""
 
@@ -165,6 +166,7 @@ def evaluate_magnetic_spatial_connections(
     )
     central_dipoles = backend.asarray(e1.central_dipoles, dtype=xp.complex128)
     accumulators = tuple(_new_accumulators(nao, backend) for _ in fields)
+    total_blocks = (quadrature.grid.npoints + quadrature.block_size - 1) // quadrature.block_size
 
     for block in quadrature.blocks():
         gradients = xp.moveaxis(block.gradients, 0, -1)
@@ -247,6 +249,8 @@ def evaluate_magnetic_spatial_connections(
                     block.weights_au,
                     xp,
                 )
+        if block_callback is not None:
+            block_callback(block.index + 1, total_blocks)
 
     results: list[MagneticSpatialConnectionResult] = []
     dipoles_last = xp.moveaxis(central_dipoles, 0, -1)

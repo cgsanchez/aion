@@ -15,6 +15,11 @@ export CUPY_CACHE_DIR="${CUPY_CACHE_DIR:-/tmp/aion-cupy-cache}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/aion-cache}"
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
 export AION_GPU_LAUNCHER=1
+host_threads="${AION_HOST_THREADS:-1}"
+export OMP_NUM_THREADS="$host_threads"
+export MKL_NUM_THREADS="$host_threads"
+export OPENBLAS_NUM_THREADS="$host_threads"
+export NUMEXPR_NUM_THREADS="$host_threads"
 
 python_site="$("$python_bin" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
 nvidia_lib_root="$python_site/nvidia"

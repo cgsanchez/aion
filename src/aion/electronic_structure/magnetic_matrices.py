@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -212,6 +212,7 @@ def evaluate_magnetic_one_electron_matrices(
     hbar: float = 1.0,
     memory_budget_bytes: int | None = None,
     include_direct_oracle: bool = True,
+    block_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[MagneticOneElectronResult, ...]:
     """Evaluate several fields while sampling each AO block exactly once.
 
@@ -278,6 +279,7 @@ def evaluate_magnetic_one_electron_matrices(
     )
     analytic_nuclear = nuclear_provider.zero_matrix_au
     accumulators = tuple(_new_accumulators(nao, backend) for _ in fields)
+    total_blocks = (quadrature.grid.npoints + quadrature.block_size - 1) // quadrature.block_size
 
     for block in quadrature.blocks():
         values = block.values
@@ -402,6 +404,8 @@ def evaluate_magnetic_one_electron_matrices(
                 accumulator.direct_nuclear += _ordinary_pair(
                     dressed_values, dressed_values, potential_weights, xp
                 )
+        if block_callback is not None:
+            block_callback(block.index + 1, total_blocks)
 
     results: list[MagneticOneElectronResult] = []
     for field, gauge, accumulator in zip(fields, gauges, accumulators, strict=True):

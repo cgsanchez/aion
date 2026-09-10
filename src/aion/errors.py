@@ -102,3 +102,7 @@ class CheckpointError(AionError, RuntimeError):
 
 class SpectroscopyError(AionError, RuntimeError):
     """A linear-response or real-time spectrum violates its declared contract."""
+
+
+class MagneticBenchmarkError(AionError, RuntimeError):
+    """A static magnetic matrix benchmark violates its declared contract."""

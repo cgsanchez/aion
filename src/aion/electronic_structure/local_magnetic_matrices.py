@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,7 +21,10 @@ from aion.electronic_structure.local_potentials import (
     LocalPotentialProvider,
     bind_local_potential,
 )
-from aion.electronic_structure.magnetic_matrices import ScalarMagneticHierarchy
+from aion.electronic_structure.magnetic_matrices import (
+    ScalarMagneticHierarchy,
+    estimate_magnetic_block_bytes,
+)
 from aion.errors import ConfigurationError
 
 
@@ -67,7 +70,9 @@ def evaluate_local_potential_magnetic_matrices(
     direct_gauges: Sequence[AffineMagneticGauge] | None = None,
     charge: float = -1.0,
     hbar: float = 1.0,
+    memory_budget_bytes: int | None = None,
     include_direct_oracle: bool = True,
+    block_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[LocalPotentialMagneticResult, ...]:
     """Evaluate every provider and field while traversing AO blocks once."""
 
@@ -81,6 +86,22 @@ def evaluate_local_potential_magnetic_matrices(
         raise ConfigurationError("at least one local-potential provider is required")
     if not isinstance(include_direct_oracle, bool):
         raise ConfigurationError("include_direct_oracle must be boolean")
+    if memory_budget_bytes is not None:
+        if (
+            isinstance(memory_budget_bytes, bool)
+            or not isinstance(memory_budget_bytes, int)
+            or memory_budget_bytes <= 0
+        ):
+            raise ConfigurationError("local magnetic memory budget must be a positive integer")
+        required = estimate_magnetic_block_bytes(
+            quadrature.block_size,
+            quadrature.reference.core_operators.nao,
+        )
+        if required > memory_budget_bytes:
+            raise ConfigurationError(
+                f"local magnetic block requires {required} bytes, exceeding "
+                f"memory_budget_bytes={memory_budget_bytes}"
+            )
     checked_charge = _finite_parameter(charge, "charge")
     checked_hbar = _positive_parameter(hbar, "hbar")
     backend = quadrature.backend
@@ -113,6 +134,7 @@ def evaluate_local_potential_magnetic_matrices(
     accumulators = tuple(
         tuple(_new_accumulator(nao, backend) for _ in bound) for _ in fields
     )
+    total_blocks = (quadrature.grid.npoints + quadrature.block_size - 1) // quadrature.block_size
     for block in quadrature.blocks():
         potentials = tuple(provider.values_au(block.coordinates_au) for provider in bound)
         for values in potentials:
@@ -161,6 +183,8 @@ def evaluate_local_potential_magnetic_matrices(
                     accumulator.direct += _ordinary_pair(
                         dressed_values, dressed_values, weights, xp
                     )
+        if block_callback is not None:
+            block_callback(block.index + 1, total_blocks)
 
     results: list[LocalPotentialMagneticResult] = []
     for field, gauge, field_accumulators in zip(fields, gauges, accumulators, strict=True):
