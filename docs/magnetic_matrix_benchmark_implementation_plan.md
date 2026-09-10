@@ -1,6 +1,7 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB7 complete (Milestones A--C); MB8 is the next work package
+Status: MB0--MB8 H2/LiH scope complete (Milestones A--C and the bounded
+Milestone D decision); NH3 is deferred by design
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -589,6 +590,12 @@ implemented theory documentation matches the code.
 
 ### MB8 — H2, LiH, and NH3 measurement campaign and decision record
 
+**Implemented scope:** the H2/LiH campaign and decision record are complete.
+The proposed NH3 extension was deferred because selecting a larger production
+validation target is a later decision and should not be made implicitly by
+this static benchmark.  This is a deliberate scope change, not missing
+campaign data.
+
 **Goal:** use the qualified API to decide which magnetic hierarchy terms are
 numerically important enough to motivate later dynamical work.
 
@@ -663,9 +670,11 @@ finite-difference, grid, rotation, CPU, and physical-GPU gates all pass.
 
 ### Milestone D — Scientific decision
 
-MB8 complete. H2, LiH, and NH3 evidence supports a documented decision about
-the usefulness and domain of the magnetic hierarchy. This milestone does not
-imply that a dynamical magnetic formulation has been approved.
+The bounded H2/LiH MB8 decision is complete.  Its evidence supports a
+documented decision about the usefulness and domain of the magnetic hierarchy
+without prematurely selecting NH3 or another production validation target.
+This milestone does not imply that a dynamical magnetic formulation has been
+approved.
 
 ## 10. Branch, environment, and integration policy
 
@@ -850,7 +859,21 @@ combination with the earlier direct/factorized, libcint GIAO derivative, E1,
 finite-difference, truncation-order, block-size, rotation, and GPU-residency
 gates, satisfy Milestone C.
 
-Proceed with MB8 in `CALCULATIONS`. First create the reusable campaign driver
-and manifest for H2 and LiH physical/stress scans; do not start NH3 production
-choices beyond the already approved benchmark axes and basis/memory
-qualification.
+MB8's bounded H2/LiH campaign is complete in
+`CALCULATIONS/campaigns/magnetic_matrix_h2_lih`: all 62 members and all eight
+references completed, producing 26,718 matrices and 123,588 diagnostics with
+no failed diagnostic.  The campaign spans STO-3G and cc-pVDZ/cc-pVTZ/cc-pVQZ,
+parallel/perpendicular/oblique directions, 1--100 T physical fields, signed
+stress fields, consecutive unpruned-grid checks, and physical CPU/GPU parity.
+Its compact fingerprinted evidence, reproducible figures, and written
+decision record conclude that a dynamical variational B1 action is worth
+deriving only with every first-order `F` and `C` sector retained.  `F=1` is a
+geometric special case rather than a general magnetic approximation, and B2
+remains necessary as a reference and for symmetry-selected even-field
+channels.
+
+No dynamics starts automatically.  The next work, when explicitly approved,
+is a separate action-level derivation covering the temporal connection,
+density-dependent Hartree/XC variation, energy/power/current closure, and the
+complete B1 matrix hierarchy.  NH3 or another larger production validation
+target remains deliberately undecided.
