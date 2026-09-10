@@ -171,6 +171,47 @@ def test_rigid_rotation_covariance() -> None:
     )
 
 
+def test_three_center_loop_link_is_gauge_independent_and_orientation_sensitive() -> None:
+    backend = NumPyBackend()
+    vertices = np.array(
+        [
+            (0.0, 0.0, 0.0),
+            (1.75, 0.0, 0.0),
+            (0.38, 1.22, 0.0),
+        ]
+    )
+    field = UniformMagneticField((0.0, 0.0, 0.73))
+    area_vector = 0.5 * np.sum(
+        np.cross(vertices, np.roll(vertices, -1, axis=0)),
+        axis=0,
+    )
+    flux = float(np.dot(field.magnetic_field_au, area_vector))
+    gauges = (
+        AffineMagneticGauge(field, origin_au=(0.21, -0.17, 0.33)),
+        AffineMagneticGauge(
+            field,
+            kind=MagneticGaugeKind.LANDAU,
+            origin_au=(-0.13, 0.29, -0.24),
+            landau_axis=(1.0, 0.0, 0.0),
+        ),
+    )
+    for gauge in gauges:
+        forward_integrals = gauge.straight_line_integrals(
+            vertices,
+            np.roll(vertices, -1, axis=0),
+            backend,
+        )
+        reverse_integrals = gauge.straight_line_integrals(
+            vertices,
+            np.roll(vertices, 1, axis=0),
+            backend,
+        )
+        forward_link = np.exp(-1j * np.sum(forward_integrals))
+        reverse_link = np.exp(-1j * np.sum(reverse_integrals))
+        assert forward_link == pytest.approx(np.exp(-1j * flux), abs=5.0e-16)
+        assert reverse_link == pytest.approx(forward_link.conjugate(), abs=5.0e-16)
+
+
 @pytest.mark.parametrize(
     "factory",
     [

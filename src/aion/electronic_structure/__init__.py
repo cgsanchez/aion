@@ -51,6 +51,10 @@ from aion.electronic_structure.magnetic_matrices import (
     evaluate_magnetic_one_electron_matrices,
     pyscf_giao_one_electron_derivatives,
 )
+from aion.electronic_structure.magnetic_overlap_oracle import (
+    AnalyticMagneticOverlap,
+    analytic_uniform_magnetic_overlap,
+)
 from aion.electronic_structure.operators import build_e1_operators, momentum_grid_residual
 from aion.electronic_structure.pyscf_rks import (
     create_reference_workspace,
@@ -75,6 +79,7 @@ __all__ = [
     "AOQuadrature",
     "AOQuadratureGrid",
     "AdiabaticPureRKS",
+    "AnalyticMagneticOverlap",
     "AnchorTopologyBundle",
     "BoundLocalPotential",
     "CoreOperatorBundle",
@@ -101,6 +106,7 @@ __all__ = [
     "ScaledLocalPotentialProvider",
     "SpatialConnectionDirectOracle",
     "SpatialConnectionHierarchy",
+    "analytic_uniform_magnetic_overlap",
     "bind_local_potential",
     "build_e1_operators",
     "create_reference_workspace",

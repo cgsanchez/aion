@@ -223,6 +223,8 @@ class MagneticDiagnostic:
     name: str
     value: float
     tolerance: float | None = None
+    unit: str = "1"
+    physical_dimension: str = "dimensionless"
 
     def __post_init__(self) -> None:
         if not self.name or not _PATH_COMPONENT.fullmatch(self.name.replace("/", ".")):
@@ -236,6 +238,8 @@ class MagneticDiagnostic:
             if not math.isfinite(tolerance) or tolerance <= 0.0:
                 raise MagneticBenchmarkError("diagnostic tolerance must be positive")
             object.__setattr__(self, "tolerance", tolerance)
+        if not self.unit or not self.physical_dimension:
+            raise MagneticBenchmarkError("diagnostic unit metadata must be nonempty")
 
     @property
     def passed(self) -> bool | None:
@@ -343,6 +347,8 @@ class MagneticBenchmarkResult:
                             "name": value.name,
                             "value": value.value,
                             "tolerance": value.tolerance,
+                            "unit": value.unit,
+                            "physical_dimension": value.physical_dimension,
                         }
                         for value in diagnostics
                     ],
@@ -445,6 +451,12 @@ def run_magnetic_benchmark(
         local,
         config.validation,
         quadrature.backend,
+    )
+    diagnostics += _matrix_norm_diagnostics(matrices, reference)
+    diagnostics += _field_reversal_diagnostics(
+        matrices,
+        config.magnetic_fields,
+        config.validation.hermiticity_tolerance,
     )
     failed = [value for value in diagnostics if value.passed is False]
     if failed and config.validation.fail_on_violation:
@@ -709,8 +721,23 @@ def _diagnostics(
 ) -> tuple[MagneticDiagnostic, ...]:
     values: list[MagneticDiagnostic] = []
 
-    def add(name: str, value: float, tolerance: float | None = None) -> None:
-        values.append(MagneticDiagnostic(name, value, tolerance))
+    def add(
+        name: str,
+        value: float,
+        tolerance: float | None = None,
+        *,
+        unit: str = "1",
+        physical_dimension: str = "dimensionless",
+    ) -> None:
+        values.append(
+            MagneticDiagnostic(
+                name,
+                value,
+                tolerance,
+                unit,
+                physical_dimension,
+            )
+        )
 
     for index, result in enumerate(core):
         prefix = f"field{index:04d}"
@@ -770,18 +797,26 @@ def _diagnostics(
         add(
             f"{prefix}.kinetic.first_F.onsite_norm",
             float(np.linalg.norm(first_f * onsite)),
+            unit="hartree",
+            physical_dimension="energy_operator_norm",
         )
         add(
             f"{prefix}.kinetic.first_F.intersite_norm",
             float(np.linalg.norm(first_f * ~onsite)),
+            unit="hartree",
+            physical_dimension="energy_operator_norm",
         )
         add(
             f"{prefix}.kinetic.first_C.onsite_norm",
             float(np.linalg.norm(first_c * onsite)),
+            unit="hartree",
+            physical_dimension="energy_operator_norm",
         )
         add(
             f"{prefix}.kinetic.first_C.intersite_norm",
             float(np.linalg.norm(first_c * ~onsite)),
+            unit="hartree",
+            physical_dimension="energy_operator_norm",
         )
     for index, result in enumerate(spatial):
         prefix = f"field{index:04d}.spatial_connection"
@@ -823,6 +858,99 @@ def _diagnostics(
                 policy.direct_oracle_tolerance,
             )
     return tuple(values)
+
+
+def _matrix_norm_diagnostics(
+    records: Sequence[MagneticMatrixRecord],
+    reference: PreparedReference,
+) -> tuple[MagneticDiagnostic, ...]:
+    anchors = reference.anchor_topology.ao_to_atom
+    same_anchor = anchors[:, None] == anchors[None, :]
+    values: list[MagneticDiagnostic] = []
+    for record in records:
+        matrix = record.values
+        if matrix.shape[-2:] != same_anchor.shape:
+            raise MagneticBenchmarkError(
+                f"matrix {record.path!r} is incompatible with reference AO anchors"
+            )
+        mask = same_anchor if matrix.ndim == 2 else same_anchor[None, :, :]
+        root = f"matrix/{record.path}"
+        dimension = f"{record.physical_dimension}_norm"
+        values.extend(
+            (
+                MagneticDiagnostic(
+                    f"{root}/frobenius",
+                    float(np.linalg.norm(matrix)),
+                    unit=record.unit,
+                    physical_dimension=dimension,
+                ),
+                MagneticDiagnostic(
+                    f"{root}/maximum_abs",
+                    float(np.max(np.abs(matrix))),
+                    unit=record.unit,
+                    physical_dimension=dimension,
+                ),
+                MagneticDiagnostic(
+                    f"{root}/same_anchor_frobenius",
+                    float(np.linalg.norm(matrix * mask)),
+                    unit=record.unit,
+                    physical_dimension=dimension,
+                ),
+                MagneticDiagnostic(
+                    f"{root}/intersite_frobenius",
+                    float(np.linalg.norm(matrix * ~mask)),
+                    unit=record.unit,
+                    physical_dimension=dimension,
+                ),
+            )
+        )
+    return tuple(values)
+
+
+def _field_reversal_diagnostics(
+    records: Sequence[MagneticMatrixRecord],
+    fields: Sequence[UniformMagneticField],
+    tolerance: float,
+) -> tuple[MagneticDiagnostic, ...]:
+    by_path = {value.path: value for value in records}
+    values: list[MagneticDiagnostic] = []
+    for positive_index, magnetic_field in enumerate(fields):
+        positive = np.asarray(magnetic_field.magnetic_field_au)
+        if np.linalg.norm(positive) == 0.0:
+            continue
+        for negative_index in range(positive_index + 1, len(fields)):
+            negative = np.asarray(fields[negative_index].magnetic_field_au)
+            if not np.array_equal(negative, -positive):
+                continue
+            positive_root = f"{positive_index:04d}/"
+            negative_root = f"{negative_index:04d}/"
+            for path, positive_record in by_path.items():
+                if not path.startswith(positive_root) or not path.endswith(
+                    ("/exact", "/b1", "/b2")
+                ):
+                    continue
+                suffix = path.removeprefix(positive_root)
+                negative_record = by_path.get(negative_root + suffix)
+                if negative_record is None:
+                    continue
+                values.append(
+                    MagneticDiagnostic(
+                        name=(
+                            f"field_reversal/{positive_index:04d}_{negative_index:04d}/"
+                            f"{suffix}"
+                        ),
+                        value=_host_relative(
+                            negative_record.values,
+                            positive_record.values.conj(),
+                        ),
+                        tolerance=tolerance,
+                    )
+                )
+    return tuple(values)
+
+
+def _host_relative(left: np.ndarray, right: np.ndarray) -> float:
+    return float(np.linalg.norm(left - right) / max(1.0, np.linalg.norm(right)))
 
 
 def _relative(left: Any, right: Any, backend: Any) -> float:

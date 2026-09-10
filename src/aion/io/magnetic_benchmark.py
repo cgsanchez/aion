@@ -280,7 +280,13 @@ def _read_matrix_records(group: h5py.Group) -> tuple[MagneticMatrixRecord, ...]:
 def _diagnostics_json(values: tuple[MagneticDiagnostic, ...]) -> str:
     return json.dumps(
         [
-            {"name": value.name, "value": value.value, "tolerance": value.tolerance}
+            {
+                "name": value.name,
+                "value": value.value,
+                "tolerance": value.tolerance,
+                "unit": value.unit,
+                "physical_dimension": value.physical_dimension,
+            }
             for value in values
         ],
         sort_keys=True,
@@ -298,6 +304,8 @@ def _diagnostics_from_json(text: str) -> tuple[MagneticDiagnostic, ...]:
                 name=value["name"],
                 value=value["value"],
                 tolerance=value["tolerance"],
+                unit=value["unit"],
+                physical_dimension=value["physical_dimension"],
             )
             for value in data
         )

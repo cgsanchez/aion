@@ -8,8 +8,12 @@ import pytest
 
 from aion.config import BackendConfig
 from aion.electromagnetism import UniformMagneticField
-from aion.electronic_structure import NuclearAttractionProvider, prepare_pyscf_reference
-from aion.errors import MagneticBenchmarkError, SchemaError
+from aion.electronic_structure import (
+    NuclearAttractionProvider,
+    estimate_magnetic_block_bytes,
+    prepare_pyscf_reference,
+)
+from aion.errors import ConfigurationError, MagneticBenchmarkError, SchemaError
 from aion.io import MAGNETIC_BENCHMARK_SCHEMA, validate_artifact
 from aion.io.util import file_sha256
 from aion.propagation import SCEMPropagator
@@ -125,17 +129,31 @@ def test_local_provider_family_and_controlled_failure_are_explicit(
 ) -> None:
     provider = NuclearAttractionProvider()
     repeated_field = UniformMagneticField((0.011, -0.007, 0.005))
+    reversed_field = UniformMagneticField((-0.011, 0.007, -0.005))
     local = run_magnetic_benchmark(  # type: ignore[arg-type]
         h2_reference,
         _config(
-            magnetic_fields=(repeated_field, repeated_field),
+            magnetic_fields=(repeated_field, reversed_field, repeated_field),
             families=(MagneticMatrixFamily.LOCAL_POTENTIALS,),
             local_potential_identities=(provider.identity,),
         ),
         local_potential_providers=(provider,),
     )
     assert any(value.path.startswith("0000/local/") for value in local.matrices)
-    assert any(value.path.startswith("0001/local/") for value in local.matrices)
+    assert any(value.path.startswith("0002/local/") for value in local.matrices)
+    reversal = next(
+        value
+        for value in local.diagnostics
+        if value.name.startswith("field_reversal/0000_0001/")
+    )
+    assert reversal.passed is True
+    norm = next(
+        value
+        for value in local.diagnostics
+        if value.name.endswith("local/0000_nuclear_attraction/exact/frobenius")
+    )
+    assert norm.unit == "hartree"
+    assert norm.physical_dimension == "energy_operator_norm"
     assert all(value.passed is not False for value in local.diagnostics)
 
     failure_path = tmp_path / "must-not-exist.h5"
@@ -149,3 +167,36 @@ def test_local_provider_family_and_controlled_failure_are_explicit(
             output_path=failure_path,
         )
     assert not failure_path.exists()
+
+
+def test_workflow_memory_ceiling_reaches_every_selected_kernel(
+    h2_reference: object,
+) -> None:
+    block_size = 128
+    insufficient = estimate_magnetic_block_bytes(block_size, 2) - 1
+    field = UniformMagneticField((0.011, -0.007, 0.005))
+    provider = NuclearAttractionProvider()
+    cases = (
+        ((MagneticMatrixFamily.ONE_ELECTRON,), (), (), "magnetic block"),
+        ((MagneticMatrixFamily.SPATIAL_CONNECTION,), (), (), "spatial-connection block"),
+        (
+            (MagneticMatrixFamily.LOCAL_POTENTIALS,),
+            (provider.identity,),
+            (provider,),
+            "local magnetic block",
+        ),
+    )
+    for families, identities, providers, message in cases:
+        config = MagneticBenchmarkConfig(
+            (field,),
+            families=families,
+            local_potential_identities=identities,
+            block_size=block_size,
+            memory_budget_bytes=insufficient,
+        )
+        with pytest.raises(ConfigurationError, match=message):
+            run_magnetic_benchmark(  # type: ignore[arg-type]
+                h2_reference,
+                config,
+                local_potential_providers=providers,
+            )

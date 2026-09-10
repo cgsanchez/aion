@@ -128,6 +128,19 @@ where `*` is elementwise multiplication. A gauge or origin change may alter
 The direct and factorized routes may share AO samples and grid weights, but
 must not obtain one result by algebraically redressing or undressing the other.
 
+The release qualification adds a third, overlap-only oracle. For every
+atom-pair block it treats the triangle factor as a plane wave with
+
+```text
+k_mu_nu = q * (R_mu - R_nu) cross B / (2*hbar)
+```
+
+and obtains the contracted-Gaussian AO-pair Fourier transform from PySCF/
+libcint. It shares neither the real-space grid nor AO samples with the direct
+and factorized contractions. The midpoint phase restores the barred overlap,
+and the exact endpoint link restores its lower form. This oracle is exact for
+the declared finite Gaussian AO space up to libcint floating-point error.
+
 ## Authoritative array layouts and names
 
 Coordinates and AO blocks use:
@@ -255,6 +268,7 @@ Its tests map as follows:
 | gauge-independent barred matrices and congruent lower spectra | MB3/MB7 tests |
 | analytic Gaussian finite-field overlap oracle | MB7 qualification tests |
 | multicentre loop, rotation, and block diagnostics | MB7 qualification tests |
+| analytic Gaussian AO-pair Fourier overlap | `analytic_uniform_magnetic_overlap` MB7 tests |
 
 The spatial-connection hierarchy has no archived implementation. It must be
 assembled directly in MB4 and checked independently against stored momentum,

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from aion.backends import CuPyBackend
 from aion.config import BackendConfig, BackendKind
 from aion.electromagnetism import UniformMagneticField
 from aion.electronic_structure import prepare_pyscf_reference
@@ -19,7 +20,10 @@ from test_reference_integration import molecular_config
 pytestmark = pytest.mark.gpu
 
 
-def test_gpu_workflow_and_artifact_match_cpu_without_fallback(tmp_path: Path) -> None:
+def test_gpu_workflow_and_artifact_match_cpu_without_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     reference = prepare_pyscf_reference(molecular_config("h2"))
     field = UniformMagneticField((0.011, -0.007, 0.005))
     cpu_config = MagneticBenchmarkConfig(
@@ -33,10 +37,27 @@ def test_gpu_workflow_and_artifact_match_cpu_without_fallback(tmp_path: Path) ->
     )
     cpu = run_magnetic_benchmark(reference, cpu_config)
     path = tmp_path / "gpu-magnetic-benchmark.h5"
-    gpu = run_magnetic_benchmark(reference, gpu_config, output_path=path)
+    progress = []
+    transfer_count = 0
+    original_to_host = CuPyBackend.to_host
+
+    def audited_to_host(self: CuPyBackend, value: object) -> np.ndarray:
+        nonlocal transfer_count
+        assert progress and progress[-1].stage == "finalize"
+        transfer_count += 1
+        return original_to_host(self, value)
+
+    monkeypatch.setattr(CuPyBackend, "to_host", audited_to_host)
+    gpu = run_magnetic_benchmark(
+        reference,
+        gpu_config,
+        output_path=path,
+        progress=progress.append,
+    )
     loaded = load_magnetic_benchmark(path)
     assert loaded.result_id == gpu.result_id
     assert loaded.config.backend.kind is BackendKind.GPU
+    assert transfer_count > len(gpu.matrices)
     assert '"evaluator":"gpu4pyscf.dft.numint.eval_ao"' in (
         loaded.ao_provenance_json
     )

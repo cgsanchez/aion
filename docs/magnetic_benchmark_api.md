@@ -44,6 +44,13 @@ index. For example, `0000/overlap/exact`, `0000/kinetic/first_pC`, and
 `0000/spatial_connection/first_C` are authoritative stored components.
 Definitions and physical-unit metadata accompany every matrix.
 
+Diagnostics include validation residuals, unit-aware Frobenius and maximum-
+element norms, same-anchor and intersite norms, and automatic field-reversal
+checks whenever the requested field list contains an exact `+B, -B` pair.
+`analytic_uniform_magnetic_overlap` is a CPU qualification oracle based on
+libcint AO-pair Fourier integrals; it is intentionally separate from the
+real-space benchmark workflow.
+
 `save_magnetic_benchmark` publishes the HDF5 artifact transactionally and
 refuses to overwrite a completed result. `load_magnetic_benchmark` validates
 the schema and recomputes the content identity, detecting changes to matrices,

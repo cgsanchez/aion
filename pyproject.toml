@@ -59,6 +59,7 @@ testpaths = ["tests"]
 markers = [
   "fast: dependency-light algebraic, configuration, and schema tests",
   "integration: small molecular CPU integration tests run serially",
+  "qualification: slower overconstrained scientific validation tests",
   "gpu: physical-GPU tests run serially in the managed GPU environment",
 ]
 

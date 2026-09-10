@@ -1,6 +1,6 @@
 # Uniform-magnetic-field matrix-element benchmark
 
-Status: MB0--MB6 complete (Milestones A and B); MB7 is the next work package
+Status: MB0--MB7 complete (Milestones A--C); MB8 is the next work package
 
 Branch: `feature/magnetic-matrix-benchmark`
 
@@ -820,7 +820,37 @@ physical-GPU tests. The GPU workflow artifact agrees with the CPU result to
 thread limits. Ruff and strict mypy pass. MB5--MB6 therefore satisfy
 Milestone B.
 
-Proceed with MB7 by adding the remaining independent analytic Gaussian
-overlap oracle, porting the useful archived qualification cases, completing
-the richer norm/reversal/grid diagnostics, and running the overconstrained
-release gate.
+MB7 is complete. `analytic_uniform_magnetic_overlap` reconstructs only the
+authenticated PySCF molecule and evaluates exact contracted-Gaussian AO-pair
+Fourier integrals through libcint. It shares no real-space grid or AO samples
+with the implemented exact Wilson contractions. Qualification tests cover
+zero field, affine-gauge independence, field reversal, finite-field
+Hermiticity, and level-4 real-space agreement. At the H2 level-4 test point,
+the corrected overlap agrees with the analytic oracle within `2e-15`.
+
+The recovered three-centre H3+ stress test independently demonstrates that
+the exact finite-Gaussian Gram metric remains positive while P0 and B1 become
+indefinite. A fast three-centre loop test fixes gauge-independent holonomy and
+orientation reversal. Consecutive unpruned H2 levels 2--4 resolve overlap,
+kinetic, nuclear-attraction, and spatial-connection matrices monotonically;
+the level-3-to-4 changes lie below their predeclared family-specific floors.
+A separate 30 T test establishes the physical-field numerical path without
+using its result as a stress-field interpretation.
+
+Workflow diagnostics now retain units and dimensions and add global
+Frobenius, maximum-element, same-anchor, and intersite norms for every stored
+matrix. Exact `+B,-B` pairs produce validated reversal residuals. Memory
+ceilings reach every selected contraction family. A physical-GPU transfer
+audit rejects any host transfer before the explicit finalization boundary;
+the GPU exact overlap independently agrees with the analytic Fourier oracle.
+
+The final gates pass with 83 fast tests, 74 serial integration/qualification
+tests, and 16 physical-GPU tests. Ruff and strict mypy pass. These tests, in
+combination with the earlier direct/factorized, libcint GIAO derivative, E1,
+finite-difference, truncation-order, block-size, rotation, and GPU-residency
+gates, satisfy Milestone C.
+
+Proceed with MB8 in `CALCULATIONS`. First create the reusable campaign driver
+and manifest for H2 and LiH physical/stress scans; do not start NH3 production
+choices beyond the already approved benchmark axes and basis/memory
+qualification.
