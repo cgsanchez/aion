@@ -24,7 +24,8 @@ reusable execution and persistence, and WP6 spectroscopy and legacy conversion:
   compilation through the analytic field derivative, consistent LG/VG/P0
   node-link data, and exact kick definitions;
 - explicit `(S, H_eom, omega)` implementations of bare LG, bare VG, P0, and
-  P0+E1 in selectable covariant length/velocity representations;
+  P0+E1 in a continuous covariant gauge family spanning the length and
+  velocity endpoints;
 - Wilson metrics and projected connections, inverse-dressed pure-DFT matrix
   builds, independently fingerprinted E1 tensors, and the E1 potential placed
   exactly once in the connection;

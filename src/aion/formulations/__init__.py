@@ -35,6 +35,7 @@ from aion.formulations.types import (
     InstantaneousEvaluation,
     PowerLedger,
     SourceSampling,
+    resolve_velocity_fraction,
 )
 
 __all__ = [
@@ -70,6 +71,7 @@ __all__ = [
     "p0_graph_current",
     "p0_pair_currents",
     "p0_source_power",
+    "resolve_velocity_fraction",
     "site_charge_derivatives",
     "site_charges",
     "uniform_mechanical_current",

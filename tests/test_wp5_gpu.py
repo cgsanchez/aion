@@ -42,16 +42,23 @@ def test_wp5_cpu_gpu_output_event_and_restart_parity(tmp_path: Path) -> None:
         references[name] = reference
 
     gpu_config = BackendConfig(BackendKind.GPU, device_index=0)
-    for name, kind, gauge in (
-        ("h2", FormulationKind.BARE_LENGTH_GAUGE, None),
-        ("h2", FormulationKind.BARE_VELOCITY_GAUGE, None),
-        ("lih", FormulationKind.P0_E1, GaugeRepresentation.LENGTH),
-        ("lih", FormulationKind.P0_E1, GaugeRepresentation.VELOCITY),
+    for name, kind, gauge, fraction in (
+        ("h2", FormulationKind.BARE_LENGTH_GAUGE, None, None),
+        ("h2", FormulationKind.BARE_VELOCITY_GAUGE, None, None),
+        ("lih", FormulationKind.P0_E1, GaugeRepresentation.LENGTH, None),
+        ("lih", FormulationKind.P0_E1, GaugeRepresentation.MIXED, 0.375),
+        ("lih", FormulationKind.P0_E1, GaugeRepresentation.VELOCITY, None),
     ):
         reference = references[name]
         suffix = kind.value if gauge is None else f"{kind.value}-{gauge.value}"
         cpu_simulation = build_simulation(
-            _config(reference, tmp_path / f"cpu-{suffix}", kind, gauge),
+            _config(
+                reference,
+                tmp_path / f"cpu-{suffix}",
+                kind,
+                gauge,
+                velocity_fraction=fraction,
+            ),
             reference,
         )
         gpu_simulation = build_simulation(
@@ -61,6 +68,7 @@ def test_wp5_cpu_gpu_output_event_and_restart_parity(tmp_path: Path) -> None:
                 kind,
                 gauge,
                 backend=gpu_config,
+                velocity_fraction=fraction,
             ),
             reference,
         )
@@ -96,6 +104,7 @@ def test_wp5_cpu_gpu_output_event_and_restart_parity(tmp_path: Path) -> None:
             kind,
             gauge,
             backend=gpu_config,
+            velocity_fraction=fraction,
         )
         interrupted_simulation = build_simulation(interrupted_config, reference)
         control = RunControl()

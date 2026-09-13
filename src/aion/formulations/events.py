@@ -88,6 +88,7 @@ def apply_electric_kick(
     *,
     kind: FormulationKind,
     gauge: GaugeRepresentation,
+    gauge_velocity_fraction: float,
     context: FormulationContext,
     coefficients: Any,
     impulse_au: tuple[float, float, float],
@@ -97,6 +98,8 @@ def apply_electric_kick(
 ) -> Any:
     """Return post-event coefficients for one exact electric impulse."""
 
+    context.validate_source(source_before, gauge, gauge_velocity_fraction)
+    context.validate_source(source_after, gauge, gauge_velocity_fraction)
     impulse_host = np.asarray(impulse_au, dtype=np.float64)
     if impulse_host.shape != (3,) or not np.all(np.isfinite(impulse_host)):
         raise FormulationError("kick impulse must be a finite Cartesian vector")
@@ -131,9 +134,7 @@ def apply_electric_kick(
         integrated,
         context=context,
     )
-    if kind in {FormulationKind.P0, FormulationKind.P0_E1} and gauge is (
-        GaugeRepresentation.VELOCITY
-    ):
+    if kind in {FormulationKind.P0, FormulationKind.P0_E1}:
         delta = source_after.vector_potential_reduced - source_before.vector_potential_reduced
         coordinates = context.workspace.require("nuclei.coordinates_au")
         origin = xp.asarray(

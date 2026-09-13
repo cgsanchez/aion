@@ -21,17 +21,17 @@ def test_wp4_h2_lih_cpu_gpu_trajectory_parity_residency_and_no_bulk_transfer() -
 
     for name in ("h2", "lih"):
         reference = prepare_pyscf_reference(molecular_config(name))
-        for kind in (FormulationKind.BARE_VELOCITY_GAUGE, FormulationKind.P0_E1):
-            gauge = (
-                None
-                if kind is FormulationKind.BARE_VELOCITY_GAUGE
-                else GaugeRepresentation.VELOCITY
-            )
+        for kind, gauge, fraction in (
+            (FormulationKind.BARE_VELOCITY_GAUGE, None, None),
+            (FormulationKind.P0_E1, GaugeRepresentation.VELOCITY, None),
+            (FormulationKind.P0_E1, GaugeRepresentation.MIXED, 0.375),
+        ):
             cpu = build_simulation(
                 _simulation_config(
                     reference,
                     kind,
                     gauge=gauge,
+                    velocity_fraction=fraction,
                     backend=BackendConfig(),
                 ),
                 reference,
@@ -41,6 +41,7 @@ def test_wp4_h2_lih_cpu_gpu_trajectory_parity_residency_and_no_bulk_transfer() -
                     reference,
                     kind,
                     gauge=gauge,
+                    velocity_fraction=fraction,
                     backend=BackendConfig(BackendKind.GPU, device_index=0),
                 ),
                 reference,

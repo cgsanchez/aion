@@ -83,6 +83,7 @@ class BuiltSimulation:
         return FormulationSourceSample.from_workspace(
             self.workspace,
             gauge=self.formulation.gauge,
+            velocity_fraction=self.formulation.gauge_velocity_fraction,
             location=location,
             index=index,
         )

@@ -5,14 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 from aion.backends import Workspace
-from aion.config import (
-    FormulationKind,
-    GaugeRepresentation,
-    IntegratorKind,
-    PropagationConfig,
-)
+from aion.config import FormulationKind, IntegratorKind, PropagationConfig
 from aion.errors import PropagationError
-from aion.formulations import Formulation, p0_geometry
+from aion.formulations import Formulation, FormulationSourceSample, SourceSampling, p0_geometry
 from aion.propagation.linalg import metric_roundoff_limit, orbital_metric_residual
 from aion.propagation.scem import PropagationScratch, SCEMPropagator
 from aion.propagation.transports import ConnectionAwareTransport, FixedMetricTransport
@@ -38,25 +33,28 @@ def build_initial_orbital_state(formulation: Formulation, workspace: Workspace) 
         workspace.require("ground_state.occupations"), occupied_indices, axis=0
     ).astype(xp.float64, copy=False)
     if formulation.kind in {FormulationKind.P0, FormulationKind.P0_E1}:
-        pair_link = workspace.require(f"source.{formulation.gauge.value}_endpoint.pair_link")[0]
-        source_node = workspace.require(
-            f"source.{formulation.gauge.value}_endpoint.node_scalar_potential"
-        )[0]
+        source = FormulationSourceSample.from_workspace(
+            workspace,
+            gauge=formulation.gauge,
+            velocity_fraction=formulation.gauge_velocity_fraction,
+            location=SourceSampling.ENDPOINT,
+            index=0,
+        )
         geometry = p0_geometry(
             workspace.require("operators.overlap"),
             workspace.require("anchors.ao_to_atom"),
             formulation.context.pairs,
-            source_node,
-            pair_link,
-            workspace.require(f"source.{formulation.gauge.value}_endpoint.pair_link_dot")[0],
+            source.node_scalar_potential,
+            source.pair_link,
+            source.pair_link_dot,
             natom=formulation.context.natom,
             charge=formulation.context.charge,
             hbar=formulation.context.hbar,
             backend=backend,
         )
-        # Theta is a diagonal congruence for the uniform source.  Recover one
-        # representative phase from the physical vector potential so P=Theta*P0.
-        vector = workspace.require("source.endpoint.vector_potential_reduced")[0]
+        # Theta is a diagonal congruence for the uniform source. Recover one
+        # representative phase from this gauge's vector potential so P=Theta*P0.
+        vector = source.vector_potential_reduced
         coordinates = workspace.require("nuclei.coordinates_au")
         origin = xp.asarray(
             reference.config.molecule.electromagnetic_origin.position_au,
@@ -66,8 +64,7 @@ def build_initial_orbital_state(formulation: Formulation, workspace: Workspace) 
             (1j * formulation.context.charge / formulation.context.hbar)
             * ((coordinates - origin[None, :]) @ vector)
         )
-        if formulation.gauge is GaugeRepresentation.VELOCITY:
-            coefficients = atom_phase[workspace.require("anchors.ao_to_atom"), None] * coefficients
+        coefficients = atom_phase[workspace.require("anchors.ao_to_atom"), None] * coefficients
         residual = orbital_metric_residual(coefficients, geometry.metric, backend)
     else:
         residual = orbital_metric_residual(

@@ -47,6 +47,7 @@ def _simulation_config(
     kind: FormulationKind,
     *,
     gauge: GaugeRepresentation | None = None,
+    velocity_fraction: float | None = None,
     source: object | None = None,
     backend: BackendConfig | None = None,
 ) -> SimulationConfig:
@@ -64,7 +65,7 @@ def _simulation_config(
     )
     return SimulationConfig(
         reference=ReferenceLinkConfig(reference.fingerprint_sha256),
-        formulation=FormulationConfig(kind, gauge),
+        formulation=FormulationConfig(kind, gauge, velocity_fraction),
         source=selected_source,
         propagation=PropagationConfig(grid, integrator),
         backend=BackendConfig() if backend is None else backend,
@@ -238,6 +239,76 @@ def test_p0_e1_lih_is_gauge_covariant_and_places_e1_once(references: dict[str, o
             - 1j * _host(velocity, eval_v.e1_potential)
         )
         < 2.0e-12
+    )
+
+
+@pytest.mark.parametrize("fraction", (0.25, 0.5, 0.75))
+def test_p0_e1_mixed_gauge_interpolates_source_and_observables_are_covariant(
+    references: dict[str, object],
+    fraction: float,
+) -> None:
+    reference = references["lih"]
+    length = build_simulation(
+        _simulation_config(reference, FormulationKind.P0_E1, gauge=GaugeRepresentation.LENGTH),
+        reference,
+    )
+    velocity = build_simulation(
+        _simulation_config(reference, FormulationKind.P0_E1, gauge=GaugeRepresentation.VELOCITY),
+        reference,
+    )
+    mixed = build_simulation(
+        _simulation_config(
+            reference,
+            FormulationKind.P0_E1,
+            velocity_fraction=fraction,
+        ),
+        reference,
+    )
+    index = 2
+    source_l = length.source_sample(SourceSampling.MIDPOINT, index)
+    source_v = velocity.source_sample(SourceSampling.MIDPOINT, index)
+    source_m = mixed.source_sample(SourceSampling.MIDPOINT, index)
+    assert source_m.gauge is GaugeRepresentation.MIXED
+    assert source_m.velocity_fraction == fraction
+    for name in (
+        "vector_potential_reduced",
+        "vector_potential_reduced_dot",
+        "node_scalar_potential",
+        "pair_link",
+        "pair_link_dot",
+        "pair_electromotive_potential",
+    ):
+        expected = (1.0 - fraction) * getattr(source_l, name) + fraction * getattr(source_v, name)
+        assert np.allclose(getattr(source_m, name), expected, atol=2.0e-15)
+    assert np.allclose(
+        source_m.pair_electromotive_potential,
+        source_l.pair_electromotive_potential,
+        atol=2.0e-15,
+    )
+
+    excited_matrix = np.array(length.density.matrix, copy=True)
+    excited_matrix[0, -1] += 0.025j
+    excited_matrix[-1, 0] -= 0.025j
+    excited_length = AODensity.from_matrix(excited_matrix, length.workspace.backend)
+    evaluation_l = length.formulation.evaluate(excited_length, source_l)
+    trial_m = mixed.formulation.evaluate(mixed.density, source_m)
+    assert trial_m.theta is not None
+    transformed = AODensity.from_matrix(
+        trial_m.theta * excited_length.matrix,
+        mixed.workspace.backend,
+    )
+    evaluation_m = mixed.formulation.evaluate(transformed, source_m)
+    current_l = length.formulation.currents(evaluation_l, source_l)
+    current_m = mixed.formulation.currents(evaluation_m, source_m)
+    energy_l = length.formulation.energy(evaluation_l, source_l)
+    energy_m = mixed.formulation.energy(evaluation_m, source_m)
+    assert np.linalg.norm(evaluation_l.field_free_density - evaluation_m.field_free_density) < (
+        2.0e-11
+    )
+    assert np.linalg.norm(current_l.electronic_dipole - current_m.electronic_dipole) < 2.0e-10
+    assert np.linalg.norm(current_l.source_current - current_m.source_current) < 2.0e-9
+    assert float(energy_l.energy_matter_total) == pytest.approx(
+        float(energy_m.energy_matter_total), abs=2.0e-10
     )
 
 

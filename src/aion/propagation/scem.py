@@ -169,6 +169,7 @@ class SCEMPropagator:
         samples = StepSourceSamples.from_workspace(
             self.workspace,
             gauge=self.formulation.gauge,
+            velocity_fraction=self.formulation.gauge_velocity_fraction,
             step_index=step_index,
         )
         prepared = self.transport.prepare(samples)

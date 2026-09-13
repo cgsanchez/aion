@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Any
 
 from aion.config import FormulationKind, GaugeRepresentation
 from aion.electronic_structure import expectation, hermitian_part
-from aion.errors import FormulationError
 from aion.formulations.bare import _baseline
 from aion.formulations.base import FormulationContext
 from aion.formulations.events import apply_electric_kick
@@ -33,18 +32,20 @@ from aion.formulations.types import (
     FormulationSourceSample,
     InstantaneousEvaluation,
     PowerLedger,
+    resolve_velocity_fraction,
 )
 
 
 def _evaluate(
     context: FormulationContext,
     gauge: GaugeRepresentation,
+    gauge_velocity_fraction: float,
     density: AODensity,
     source: FormulationSourceSample,
     *,
     include_e1: bool,
 ) -> InstantaneousEvaluation:
-    context.validate_source(source, gauge)
+    context.validate_source(source, gauge, gauge_velocity_fraction)
     rho = context.require_density(density)
     geometry = p0_geometry(
         context.workspace.require("operators.overlap"),
@@ -112,12 +113,13 @@ def _evaluate(
 def _currents(
     context: FormulationContext,
     gauge: GaugeRepresentation,
+    gauge_velocity_fraction: float,
     evaluation: InstantaneousEvaluation,
     source: FormulationSourceSample,
     *,
     include_e1: bool,
 ) -> CurrentLedger:
-    context.validate_source(source, gauge)
+    context.validate_source(source, gauge, gauge_velocity_fraction)
     xp = context.namespace
     rho = evaluation.density.matrix
     assert evaluation.theta is not None
@@ -252,6 +254,7 @@ def _currents(
 def _energy(
     context: FormulationContext,
     gauge: GaugeRepresentation,
+    gauge_velocity_fraction: float,
     evaluation: InstantaneousEvaluation,
     source: FormulationSourceSample,
     *,
@@ -259,7 +262,14 @@ def _energy(
     initial_matter_energy: Any | None,
     accumulated_source_work: Any | None,
 ) -> EnergyLedger:
-    currents = _currents(context, gauge, evaluation, source, include_e1=include_e1)
+    currents = _currents(
+        context,
+        gauge,
+        gauge_velocity_fraction,
+        evaluation,
+        source,
+        include_e1=include_e1,
+    )
     internal = context.electronic_model.energy(evaluation.field_free_dft)
     xp = context.namespace
     zero = context.zero_scalar()
@@ -322,12 +332,20 @@ def _power_from_currents(
 def _power(
     context: FormulationContext,
     gauge: GaugeRepresentation,
+    gauge_velocity_fraction: float,
     evaluation: InstantaneousEvaluation,
     source: FormulationSourceSample,
     *,
     include_e1: bool,
 ) -> PowerLedger:
-    currents = _currents(context, gauge, evaluation, source, include_e1=include_e1)
+    currents = _currents(
+        context,
+        gauge,
+        gauge_velocity_fraction,
+        evaluation,
+        source,
+        include_e1=include_e1,
+    )
     return _power_from_currents(context, evaluation, currents)
 
 
@@ -335,11 +353,16 @@ def _power(
 class P0:
     context: FormulationContext
     gauge: GaugeRepresentation = GaugeRepresentation.LENGTH
+    velocity_fraction: InitVar[float | None] = None
+    gauge_velocity_fraction: float = field(init=False)
     kind: FormulationKind = field(default=FormulationKind.P0, init=False)
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.gauge, GaugeRepresentation):
-            raise FormulationError("P0 gauge must be a GaugeRepresentation")
+    def __post_init__(self, velocity_fraction: float | None) -> None:
+        object.__setattr__(
+            self,
+            "gauge_velocity_fraction",
+            resolve_velocity_fraction(self.gauge, velocity_fraction),
+        )
 
     @property
     def observable_dependencies(self) -> frozenset[str]:
@@ -348,12 +371,26 @@ class P0:
     def evaluate(
         self, density: AODensity, source: FormulationSourceSample
     ) -> InstantaneousEvaluation:
-        return _evaluate(self.context, self.gauge, density, source, include_e1=False)
+        return _evaluate(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            density,
+            source,
+            include_e1=False,
+        )
 
     def currents(
         self, evaluation: InstantaneousEvaluation, source: FormulationSourceSample
     ) -> CurrentLedger:
-        return _currents(self.context, self.gauge, evaluation, source, include_e1=False)
+        return _currents(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            evaluation,
+            source,
+            include_e1=False,
+        )
 
     def energy(
         self,
@@ -366,6 +403,7 @@ class P0:
         return _energy(
             self.context,
             self.gauge,
+            self.gauge_velocity_fraction,
             evaluation,
             source,
             include_e1=False,
@@ -378,7 +416,14 @@ class P0:
         evaluation: InstantaneousEvaluation,
         source: FormulationSourceSample,
     ) -> PowerLedger:
-        return _power(self.context, self.gauge, evaluation, source, include_e1=False)
+        return _power(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            evaluation,
+            source,
+            include_e1=False,
+        )
 
     def apply_kick(
         self,
@@ -391,6 +436,7 @@ class P0:
         return apply_electric_kick(
             kind=self.kind,
             gauge=self.gauge,
+            gauge_velocity_fraction=self.gauge_velocity_fraction,
             context=self.context,
             coefficients=coefficients,
             impulse_au=impulse_au,
@@ -404,11 +450,16 @@ class P0:
 class P0E1:
     context: FormulationContext
     gauge: GaugeRepresentation = GaugeRepresentation.LENGTH
+    velocity_fraction: InitVar[float | None] = None
+    gauge_velocity_fraction: float = field(init=False)
     kind: FormulationKind = field(default=FormulationKind.P0_E1, init=False)
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.gauge, GaugeRepresentation):
-            raise FormulationError("P0+E1 gauge must be a GaugeRepresentation")
+    def __post_init__(self, velocity_fraction: float | None) -> None:
+        object.__setattr__(
+            self,
+            "gauge_velocity_fraction",
+            resolve_velocity_fraction(self.gauge, velocity_fraction),
+        )
 
     @property
     def observable_dependencies(self) -> frozenset[str]:
@@ -427,12 +478,26 @@ class P0E1:
     def evaluate(
         self, density: AODensity, source: FormulationSourceSample
     ) -> InstantaneousEvaluation:
-        return _evaluate(self.context, self.gauge, density, source, include_e1=True)
+        return _evaluate(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            density,
+            source,
+            include_e1=True,
+        )
 
     def currents(
         self, evaluation: InstantaneousEvaluation, source: FormulationSourceSample
     ) -> CurrentLedger:
-        return _currents(self.context, self.gauge, evaluation, source, include_e1=True)
+        return _currents(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            evaluation,
+            source,
+            include_e1=True,
+        )
 
     def energy(
         self,
@@ -445,6 +510,7 @@ class P0E1:
         return _energy(
             self.context,
             self.gauge,
+            self.gauge_velocity_fraction,
             evaluation,
             source,
             include_e1=True,
@@ -457,7 +523,14 @@ class P0E1:
         evaluation: InstantaneousEvaluation,
         source: FormulationSourceSample,
     ) -> PowerLedger:
-        return _power(self.context, self.gauge, evaluation, source, include_e1=True)
+        return _power(
+            self.context,
+            self.gauge,
+            self.gauge_velocity_fraction,
+            evaluation,
+            source,
+            include_e1=True,
+        )
 
     def apply_kick(
         self,
@@ -470,6 +543,7 @@ class P0E1:
         return apply_electric_kick(
             kind=self.kind,
             gauge=self.gauge,
+            gauge_velocity_fraction=self.gauge_velocity_fraction,
             context=self.context,
             coefficients=coefficients,
             impulse_au=impulse_au,

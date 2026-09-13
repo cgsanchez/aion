@@ -20,6 +20,34 @@ class SourceSampling(StrEnum):
     MIDPOINT = "midpoint"
 
 
+def resolve_velocity_fraction(
+    gauge: GaugeRepresentation,
+    velocity_fraction: float | None,
+) -> float:
+    """Validate and normalize one constant uniform-electric gauge parameter."""
+
+    if not isinstance(gauge, GaugeRepresentation):
+        raise FormulationError("gauge must be a GaugeRepresentation")
+    if velocity_fraction is None:
+        if gauge is GaugeRepresentation.LENGTH:
+            return 0.0
+        if gauge is GaugeRepresentation.VELOCITY:
+            return 1.0
+        raise FormulationError("mixed gauge requires a velocity fraction")
+    if isinstance(velocity_fraction, bool) or not isinstance(velocity_fraction, int | float):
+        raise FormulationError("gauge velocity fraction must be a finite number")
+    fraction = float(velocity_fraction)
+    if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
+        raise FormulationError("gauge velocity fraction must lie in [0, 1]")
+    if gauge is GaugeRepresentation.LENGTH and fraction != 0.0:
+        raise FormulationError("length gauge requires velocity fraction zero")
+    if gauge is GaugeRepresentation.VELOCITY and fraction != 1.0:
+        raise FormulationError("velocity gauge requires velocity fraction one")
+    if gauge is GaugeRepresentation.MIXED and fraction in {0.0, 1.0}:
+        raise FormulationError("mixed gauge requires a velocity fraction strictly inside (0, 1)")
+    return fraction
+
+
 @dataclass(frozen=True, slots=True)
 class AODensity:
     """A lower-index AO density using ``P=C f C^dagger``."""
@@ -75,6 +103,7 @@ class FormulationSourceSample:
 
     time_au: float
     gauge: GaugeRepresentation
+    velocity_fraction: float
     electric_field: Any
     electric_field_dot: Any
     vector_potential_reduced: Any
@@ -90,6 +119,7 @@ class FormulationSourceSample:
         workspace: Workspace,
         *,
         gauge: GaugeRepresentation,
+        velocity_fraction: float | None = None,
         location: SourceSampling,
         index: int,
         prefix: str = "source",
@@ -102,36 +132,49 @@ class FormulationSourceSample:
             raise FormulationError(
                 f"source sample index {index} is outside [0, {times.shape[0] - 1}]"
             )
-        gauge_prefix = f"{prefix}.{gauge.value}_{loc}"
+        fraction = resolve_velocity_fraction(gauge, velocity_fraction)
         physical_vector = workspace.require(f"{prefix}.{loc}.vector_potential_reduced")[index]
         physical_vector_dot = workspace.require(f"{prefix}.{loc}.vector_potential_reduced_dot")[
             index
         ]
         xp = workspace.backend.namespace
-        if gauge is GaugeRepresentation.LENGTH:
+        if fraction == 0.0:
             vector = xp.zeros((3,), dtype=xp.float64)
             vector_dot = xp.zeros((3,), dtype=xp.float64)
-        else:
+        elif fraction == 1.0:
             vector = physical_vector
             vector_dot = physical_vector_dot
+        else:
+            vector = fraction * physical_vector
+            vector_dot = fraction * physical_vector_dot
+
+        def projected(name: str) -> Any:
+            length = workspace.require(f"{prefix}.length_{loc}.{name}")[index]
+            if fraction == 0.0:
+                return length
+            velocity = workspace.require(f"{prefix}.velocity_{loc}.{name}")[index]
+            if fraction == 1.0:
+                return velocity
+            return (1.0 - fraction) * length + fraction * velocity
+
         return cls(
             time_au=workspace.backend.scalar_to_float(times[index]),
             gauge=gauge,
+            velocity_fraction=fraction,
             electric_field=workspace.require(f"{prefix}.{loc}.electric_field")[index],
             electric_field_dot=workspace.require(f"{prefix}.{loc}.electric_field_dot")[index],
             vector_potential_reduced=vector,
             vector_potential_reduced_dot=vector_dot,
-            node_scalar_potential=workspace.require(f"{gauge_prefix}.node_scalar_potential")[index],
-            pair_link=workspace.require(f"{gauge_prefix}.pair_link")[index],
-            pair_link_dot=workspace.require(f"{gauge_prefix}.pair_link_dot")[index],
-            pair_electromotive_potential=workspace.require(
-                f"{gauge_prefix}.pair_electromotive_potential"
-            )[index],
+            node_scalar_potential=projected("node_scalar_potential"),
+            pair_link=projected("pair_link"),
+            pair_link_dot=projected("pair_link_dot"),
+            pair_electromotive_potential=projected("pair_electromotive_potential"),
         )
 
     def assert_resident(self, backend: ArrayBackend) -> None:
         if not math.isfinite(self.time_au):
             raise FormulationError("source sample time is not finite")
+        resolve_velocity_fraction(self.gauge, self.velocity_fraction)
         for name in (
             "electric_field",
             "electric_field_dot",
@@ -246,6 +289,9 @@ class Formulation(Protocol):
 
     @property
     def gauge(self) -> GaugeRepresentation: ...
+
+    @property
+    def gauge_velocity_fraction(self) -> float: ...
 
     @property
     def context(self) -> Any: ...

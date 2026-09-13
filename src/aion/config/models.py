@@ -64,6 +64,7 @@ class GaugeRepresentation(StrEnum):
     """Gauge representation selected for one formulation simulation."""
 
     LENGTH = "length"
+    MIXED = "mixed"
     VELOCITY = "velocity"
 
 
@@ -379,17 +380,33 @@ class ReferenceLinkConfig:
 class FormulationConfig:
     kind: FormulationKind
     gauge: GaugeRepresentation | None = None
+    velocity_fraction: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.kind, FormulationKind):
             raise ConfigurationError("formulation.kind is invalid")
+        fraction = self.velocity_fraction
+        if fraction is not None:
+            fraction = finite_float(fraction, "formulation.velocity_fraction")
+            if not 0.0 <= fraction <= 1.0:
+                raise ConfigurationError(
+                    "formulation.velocity_fraction must lie in the closed interval [0, 1]"
+                )
+            object.__setattr__(self, "velocity_fraction", fraction)
         gauge = self.gauge
         if gauge is None:
-            gauge = (
-                GaugeRepresentation.VELOCITY
-                if self.kind is FormulationKind.BARE_VELOCITY_GAUGE
-                else GaugeRepresentation.LENGTH
-            )
+            if fraction is None:
+                gauge = (
+                    GaugeRepresentation.VELOCITY
+                    if self.kind is FormulationKind.BARE_VELOCITY_GAUGE
+                    else GaugeRepresentation.LENGTH
+                )
+            elif fraction == 0.0:
+                gauge = GaugeRepresentation.LENGTH
+            elif fraction == 1.0:
+                gauge = GaugeRepresentation.VELOCITY
+            else:
+                gauge = GaugeRepresentation.MIXED
             object.__setattr__(self, "gauge", gauge)
         if not isinstance(gauge, GaugeRepresentation):
             raise ConfigurationError("formulation.gauge is invalid")
@@ -401,10 +418,41 @@ class FormulationConfig:
             raise UnsupportedConfigurationError(
                 f"{self.kind.value} requires the {required.value}-gauge representation"
             )
+        if gauge is GaugeRepresentation.MIXED:
+            if self.kind not in {FormulationKind.P0, FormulationKind.P0_E1}:
+                raise UnsupportedConfigurationError(
+                    "mixed gauge is implemented only for the covariant P0/P0+E1 formulations"
+                )
+            if fraction is None or fraction in {0.0, 1.0}:
+                raise ConfigurationError(
+                    "mixed gauge requires a velocity_fraction strictly between zero and one"
+                )
+        else:
+            expected = 0.0 if gauge is GaugeRepresentation.LENGTH else 1.0
+            if fraction is not None and fraction != expected:
+                raise ConfigurationError(
+                    f"{gauge.value} gauge requires velocity_fraction={expected:.1f}"
+                )
+            object.__setattr__(self, "velocity_fraction", None)
+
+    @property
+    def resolved_velocity_fraction(self) -> float:
+        """Return the fraction of the physical reduced vector potential."""
+
+        assert self.gauge is not None
+        if self.gauge is GaugeRepresentation.LENGTH:
+            return 0.0
+        if self.gauge is GaugeRepresentation.VELOCITY:
+            return 1.0
+        assert self.velocity_fraction is not None
+        return self.velocity_fraction
 
     def as_mapping(self) -> dict[str, object]:
         assert self.gauge is not None
-        return {"kind": self.kind.value, "gauge": self.gauge.value}
+        result: dict[str, object] = {"kind": self.kind.value, "gauge": self.gauge.value}
+        if self.gauge is GaugeRepresentation.MIXED:
+            result["velocity_fraction"] = self.resolved_velocity_fraction
+        return result
 
 
 @dataclass(frozen=True, slots=True)
