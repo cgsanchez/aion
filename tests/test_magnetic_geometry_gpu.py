@@ -10,9 +10,11 @@ from aion.electromagnetism import (
     UniformMagneticField,
     anchored_vectors,
     build_magnetic_pair_geometry,
+    center_loop_holonomy,
     endpoint_links,
     triangle_factors,
     triangle_fluxes,
+    uniform_magnetic_first_derivatives,
 )
 
 pytestmark = pytest.mark.gpu
@@ -56,3 +58,29 @@ def test_magnetic_geometry_is_gpu_resident_and_matches_numpy() -> None:
     for expected, actual in zip(cpu_results, gpu_results, strict=True):
         gpu.assert_resident(actual)
         np.testing.assert_allclose(gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15)
+
+    cpu_derivatives = uniform_magnetic_first_derivatives(points, cpu_geometry, cpu)
+    gpu_derivatives = uniform_magnetic_first_derivatives(points, gpu_geometry, gpu)
+    for name in ("triangle_phase", "triangle_factor", "anchored_vector"):
+        expected = getattr(cpu_derivatives, name)
+        actual = getattr(gpu_derivatives, name)
+        gpu.assert_resident(actual)
+        np.testing.assert_allclose(gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15)
+
+    vertices = np.array(
+        [[-0.7, -0.2, 0.0], [0.7, -0.2, 0.0], [0.1, 0.9, 0.0]]
+    )
+    cpu_loop = center_loop_holonomy(vertices, gauge, cpu)
+    gpu_loop = center_loop_holonomy(vertices, gauge, gpu)
+    for name in (
+        "oriented_area_vector_au2",
+        "magnetic_flux_au",
+        "endpoint_link_product",
+        "expected_flux_phase",
+    ):
+        expected = getattr(cpu_loop, name)
+        actual = getattr(gpu_loop, name)
+        gpu.assert_resident(actual)
+        np.testing.assert_allclose(
+            gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15
+        )

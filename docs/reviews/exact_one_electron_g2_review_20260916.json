@@ -1,0 +1,26 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G2",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-16T19:31:41Z",
+  "scope": [
+    "exact_static_straight_wilson_evaluator",
+    "EX_direct_and_EX_link_identity",
+    "field_sign_and_orientation_identities",
+    "symmetric_landau_and_origin_covariance",
+    "exact_gram_positivity",
+    "rigid_rotation_with_oxygen_p_mixing",
+    "authenticated_regression_output"
+  ],
+  "effect": "G2 accepted and WP3 authorized; the static pair-physics campaign may begin",
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp2_20260916T192437Z_3fd2a83b77d1",
+    "manifest_id": "a85f4f0cb78036b8b54e6319cf0c5ce8acc9df2b46c7a6c6bc80f0b447b4c7ae",
+    "execution_index_sha256": "d4fac1edec73e21bc7b129763fa66b36a516326fab059ce9802c858b90e20328",
+    "raw_report_sha256": "7d821702342e0c6e8dab031ed4819b7a724f483357bc72a2dff4e151a1be59ef",
+    "compact_report_sha256_at_review": "67fdfce4ffdd629894649b3af7bdf1bc79e2c85e6745bccb5d253633d7822503"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

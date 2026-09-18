@@ -14,7 +14,12 @@ from aion.electromagnetism import (
     build_magnetic_pair_geometry,
     endpoint_links,
 )
-from aion.electronic_structure.data import PreparedReference, immutable_array
+from aion.electronic_structure.data import (
+    OneElectronAOReference,
+    PreparedReference,
+    immutable_array,
+)
+from aion.electronic_structure.one_electron import reconstruct_one_electron_molecule
 from aion.electronic_structure.pyscf_rks import reconstruct_mean_field
 from aion.errors import ConfigurationError, ReferencePreparationError
 
@@ -75,7 +80,7 @@ class AnalyticMagneticOverlap:
 
 
 def analytic_uniform_magnetic_overlap(
-    reference: PreparedReference,
+    reference: PreparedReference | OneElectronAOReference,
     gauge: AffineMagneticGauge,
     *,
     charge: float = -1.0,
@@ -90,8 +95,8 @@ def analytic_uniform_magnetic_overlap(
     selected from each Fourier matrix.
     """
 
-    if not isinstance(reference, PreparedReference):
-        raise TypeError("reference must be PreparedReference")
+    if not isinstance(reference, PreparedReference | OneElectronAOReference):
+        raise TypeError("reference must be PreparedReference or OneElectronAOReference")
     if not isinstance(gauge, AffineMagneticGauge):
         raise TypeError("gauge must be AffineMagneticGauge")
     checked_charge = _finite_parameter(charge, "charge")
@@ -103,7 +108,11 @@ def analytic_uniform_magnetic_overlap(
             "analytic magnetic overlap requires pyscf.gto.ft_ao"
         ) from exc
 
-    molecule = reconstruct_mean_field(reference, BackendConfig()).mol
+    molecule = (
+        reconstruct_mean_field(reference, BackendConfig()).mol
+        if isinstance(reference, PreparedReference)
+        else reconstruct_one_electron_molecule(reference)
+    )
     atom_coordinates = np.asarray(
         reference.core_operators.nuclei.coordinates_au,
         dtype=np.float64,

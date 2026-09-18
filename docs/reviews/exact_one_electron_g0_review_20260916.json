@@ -1,0 +1,22 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G0",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-16T18:56:55Z",
+  "scope": [
+    "authority_and_conventions",
+    "minimal_hh_sto3g_fixture",
+    "run_and_result_schemas",
+    "wp1_overlap_kinetic_checkpoint"
+  ],
+  "effect": "G0 accepted and remainder of WP1 authorized; G1 remains unreviewed",
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/20260916T184810Z_3fd2a83b77d1",
+    "execution_index_sha256": "d3f18ba2b865d7106471c7cf31e67af86957c98ff24b4b38ab52da2ce0c8d8a7",
+    "checkpoint_report_sha256": "33c76580f5888baeed2b4cde7c5a92af51613336267311c77baf2c040a4109b0",
+    "finest_grid_manifest_id": "a80ce0b017d2656cdfd2c0939bf52260d529539b3e00055e25683b4dbbc5f356"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G3",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-18T19:53:33Z",
+  "scope": [
+    "static_pair_physics_hh_oh_n2_co",
+    "compact_polarized_and_diffuse_basis_sets",
+    "parallel_perpendicular_and_oblique_fields",
+    "compressed_reference_and_stretched_bond_lengths",
+    "odd_even_scaling_and_numerical_floors",
+    "gauge_orientation_block_and_spectral_checks"
+  ],
+  "effect": "G3 accepted; the authenticated static pair-physics evidence may serve as the exact-parent fixture for later gates",
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp3_pair_distance_20260917T002456Z_3fd2a83b77d1",
+    "execution_index_sha256": "41c9021caee7061ed275107e37f515e1334362a8950d1044fc08728ef7e40594",
+    "analysis_manifest_id": "ed239e302ccfecd2526bb9597a35cf4d106028b84edfdcc68518fbbb23346adb",
+    "analysis_manifest_sha256": "540fc18cdafc132ecace0004a8f2d3f8c702e9c7c3bbf818f18a2a15ae96ddb5",
+    "analysis_summary_sha256": "7be8d6c369f4e69b7fd8a9451f32605bd28572dcfc201dd783c16cc5abab4ce3",
+    "analysis_report_sha256": "85c6126f244ea8dffdac5422b872bbdf8456cd61778ad031dbd078aca6a032ef"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

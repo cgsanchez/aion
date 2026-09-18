@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aion.local/schemas/exact_one_electron_matrix_result.schema.json",
+  "title": "Aion exact one-electron qualification matrix result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "status", "manifest_id", "matrices", "residuals", "artifact", "review"],
+  "properties": {
+    "schema": {"const": "aion.exact-one-electron-matrix-result"},
+    "version": {"const": "1.0.0"},
+    "status": {
+      "enum": ["schema_example_not_executed", "executed_unreviewed", "reviewed_accepted", "reviewed_rejected"]
+    },
+    "manifest_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "matrices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "shape", "dtype", "unit", "physical_dimension", "definition", "data_sha256"],
+        "properties": {
+          "name": {"type": "string"},
+          "shape": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+          "dtype": {"enum": ["float64", "complex128"]},
+          "unit": {"type": "string"},
+          "physical_dimension": {"type": "string"},
+          "definition": {"type": "string"},
+          "data_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "residuals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value", "normalization", "reference", "tolerance"],
+        "properties": {
+          "name": {"type": "string"},
+          "value": {"type": ["number", "null"]},
+          "normalization": {"type": "string"},
+          "reference": {"type": "string"},
+          "tolerance": {"type": ["number", "null"], "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["reviewed", "reviewer", "decision"],
+      "properties": {
+        "reviewed": {"type": "boolean"},
+        "reviewer": {"type": ["string", "null"]},
+        "decision": {"enum": ["pending", "accepted", "rejected"]}
+      }
+    }
+  }
+}

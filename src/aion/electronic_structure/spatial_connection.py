@@ -17,6 +17,7 @@ from aion.electromagnetism.magnetic import (
     triangle_phases,
 )
 from aion.electronic_structure.ao_quadrature import AOQuadrature
+from aion.electronic_structure.data import PreparedReference
 from aion.electronic_structure.operators import build_e1_operators
 from aion.errors import ConfigurationError
 
@@ -110,6 +111,11 @@ def evaluate_magnetic_spatial_connections(
 
     if not isinstance(quadrature, AOQuadrature):
         raise TypeError("quadrature must be an AOQuadrature")
+    reference = quadrature.reference
+    if not isinstance(reference, PreparedReference):
+        raise TypeError(
+            "the magnetic spatial-connection evaluator currently requires PreparedReference"
+        )
     fields = tuple(magnetic_fields)
     if not fields or not all(isinstance(field, UniformMagneticField) for field in fields):
         raise ConfigurationError("magnetic_fields must contain UniformMagneticField values")
@@ -134,7 +140,7 @@ def evaluate_magnetic_spatial_connections(
             )
 
     if direct_gauges is None:
-        origin = quadrature.reference.config.molecule.electromagnetic_origin.position_au
+        origin = reference.config.molecule.electromagnetic_origin.position_au
         gauges = tuple(AffineMagneticGauge(field, origin_au=origin) for field in fields)
     else:
         gauges = tuple(direct_gauges)
@@ -146,7 +152,6 @@ def evaluate_magnetic_spatial_connections(
 
     backend = quadrature.backend
     xp = backend.namespace
-    reference = quadrature.reference
     geometry = build_magnetic_pair_geometry(
         reference.core_operators.nuclei.coordinates_au,
         reference.anchor_topology.ao_to_atom,

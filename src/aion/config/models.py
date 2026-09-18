@@ -23,6 +23,7 @@ from aion.config.units import (
 from aion.errors import ConfigurationError, UnsupportedConfigurationError
 
 REFERENCE_CONFIG_SCHEMA = "aion.reference-input"
+ONE_ELECTRON_REFERENCE_CONFIG_SCHEMA = "aion.one-electron-ao-reference-input"
 SIMULATION_CONFIG_SCHEMA = "aion.simulation-input"
 CONFIG_SCHEMA_VERSION = "1.0.0"
 
@@ -150,6 +151,50 @@ class MoleculeConfig:
             "electromagnetic_origin_au": list(self.electromagnetic_origin.position_au),
             "atoms": [atom.as_mapping() for atom in self.atoms],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class OneElectronReferenceConfig:
+    """Occupancy-independent molecular AO input for matrix qualification.
+
+    This is deliberately not an SCF or electronic-state configuration.  It
+    fixes only the nuclear framework, real spherical Gaussian basis, and
+    electromagnetic origin needed to reconstruct one-electron AO data.
+    """
+
+    atoms: tuple[AtomConfig, ...]
+    basis: str
+    electromagnetic_origin: ElectromagneticOrigin = field(default_factory=ElectromagneticOrigin)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.atoms, tuple | list):
+            raise ConfigurationError("one-electron reference atoms must be a sequence")
+        object.__setattr__(self, "atoms", tuple(self.atoms))
+        if not self.atoms or not all(isinstance(atom, AtomConfig) for atom in self.atoms):
+            raise ConfigurationError(
+                "one-electron reference atoms must contain at least one AtomConfig"
+            )
+        if not isinstance(self.basis, str) or not self.basis.strip():
+            raise ConfigurationError("one-electron reference basis cannot be empty")
+        if not isinstance(self.electromagnetic_origin, ElectromagneticOrigin):
+            raise ConfigurationError(
+                "one-electron reference electromagnetic_origin has the wrong type"
+            )
+
+    def scientific_mapping(self) -> dict[str, object]:
+        return {
+            "schema": ONE_ELECTRON_REFERENCE_CONFIG_SCHEMA,
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "atoms": [atom.as_mapping() for atom in self.atoms],
+            "basis": self.basis,
+            "ao_convention": "real_spherical_gaussian",
+            "nuclear_model": NuclearModel.ALL_ELECTRON_LOCAL.value,
+            "electromagnetic_origin_au": list(self.electromagnetic_origin.position_au),
+        }
+
+    @property
+    def scientific_id(self) -> str:
+        return canonical_sha256(self.scientific_mapping())
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,6 +16,7 @@ from aion.electromagnetism.magnetic import (
     triangle_phases,
 )
 from aion.electronic_structure.ao_quadrature import AOQuadrature
+from aion.electronic_structure.data import PreparedReference
 from aion.electronic_structure.local_potentials import (
     LocalPotentialIdentity,
     LocalPotentialProvider,
@@ -78,6 +79,12 @@ def evaluate_local_potential_magnetic_matrices(
 
     if not isinstance(quadrature, AOQuadrature):
         raise TypeError("quadrature must be an AOQuadrature")
+    reference = quadrature.reference
+    if not isinstance(reference, PreparedReference):
+        raise TypeError(
+            "the generic local-potential magnetic evaluator currently requires "
+            "PreparedReference"
+        )
     fields = tuple(magnetic_fields)
     provider_values = tuple(providers)
     if not fields or not all(isinstance(field, UniformMagneticField) for field in fields):
@@ -95,7 +102,7 @@ def evaluate_local_potential_magnetic_matrices(
             raise ConfigurationError("local magnetic memory budget must be a positive integer")
         required = estimate_magnetic_block_bytes(
             quadrature.block_size,
-            quadrature.reference.core_operators.nao,
+            reference.core_operators.nao,
         )
         if required > memory_budget_bytes:
             raise ConfigurationError(
@@ -107,7 +114,7 @@ def evaluate_local_potential_magnetic_matrices(
     backend = quadrature.backend
     xp = backend.namespace
     bound = tuple(
-        bind_local_potential(provider, quadrature.reference, backend)
+        bind_local_potential(provider, reference, backend)
         for provider in provider_values
     )
     fingerprints = tuple(provider.identity.fingerprint_sha256 for provider in bound)
@@ -115,7 +122,7 @@ def evaluate_local_potential_magnetic_matrices(
         raise ConfigurationError("local-potential provider identities must be unique")
 
     if direct_gauges is None:
-        origin = quadrature.reference.config.molecule.electromagnetic_origin.position_au
+        origin = reference.config.molecule.electromagnetic_origin.position_au
         gauges = tuple(AffineMagneticGauge(field, origin_au=origin) for field in fields)
     else:
         gauges = tuple(direct_gauges)
@@ -126,11 +133,11 @@ def evaluate_local_potential_magnetic_matrices(
                 raise ConfigurationError("every direct gauge must represent its matching field")
 
     geometry = build_magnetic_pair_geometry(
-        quadrature.reference.core_operators.nuclei.coordinates_au,
-        quadrature.reference.anchor_topology.ao_to_atom,
+        reference.core_operators.nuclei.coordinates_au,
+        reference.anchor_topology.ao_to_atom,
         backend,
     )
-    nao = quadrature.reference.core_operators.nao
+    nao = reference.core_operators.nao
     accumulators = tuple(
         tuple(_new_accumulator(nao, backend) for _ in bound) for _ in fields
     )

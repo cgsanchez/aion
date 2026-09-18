@@ -1,0 +1,70 @@
+{
+  "schema": "aion.exact-one-electron-wp5-multicentre-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "system_label": "three_proton_framework_occupation_independent",
+  "later_linear_dynamics_label": "one_electron_on_three_protons_is_H3_2plus_not_physical_H3_plus",
+  "geometries": {
+    "equilateral": {
+      "coordinates_au": [
+        [-0.7, -0.404145188432738, 0.0],
+        [0.7, -0.404145188432738, 0.0],
+        [0.0, 0.808290376865476, 0.0]
+      ],
+      "edge_bond_scales_in_oriented_order": [1.0, 1.0, 1.0]
+    },
+    "distorted": {
+      "coordinates_au": [
+        [-0.48474999999999996, -0.3728951204203849, 0.0],
+        [0.9152499999999999, -0.3728951204203849, 0.0],
+        [-0.4305, 0.7457902408407697, 0.0]
+      ],
+      "edge_bond_scales_in_oriented_order": [1.0, 1.25, 0.8]
+    }
+  },
+  "oriented_edges": [[0, 1], [1, 2], [2, 0]],
+  "bases": {
+    "sto-3g": "compact_minimal",
+    "cc-pvdz": "polarized_double_zeta"
+  },
+  "magnetic_axis": [0.0, 0.0, 1.0],
+  "positive_loop_flux_scan": {
+    "logarithmic": [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+    "linear_start": 0.025,
+    "linear_stop": 2.5,
+    "linear_step": 0.025,
+    "stress_start": 2.6,
+    "stress_stop": 4.0,
+    "stress_step": 0.1
+  },
+  "selected_case_targets": {
+    "classification_measure": "relative_frobenius_exact_minus_p0_metric",
+    "physical_threshold": 0.01,
+    "sub_threshold_target": 0.001,
+    "near_threshold_target": 0.01,
+    "above_threshold_target": 0.05,
+    "selection_minimum_metric_eigenvalue": 1e-6,
+    "require_positive_metric_for_models": ["exact", "p0", "geometric_b1", "full_b1"]
+  },
+  "quadrature": {
+    "qualification_level": 4,
+    "refinement_level": 5,
+    "block_size": 2048
+  },
+  "acceptance_tolerances": {
+    "loop_holonomy_absolute": 1e-12,
+    "metric_hermiticity_relative": 1e-10,
+    "gauge_congruence_relative": 1e-11,
+    "field_reversal_relative": 1e-10,
+    "pair_restriction_floor_multiplier": 4.0
+  },
+  "conventions": {
+    "q": -1.0,
+    "mass": 1.0,
+    "hbar": 1.0,
+    "matrix_indices": "row_mu_bra_column_nu_ket",
+    "endpoint_path": "R_nu_to_R_mu",
+    "loop_orientation": "vertices_0_to_1_to_2_to_0",
+    "metric_regularization": "none"
+  }
+}

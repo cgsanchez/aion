@@ -1,0 +1,26 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G4",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-18T19:53:33Z",
+  "scope": [
+    "analytic_uniform_magnetic_first_derivatives",
+    "exact_p0_geometric_b1_full_b1_and_complete_first_hierarchy",
+    "coefficient_adjoint_and_sector_identities",
+    "finite_field_remainder_orders_and_validity_intervals",
+    "mechanical_b1_channel_classification",
+    "uniform_electric_e1_independent_qualification"
+  ],
+  "effect": "G4 accepted; Stage B formulation work and WP5 multicentre loop-flux qualification are authorized",
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp4_first_order_20260918T191425Z_3fd2a83b77d1",
+    "execution_index_sha256": "fdb90dd1c64db81225946f83ec9c95b7b8f08d737b7ffd2cf49f3373059d0560",
+    "analysis_manifest_id": "8237a06402ebd0e2a3f7e519e7d863895954318e97d7e070b329eb6b8df66107",
+    "analysis_manifest_sha256": "5f99f38b6b425d22d688fc2b8c9127a94d0c195e62d29aaf1a54daf2ff96ebd7",
+    "analysis_summary_sha256": "bcb2ffd7e78c8569a8fc2a618f8a1cf6dbff91fbbd9f797041c316d211a16ad4",
+    "analysis_report_sha256": "d9a5f0391f1edf19611bdb614a35265af757a6ba3fcd2b8a5ce1b85c518c851d"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

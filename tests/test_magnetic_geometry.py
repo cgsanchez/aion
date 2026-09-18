@@ -13,11 +13,13 @@ from aion.electromagnetism import (
     affine_gauge_difference_potential,
     anchored_vectors,
     build_magnetic_pair_geometry,
+    center_loop_holonomy,
     endpoint_line_integrals,
     endpoint_links,
     triangle_factors,
     triangle_fluxes,
     triangle_phases,
+    uniform_magnetic_first_derivatives,
 )
 from aion.errors import ConfigurationError
 
@@ -93,6 +95,59 @@ def test_pair_and_field_reversal_same_anchor_and_taylor_coefficients() -> None:
     np.testing.assert_allclose(factors.second, -0.5 * phase**2, atol=0.0)
     remainder = factors.exact - (1.0 + factors.first + factors.second)
     assert float(np.max(np.abs(remainder))) <= float(np.max(np.abs(phase) ** 3)) / 6.0
+
+
+def test_uniform_magnetic_internal_derivatives_match_centered_differences() -> None:
+    backend, geometry, points = _fixture()
+    derivatives = uniform_magnetic_first_derivatives(
+        points,
+        geometry,
+        backend,
+        charge=-1.0,
+        hbar=2.0,
+    )
+    steps = (4.0e-4, 2.0e-4, 1.0e-4)
+    for axis in range(3):
+        direction = np.eye(3)[axis]
+        factor_errors = []
+        for step in steps:
+            plus_field = UniformMagneticField(tuple(step * direction))
+            minus_field = UniformMagneticField(tuple(-step * direction))
+            plus = triangle_factors(
+                points,
+                geometry,
+                plus_field,
+                backend,
+                charge=-1.0,
+                hbar=2.0,
+            ).exact
+            minus = triangle_factors(
+                points,
+                geometry,
+                minus_field,
+                backend,
+                charge=-1.0,
+                hbar=2.0,
+            ).exact
+            factor_fd = (plus - minus) / (2.0 * step)
+            vector_fd = (
+                anchored_vectors(points, geometry, plus_field, backend)
+                - anchored_vectors(points, geometry, minus_field, backend)
+            ) / (2.0 * step)
+            factor_errors.append(
+                np.linalg.norm(factor_fd - derivatives.triangle_factor[axis])
+            )
+            np.testing.assert_allclose(
+                vector_fd,
+                derivatives.anchored_vector[axis],
+                atol=2.0e-13,
+                rtol=2.0e-13,
+            )
+        if np.linalg.norm(derivatives.triangle_factor[axis]) > 0.0:
+            fitted_order = np.polyfit(np.log(steps), np.log(factor_errors), 1)[0]
+            assert fitted_order == pytest.approx(2.0, abs=0.02)
+        else:
+            np.testing.assert_array_equal(factor_errors, np.zeros(len(steps)))
 
 
 def test_bond_parallel_field_annuls_every_triangle_phase() -> None:
@@ -196,6 +251,15 @@ def test_three_center_loop_link_is_gauge_independent_and_orientation_sensitive()
         ),
     )
     for gauge in gauges:
+        holonomy = center_loop_holonomy(vertices, gauge, backend)
+        reverse_holonomy = center_loop_holonomy(vertices[::-1], gauge, backend)
+        assert holonomy.magnetic_flux_au == pytest.approx(flux, abs=5.0e-16)
+        assert holonomy.endpoint_link_product == pytest.approx(
+            holonomy.expected_flux_phase, abs=5.0e-16
+        )
+        assert reverse_holonomy.endpoint_link_product == pytest.approx(
+            holonomy.endpoint_link_product.conjugate(), abs=5.0e-16
+        )
         forward_integrals = gauge.straight_line_integrals(
             vertices,
             np.roll(vertices, -1, axis=0),

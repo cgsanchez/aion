@@ -1,0 +1,63 @@
+{
+  "schema": "aion.exact-one-electron-wp6-linear-dynamics-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "conventions": {
+    "q": -1.0,
+    "mass": 1.0,
+    "hbar": 1.0,
+    "matrix_indices": "row_mu_bra_column_nu_ket",
+    "endpoint_path": "R_nu_to_R_mu",
+    "coefficient_equation": "i*hbar*(S*Cdot+omega_t*C)=K*C",
+    "metric_regularization": "none",
+    "time_integrator": "midpoint_pade_22_with_recorded_right_cholesky_constraint"
+  },
+  "h2": {
+    "atoms": [
+      {"symbol": "H", "position_au": [-0.7, 0.0, 0.0]},
+      {"symbol": "H", "position_au": [0.7, 0.0, 0.0]}
+    ],
+    "basis": "cc-pvdz",
+    "electromagnetic_origin_au": [0.11, -0.07, 0.05],
+    "qualification_grid_level": 3,
+    "refinement_grid_level": 4,
+    "block_size": 2048,
+    "pulse": {
+      "duration_au": 4.0,
+      "peak_magnetic_field_au": [0.0, 0.0, 0.04],
+      "peak_uniform_electric_field_au": [0.012, 0.0, 0.0],
+      "fine_intervals": 32,
+      "comparison_intervals": [8, 16, 32]
+    },
+    "static_spectral": {
+      "duration_au": 1.2,
+      "magnetic_field_au": [0.0, 0.0, 0.04],
+      "intervals": [4, 8, 16]
+    }
+  },
+  "three_centre": {
+    "basis": "cc-pvdz",
+    "electromagnetic_origin_au": [0.0, 0.0, 0.0],
+    "qualification_grid_level": 4,
+    "refinement_grid_level": 5,
+    "block_size": 2048,
+    "pulse_duration_au": 4.0,
+    "fine_intervals": 8,
+    "comparison_intervals": [4, 8],
+    "qualification_geometries": ["equilateral", "distorted"],
+    "refinement_geometries": ["equilateral"],
+    "selection_roles": ["sub_threshold", "near_threshold", "above_threshold"],
+    "physical_label": "one_electron_on_three_protons_is_H3_2plus_not_physical_H3_plus"
+  },
+  "acceptance_tolerances": {
+    "direct_factorized_relative": 1e-10,
+    "metric_compatibility_relative": 1e-9,
+    "metric_rate_finite_difference_relative": 2e-7,
+    "matrix_gauge_covariance_relative": 1e-9,
+    "corrected_norm_drift": 2e-10,
+    "minimum_metric_eigenvalue": 1e-6,
+    "minimum_time_convergence_order": 1.5,
+    "minimum_static_pade_order": 3.5,
+    "quadrature_stability_fraction": 0.25
+  }
+}

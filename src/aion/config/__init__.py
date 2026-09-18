@@ -3,6 +3,7 @@
 from aion.config.hashing import canonical_bytes, canonical_sha256
 from aion.config.models import (
     CONFIG_SCHEMA_VERSION,
+    ONE_ELECTRON_REFERENCE_CONFIG_SCHEMA,
     REFERENCE_CONFIG_SCHEMA,
     SIMULATION_CONFIG_SCHEMA,
     AionConfig,
@@ -20,6 +21,7 @@ from aion.config.models import (
     MoleculeConfig,
     NuclearModel,
     ObservableSchedules,
+    OneElectronReferenceConfig,
     OutputConfig,
     Precision,
     PropagationConfig,
@@ -49,6 +51,7 @@ from aion.config.units import (
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
+    "ONE_ELECTRON_REFERENCE_CONFIG_SCHEMA",
     "REFERENCE_CONFIG_SCHEMA",
     "SIMULATION_CONFIG_SCHEMA",
     "AionConfig",
@@ -69,6 +72,7 @@ __all__ = [
     "MoleculeConfig",
     "NuclearModel",
     "ObservableSchedules",
+    "OneElectronReferenceConfig",
     "OutputConfig",
     "PhysicalDimension",
     "Precision",

@@ -5,6 +5,14 @@ from aion.formulations.bare import BareLengthGauge, BareVelocityGauge
 from aion.formulations.base import FormulationContext
 from aion.formulations.covariant import P0, P0E1
 from aion.formulations.events import apply_electric_kick, metric_unitary_impulse
+from aion.formulations.exact_one_electron import (
+    ExactOneElectronModelContext,
+    ExactOneElectronModelTriples,
+    OneElectronModelTriple,
+    exact_one_electron_model_triples,
+    exact_wilson_one_electron_triple,
+    prepare_exact_one_electron_model_context,
+)
 from aion.formulations.kernels import (
     E1Tensors,
     MechanicalCurrent,
@@ -47,11 +55,14 @@ __all__ = [
     "E1Tensors",
     "EOMTriple",
     "EnergyLedger",
+    "ExactOneElectronModelContext",
+    "ExactOneElectronModelTriples",
     "Formulation",
     "FormulationContext",
     "FormulationSourceSample",
     "InstantaneousEvaluation",
     "MechanicalCurrent",
+    "OneElectronModelTriple",
     "P0Geometry",
     "PowerLedger",
     "SourceSampling",
@@ -61,6 +72,8 @@ __all__ = [
     "covariant_ambient_mechanical_current",
     "density_derivative",
     "e1_tensors",
+    "exact_one_electron_model_triples",
+    "exact_wilson_one_electron_triple",
     "generic_mechanical_current",
     "inverse_dressed_density",
     "inverse_dressed_density_dot",
@@ -70,6 +83,7 @@ __all__ = [
     "p0_graph_current",
     "p0_pair_currents",
     "p0_source_power",
+    "prepare_exact_one_electron_model_context",
     "site_charge_derivatives",
     "site_charges",
     "uniform_mechanical_current",

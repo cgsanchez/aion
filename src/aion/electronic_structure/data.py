@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from aion.config import FormulationKind, ReferenceConfig, canonical_sha256
+from aion.config import (
+    FormulationKind,
+    OneElectronReferenceConfig,
+    ReferenceConfig,
+    canonical_sha256,
+)
 from aion.errors import ReferencePreparationError
 
 if TYPE_CHECKING:
@@ -27,6 +32,10 @@ E1_OPERATOR_SCHEMA = "aion.e1-operators"
 E1_OPERATOR_VERSION = "1.0.0"
 GRID_SCHEMA = "aion.pyscf-grid"
 GRID_VERSION = "1.0.0"
+AO_BASIS_METADATA_SCHEMA = "aion.ao-basis-metadata"
+AO_BASIS_METADATA_VERSION = "1.0.0"
+ONE_ELECTRON_AO_REFERENCE_SCHEMA = "aion.one-electron-ao-reference"
+ONE_ELECTRON_AO_REFERENCE_VERSION = "1.0.0"
 
 
 def immutable_array(
@@ -334,6 +343,157 @@ class AnchorTopologyBundle:
 
 
 @dataclass(frozen=True, slots=True)
+class AOBasisMetadata:
+    """Exact spherical-AO ordering and shell layout reported by PySCF."""
+
+    ao_labels: tuple[str, ...]
+    shell_to_atom: np.ndarray
+    shell_angular_momenta: np.ndarray
+    shell_primitive_counts: np.ndarray
+    shell_contraction_counts: np.ndarray
+    ao_locations: np.ndarray
+    spherical: bool = True
+    fingerprint_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        labels = tuple(self.ao_labels)
+        if not labels or not all(isinstance(value, str) and value for value in labels):
+            raise ReferencePreparationError("AO labels must be nonempty strings")
+        arrays: dict[str, np.ndarray] = {}
+        for name in (
+            "shell_to_atom",
+            "shell_angular_momenta",
+            "shell_primitive_counts",
+            "shell_contraction_counts",
+            "ao_locations",
+        ):
+            arrays[name] = immutable_array(
+                getattr(self, name), dtype=np.int64, ndim=1, name=name.replace("_", " ")
+            )
+        nbas = arrays["shell_to_atom"].size
+        if nbas == 0:
+            raise ReferencePreparationError("AO shell metadata cannot be empty")
+        if any(
+            arrays[name].shape != (nbas,)
+            for name in (
+                "shell_angular_momenta",
+                "shell_primitive_counts",
+                "shell_contraction_counts",
+            )
+        ):
+            raise ReferencePreparationError("AO shell metadata arrays have inconsistent sizes")
+        locations = arrays["ao_locations"]
+        if (
+            locations.shape != (nbas + 1,)
+            or locations[0] != 0
+            or locations[-1] != len(labels)
+            or np.any(np.diff(locations) <= 0)
+        ):
+            raise ReferencePreparationError("AO shell locations are inconsistent with AO labels")
+        if np.any(arrays["shell_to_atom"] < 0):
+            raise ReferencePreparationError("AO shell anchors contain negative atom indices")
+        if np.any(arrays["shell_angular_momenta"] < 0):
+            raise ReferencePreparationError("AO angular momenta must be nonnegative")
+        if np.any(arrays["shell_primitive_counts"] <= 0) or np.any(
+            arrays["shell_contraction_counts"] <= 0
+        ):
+            raise ReferencePreparationError("AO shell sizes must be positive")
+        if not isinstance(self.spherical, bool) or not self.spherical:
+            raise ReferencePreparationError("only real spherical Gaussian AOs are supported")
+        object.__setattr__(self, "ao_labels", labels)
+        for name, value in arrays.items():
+            object.__setattr__(self, name, value)
+        object.__setattr__(
+            self,
+            "fingerprint_sha256",
+            canonical_sha256(
+                {
+                    "schema": AO_BASIS_METADATA_SCHEMA,
+                    "version": AO_BASIS_METADATA_VERSION,
+                    "ao_labels": labels,
+                    "shell_to_atom": arrays["shell_to_atom"],
+                    "shell_angular_momenta": arrays["shell_angular_momenta"],
+                    "shell_primitive_counts": arrays["shell_primitive_counts"],
+                    "shell_contraction_counts": arrays["shell_contraction_counts"],
+                    "ao_locations": locations,
+                    "spherical": self.spherical,
+                }
+            ),
+        )
+
+    @property
+    def nao(self) -> int:
+        return len(self.ao_labels)
+
+    @property
+    def nbas(self) -> int:
+        return int(self.shell_to_atom.size)
+
+
+@dataclass(frozen=True, slots=True)
+class OneElectronAOReference:
+    """Immutable occupancy-independent AO data for one-electron qualification."""
+
+    config: OneElectronReferenceConfig
+    core_operators: CoreOperatorBundle
+    anchor_topology: AnchorTopologyBundle
+    basis_metadata: AOBasisMetadata
+    dependencies: DependencyVersions
+    fingerprint_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.config, OneElectronReferenceConfig):
+            raise ReferencePreparationError("one-electron reference config has the wrong type")
+        if not isinstance(self.core_operators, CoreOperatorBundle):
+            raise ReferencePreparationError("one-electron core operators have the wrong type")
+        if not isinstance(self.anchor_topology, AnchorTopologyBundle):
+            raise ReferencePreparationError("one-electron anchor topology has the wrong type")
+        if not isinstance(self.basis_metadata, AOBasisMetadata):
+            raise ReferencePreparationError("one-electron basis metadata has the wrong type")
+        if not isinstance(self.dependencies, DependencyVersions):
+            raise ReferencePreparationError("one-electron dependency metadata has the wrong type")
+        nao = self.core_operators.nao
+        if self.anchor_topology.ao_to_atom.shape != (nao,) or self.basis_metadata.nao != nao:
+            raise ReferencePreparationError("one-electron AO dimensions disagree")
+        configured_symbols = tuple(atom.symbol for atom in self.config.atoms)
+        configured_coordinates = np.asarray(
+            [atom.position_au for atom in self.config.atoms], dtype=np.float64
+        )
+        nuclei = self.core_operators.nuclei
+        if configured_symbols != nuclei.symbols or not np.array_equal(
+            configured_coordinates, nuclei.coordinates_au
+        ):
+            raise ReferencePreparationError(
+                "one-electron configuration and stored nuclear data disagree"
+            )
+        if np.any(self.basis_metadata.shell_to_atom >= len(configured_symbols)):
+            raise ReferencePreparationError("AO shell anchors exceed the nuclear framework")
+        object.__setattr__(
+            self,
+            "fingerprint_sha256",
+            canonical_sha256(
+                {
+                    "schema": ONE_ELECTRON_AO_REFERENCE_SCHEMA,
+                    "version": ONE_ELECTRON_AO_REFERENCE_VERSION,
+                    "config": self.config.scientific_mapping(),
+                    "dependencies": self.dependencies.as_mapping(),
+                    "core_operator_fingerprint_sha256": self.core_operators.fingerprint_sha256,
+                    "anchor_topology_fingerprint_sha256": (
+                        self.anchor_topology.fingerprint_sha256
+                    ),
+                    "basis_metadata_fingerprint_sha256": (
+                        self.basis_metadata.fingerprint_sha256
+                    ),
+                }
+            ),
+        )
+
+    @property
+    def electromagnetic_origin_au(self) -> tuple[float, float, float]:
+        return self.config.electromagnetic_origin.position_au
+
+
+@dataclass(frozen=True, slots=True)
 class E1OperatorBundle:
     """Independently fingerprinted field-free central-dipole operators."""
 
@@ -450,6 +610,12 @@ class PreparedReference:
     @property
     def supported_formulations(self) -> tuple[FormulationKind, ...]:
         return tuple(FormulationKind)
+
+    @property
+    def electromagnetic_origin_au(self) -> tuple[float, float, float]:
+        """Return the explicitly configured common electromagnetic origin."""
+
+        return self.config.molecule.electromagnetic_origin.position_au
 
     def save(self, path: str | PathLike[str] | None = None) -> None:
         """Transactionally publish this reference; implemented lazily to avoid I/O cycles."""

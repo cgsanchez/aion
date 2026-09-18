@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aion.local/schemas/exact_one_electron_run_manifest.schema.json",
+  "title": "Aion exact one-electron qualification run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "version", "status", "manifest_id", "execution", "code", "environment", "fixture",
+    "quadrature", "source", "conventions", "tolerances", "input_hashes"
+  ],
+  "properties": {
+    "schema": {"const": "aion.exact-one-electron-run-manifest"},
+    "version": {"const": "1.0.0"},
+    "status": {
+      "enum": ["schema_example_not_executed", "executed_unreviewed", "reviewed_accepted", "reviewed_rejected"]
+    },
+    "manifest_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_utc", "runner"],
+      "properties": {
+        "timestamp_utc": {"type": ["string", "null"], "format": "date-time"},
+        "runner": {"type": "string"}
+      }
+    },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "branch", "commit", "dirty"],
+      "properties": {
+        "repository": {"type": "string"},
+        "branch": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "dirty": {"type": "boolean"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["catalog", "profile", "modules", "conda_prefix", "conda_lock_sha256", "dependencies", "thread_limits"],
+      "properties": {
+        "catalog": {"type": "string"},
+        "profile": {"type": "string"},
+        "modules": {"type": "array", "items": {"type": "string"}},
+        "conda_prefix": {"type": "string"},
+        "conda_lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "dependencies": {"type": "object", "additionalProperties": {"type": "string"}},
+        "thread_limits": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "required": ["reference_fingerprint_sha256", "config_id", "atoms_bohr", "nuclear_charges", "coordinate_unit", "basis", "spherical", "ao_labels", "shell_metadata", "ao_to_atom"],
+      "properties": {
+        "reference_fingerprint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "config_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "atoms_bohr": {"type": "array"},
+        "nuclear_charges": {"type": "array", "items": {"type": "number"}},
+        "coordinate_unit": {"const": "bohr"},
+        "basis": {"type": "string"},
+        "spherical": {"const": true},
+        "ao_labels": {"type": "array", "items": {"type": "string"}},
+        "shell_metadata": {"type": "object"},
+        "ao_to_atom": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "quadrature": {
+      "type": "object",
+      "required": ["kind", "level", "pruning", "npoints", "fingerprint_sha256", "coordinates_sha256", "weights_sha256", "block_size", "backend"],
+      "properties": {
+        "kind": {"enum": ["reference", "qualification"]},
+        "level": {"type": "integer", "minimum": 0},
+        "pruning": {"type": "string"},
+        "npoints": {"type": "integer", "minimum": 1},
+        "fingerprint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "coordinates_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "weights_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "block_size": {"type": "integer", "minimum": 1},
+        "backend": {"enum": ["cpu", "gpu"]}
+      }
+    },
+    "source": {"type": "object"},
+    "conventions": {"type": "object"},
+    "tolerances": {"type": "object", "additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
+    "input_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "aion.exact-one-electron-wp2-regression-reference",
+  "version": "1.0.0",
+  "status": "executed_unreviewed_reference_output",
+  "source_execution": {
+    "manifest_id": "a85f4f0cb78036b8b54e6319cf0c5ce8acc9df2b46c7a6c6bc80f0b447b4c7ae",
+    "execution_index_sha256": "d4fac1edec73e21bc7b129763fa66b36a516326fab059ce9802c858b90e20328",
+    "arrays_sha256": "655e03c47820a009ea8d617911ecacaff5e347e01dd6df9e40722707128b6f29",
+    "result_sha256": "288f93e29556ca98ccb387daed36d9402dde41c43d0e34da12cab2d02b2a8ca4"
+  },
+  "reference_fingerprint_sha256": "3610abf760734ce9fc1821d23041d1b017dfe6e96227f69d9eb8bf20a74d9974",
+  "quadrature": {
+    "kind": "qualification",
+    "level": 4,
+    "pruning": "none",
+    "block_size": 2048,
+    "fingerprint_sha256": "247074e1b124e17d4fde8f7edc146a246bd93089995ab9ffbd874ce4f33bbef5"
+  },
+  "field": {
+    "name": "oblique_plus",
+    "magnitude_au": 0.08,
+    "direction": [0.2672612419124244, 0.5345224838248488, 0.8017837257372732],
+    "gauge": "symmetric",
+    "origin_au": [0.0, 0.0, 0.0]
+  },
+  "conventions": {
+    "q": -1.0,
+    "mass": 1.0,
+    "hbar": 1.0,
+    "matrix_indices": "row_mu_bra_column_nu_ket",
+    "endpoint_path": "R_nu_to_R_mu"
+  },
+  "semantic_array_sha256": {
+    "lower_exact_overlap": "4393ad735762182ba82a395618585ea444bcf2c19feb6b4a7029d8f2a3a0e713",
+    "lower_exact_kinetic": "9cb01ed3fdb7021d523265daa3d576cbd6c17f72fc223348f89ab43312168f67",
+    "lower_exact_nuclear_attraction": "d465ae339951c24e679cc6c460c2f1d955f846dfe4da581005d7a6f9c12e94d4",
+    "lower_exact_mechanical": "69da39c6d3b83641d600a1a8742eab9f4444b374f7df7f516b75c419503af6b9",
+    "kinetic_T_pp_F": "51e79527fff06b4e9954eb632dd0025ba86218408fdb58555f1ec15ee22d83d0",
+    "kinetic_T_pC_F": "372ffb9b32258f6b2c0e444e37de8c7e447fd5abef9f614955c5b7fa2a082f05",
+    "kinetic_T_Cp_F": "fa8ea77d64db01693eb9bb606bfa859a56759f9e01c4f3077e558ae4d6c55a3d",
+    "kinetic_T_CC_F": "ad9e08061effdde981abda29731d29d9f8f3a774c05a79560ee7ee20a2285db8"
+  }
+}

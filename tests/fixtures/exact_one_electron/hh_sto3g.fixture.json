@@ -1,0 +1,66 @@
+{
+  "schema": "aion.exact-one-electron-minimal-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "config": {
+    "schema": "aion.one-electron-ao-reference-input",
+    "schema_version": "1.0.0",
+    "atoms": [
+      {"symbol": "H", "position_au": [0.0, 0.0, -0.7]},
+      {"symbol": "H", "position_au": [0.0, 0.0, 0.7]}
+    ],
+    "basis": "sto-3g",
+    "ao_convention": "real_spherical_gaussian",
+    "nuclear_model": "all_electron_local",
+    "electromagnetic_origin_au": [0.0, 0.0, 0.0]
+  },
+  "config_id": "ce2538633f2330799581a1775fa0219146eefee3098ecb38fe0d87cc0513ad45",
+  "reference_fingerprint_sha256": "3610abf760734ce9fc1821d23041d1b017dfe6e96227f69d9eb8bf20a74d9974",
+  "dependencies": {
+    "python": "3.12.13",
+    "numpy": "2.5.2",
+    "scipy": "1.18.0",
+    "pyscf": "2.13.1",
+    "h5py": "3.16.0",
+    "platform": "linux"
+  },
+  "basis_metadata": {
+    "ao_labels": ["0 H 1s    ", "1 H 1s    "],
+    "shell_to_atom": [0, 1],
+    "shell_angular_momenta": [0, 0],
+    "shell_primitive_counts": [3, 3],
+    "shell_contraction_counts": [1, 1],
+    "ao_locations": [0, 1, 2],
+    "fingerprint_sha256": "c24b49b8627e46b981ca2fbd003cdefe2ccdc99592ff62757be3d89051ab4d0a"
+  },
+  "ao_to_atom": [0, 1],
+  "pair_orientation": {
+    "matrix": "row_mu_bra_column_nu_ket",
+    "endpoint_path": "R_nu_to_R_mu",
+    "pair_displacement": "R_mu_minus_R_nu"
+  },
+  "analytic_matrices": {
+    "overlap": [[1.0000000000000002, 0.659318206134864], [0.659318206134864, 1.0000000000000002]],
+    "kinetic": [[0.7600318835666091, 0.23645465597967397], [0.23645465597967397, 0.7600318835666091]],
+    "nuclear_attraction": [[-1.8804408924734295, -1.194834620369291], [-1.194834620369291, -1.8804408924734295]],
+    "position": [
+      [[0.0, 0.0], [0.0, 0.0]],
+      [[0.0, 0.0], [0.0, 0.0]],
+      [[-0.7000000000000001, -6.938893903907228e-18], [6.938893903907228e-18, 0.7000000000000001]]
+    ],
+    "canonical_momentum_real": [
+      [[-0.0, -0.0], [-0.0, -0.0]],
+      [[-0.0, -0.0], [-0.0, -0.0]],
+      [[-0.0, 0.0], [0.0, -0.0]]
+    ],
+    "canonical_momentum_imag": [
+      [[0.0, 0.0], [0.0, 0.0]],
+      [[0.0, 0.0], [0.0, 0.0]],
+      [[0.0, -0.34622766394654747], [0.34622766394654747, 0.0]]
+    ]
+  },
+  "fingerprints": {
+    "core_operators": "3966a8cad976dabc11a5e0c1ff7eb58cd6ffe8d7e48f4a9073fd006ca54274ae",
+    "anchor_topology": "457d35d204e9cdbff200b497825e9511e5731e1c823ec25a9da2370fce67fbec"
+  }
+}

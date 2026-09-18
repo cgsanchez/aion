@@ -1,0 +1,27 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G5",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-18T20:24:32Z",
+  "scope": [
+    "equilateral_and_distorted_three_proton_frameworks",
+    "accepted_pair_fixture_restrictions",
+    "centre_loop_holonomy_orientation_and_field_reversal",
+    "affine_gauge_covariance",
+    "exact_and_approximate_metric_domains_without_regularization",
+    "generalized_eigenvalues_and_subspace_angles",
+    "positive_metric_field_cases_selected_for_wp6"
+  ],
+  "effect": "G5 accepted and WP6 authorized; exact time-connection and linear-propagation qualification may begin at the selected positive-metric fields",
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp5_multicentre_20260918T200808Z_3fd2a83b77d1",
+    "execution_index_sha256": "4ecc66b372360444533bbff56e6c694892ff756e125f788fed13aee92a2d104b",
+    "analysis_manifest_id": "39700c7121c81aca542d9243e9519d5d20416cc678ffa94e69a36e3c7ea9bb7a",
+    "analysis_manifest_sha256": "17b0138fe242db50be7cf35336f990d306786214180df6b0c4fac82b795a1b6a",
+    "analysis_summary_sha256": "4b7c30b604d3c00aa6658ff2db67df65499682b094e48cce6a26ad52dcba115d",
+    "analysis_report_sha256": "87ac001ec8f70ae5bc83fcf230789fd3ef1cd99fc8625c3c786803f8016af1bc"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

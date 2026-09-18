@@ -10,7 +10,7 @@ import numpy as np
 
 from aion.backends import ArrayBackend
 from aion.config import AtomicUnit, NuclearModel, PhysicalDimension, canonical_sha256
-from aion.electronic_structure.data import PreparedReference
+from aion.electronic_structure.data import OneElectronAOReference, PreparedReference
 from aion.errors import ConfigurationError, UnsupportedConfigurationError
 
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,127}$")
@@ -90,7 +90,9 @@ class LocalPotentialProvider(Protocol):
     def identity(self) -> LocalPotentialIdentity: ...
 
     def bind(
-        self, reference: PreparedReference, backend: ArrayBackend
+        self,
+        reference: PreparedReference | OneElectronAOReference,
+        backend: ArrayBackend,
     ) -> BoundLocalPotential: ...
 
 
@@ -107,9 +109,11 @@ class NuclearAttractionProvider:
     )
 
     def bind(
-        self, reference: PreparedReference, backend: ArrayBackend
+        self,
+        reference: PreparedReference | OneElectronAOReference,
+        backend: ArrayBackend,
     ) -> BoundLocalPotential:
-        if (
+        if isinstance(reference, PreparedReference) and (
             reference.config.electronic_structure.nuclear_model
             is not NuclearModel.ALL_ELECTRON_LOCAL
         ):
@@ -165,7 +169,9 @@ class ScaledLocalPotentialProvider:
         )
 
     def bind(
-        self, reference: PreparedReference, backend: ArrayBackend
+        self,
+        reference: PreparedReference | OneElectronAOReference,
+        backend: ArrayBackend,
     ) -> BoundLocalPotential:
         return _BoundScaledPotential(
             identity=self.identity,
@@ -217,7 +223,7 @@ class _BoundScaledPotential:
 
 def bind_local_potential(
     provider: LocalPotentialProvider,
-    reference: PreparedReference,
+    reference: PreparedReference | OneElectronAOReference,
     backend: ArrayBackend,
 ) -> BoundLocalPotential:
     """Bind and validate a provider without accepting AO-matrix substitutes."""

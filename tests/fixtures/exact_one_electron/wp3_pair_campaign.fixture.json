@@ -1,0 +1,61 @@
+{
+  "schema": "aion.exact-one-electron-wp3-pair-campaign-input",
+  "version": "1.0.0",
+  "status": "declared_input_no_numerical_claim",
+  "systems": {
+    "hh": {
+      "atoms": ["H", "H"],
+      "reference_distance_bohr": 1.4,
+      "bond_scales": [0.8, 1.0, 1.25]
+    },
+    "oh": {
+      "atoms": ["O", "H"],
+      "reference_distance_bohr": 1.8,
+      "bond_scales": [0.8, 1.0, 1.25]
+    },
+    "n2": {
+      "atoms": ["N", "N"],
+      "reference_distance_bohr": 2.074,
+      "bond_scales": [0.8, 1.0, 1.25]
+    },
+    "co": {
+      "atoms": ["C", "O"],
+      "reference_distance_bohr": 2.132,
+      "bond_scales": [0.8, 1.0, 1.25]
+    }
+  },
+  "basis_sequence": ["sto-3g", "cc-pvdz", "aug-cc-pvdz"],
+  "basis_roles": {
+    "sto-3g": "compact_minimal",
+    "cc-pvdz": "polarized_double_zeta",
+    "aug-cc-pvdz": "diffuse_augmented_double_zeta"
+  },
+  "uncontracted_policy": "run only if contraction obscures an observed discrepancy",
+  "reference_grid": {"level": 4, "pruning": "none"},
+  "refinement_grid": {"level": 5, "pruning": "none"},
+  "initial_positive_field_magnitudes_au": [
+    1.0e-7,
+    1.0e-6,
+    1.0e-5,
+    1.0e-4,
+    1.0e-3,
+    1.0e-2,
+    1.0e-1,
+    1.0
+  ],
+  "field_directions": {
+    "parallel": [0.0, 0.0, 1.0],
+    "perpendicular_x": [1.0, 0.0, 0.0],
+    "perpendicular_y": [0.0, 1.0, 0.0],
+    "oblique": [0.2672612419124244, 0.5345224838248488, 0.8017837257372732]
+  },
+  "adaptive_refinement": {
+    "rounds": 1,
+    "rule": "geometric midpoint of every first detected threshold bracket"
+  },
+  "normalized_matrix_thresholds": [1.0e-4, 1.0e-3, 1.0e-2],
+  "spectral_shift_thresholds_hartree": [1.0e-6, 1.0e-4, 1.0e-3],
+  "magnetic_field_tesla_per_au": 235051.757077,
+  "coordinate_convention": "bond centered on origin and aligned with positive z",
+  "particle_convention": {"q": -1.0, "mass": 1.0, "hbar": 1.0}
+}

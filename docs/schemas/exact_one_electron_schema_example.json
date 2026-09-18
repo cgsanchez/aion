@@ -1,0 +1,82 @@
+{
+  "run_manifest": {
+    "schema": "aion.exact-one-electron-run-manifest",
+    "version": "1.0.0",
+    "status": "schema_example_not_executed",
+    "manifest_id": null,
+    "execution": {
+      "timestamp_utc": null,
+      "runner": "illustrative schema record; not executed"
+    },
+    "code": {
+      "repository": "/home/cgs/00_WORK/Projection_Code/aion-magnetic-matrix-benchmark",
+      "branch": "feature/magnetic-matrix-benchmark",
+      "commit": "3fd2a83b77d1db64451a64e7a3926f185529525b",
+      "dirty": false
+    },
+    "environment": {
+      "catalog": "2026.07.1",
+      "profile": "gnu",
+      "modules": [],
+      "conda_prefix": "/home/cgs/01_TOOLS/EasyBuild/conda/envs/aion",
+      "conda_lock_sha256": "c4bc582b9f2874297db8195a65653cba6eced73a07757aaffe5408a9e7aeacef",
+      "dependencies": {"pyscf": "2.13.1"},
+      "thread_limits": {"OMP_NUM_THREADS": "8"}
+    },
+    "fixture": {
+      "reference_fingerprint_sha256": "3610abf760734ce9fc1821d23041d1b017dfe6e96227f69d9eb8bf20a74d9974",
+      "config_id": "ce2538633f2330799581a1775fa0219146eefee3098ecb38fe0d87cc0513ad45",
+      "atoms_bohr": [["H", 0.0, 0.0, -0.7], ["H", 0.0, 0.0, 0.7]],
+      "nuclear_charges": [1.0, 1.0],
+      "coordinate_unit": "bohr",
+      "basis": "sto-3g",
+      "spherical": true,
+      "ao_labels": ["0 H 1s    ", "1 H 1s    "],
+      "shell_metadata": {"ao_locations": [0, 1, 2]},
+      "ao_to_atom": [0, 1]
+    },
+    "quadrature": {
+      "kind": "qualification",
+      "level": 0,
+      "pruning": "none",
+      "npoints": 1,
+      "fingerprint_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "coordinates_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "weights_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "block_size": 512,
+      "backend": "cpu"
+    },
+    "source": {"field": "zero", "approximation_level": "bare"},
+    "conventions": {"q": -1.0, "mass": 1.0, "hbar": 1.0, "endpoint_path": "R_nu_to_R_mu"},
+    "tolerances": {"example_only": 1.0},
+    "input_hashes": {"example_only": "0000000000000000000000000000000000000000000000000000000000000000"}
+  },
+  "matrix_result": {
+    "schema": "aion.exact-one-electron-matrix-result",
+    "version": "1.0.0",
+    "status": "schema_example_not_executed",
+    "manifest_id": null,
+    "matrices": [
+      {
+        "name": "overlap/quadrature",
+        "shape": [2, 2],
+        "dtype": "complex128",
+        "unit": "1",
+        "physical_dimension": "overlap",
+        "definition": "illustrative schema record; no numerical array exists",
+        "data_sha256": null
+      }
+    ],
+    "residuals": [
+      {
+        "name": "overlap/relative_frobenius",
+        "value": null,
+        "normalization": "max(1,norm(reference))",
+        "reference": "analytic_libcint_overlap",
+        "tolerance": null
+      }
+    ],
+    "artifact": {"path": null, "sha256": null},
+    "review": {"reviewed": false, "reviewer": null, "decision": "pending"}
+  }
+}

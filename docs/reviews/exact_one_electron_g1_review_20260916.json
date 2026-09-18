@@ -1,0 +1,27 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G1",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-16T19:13:06Z",
+  "scope": [
+    "hh_sto3g_zero_field_grid_convergence",
+    "oh_sto3g_zero_field_grid_convergence",
+    "overlap_kinetic_nuclear_mechanical_momentum",
+    "unpruned_and_nwchem_pruning",
+    "atom_pair_floors_and_momentum_sign"
+  ],
+  "effect": "G1 accepted and WP2 authorized; finite magnetic-field qualification may begin",
+  "selected_grids": {
+    "default": {"level": 4, "pruning": "none"},
+    "refinement": {"level": 5, "pruning": "none"},
+    "alternative_pruning": {"level": 4, "pruning": "nwchem"}
+  },
+  "evidence": {
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp1_20260916T190346Z_3fd2a83b77d1",
+    "execution_index_sha256": "0cbfca29db9db7049885105bcc2fdb5c321fb51507cd0458cb0a4da27a97f19f",
+    "report_sha256": "e36760572eede92c4f39dad248857417bf2c9f69c6ada192dee0b8e9c7e97014"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

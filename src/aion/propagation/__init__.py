@@ -14,6 +14,13 @@ from aion.propagation.linalg import (
     relative_frobenius,
     right_cholesky_metric_link,
 )
+from aion.propagation.linear import (
+    LinearMatrixHistory,
+    LinearPropagationHistory,
+    LinearStepDiagnostics,
+    generalized_spectral_trajectory,
+    propagate_linear_matrix_history,
+)
 from aion.propagation.scem import DampedPicardController, PropagationScratch, SCEMPropagator
 from aion.propagation.transports import (
     ConnectionAwareTransport,
@@ -37,6 +44,9 @@ __all__ = [
     "DampedPicardController",
     "ElectronicState",
     "FixedMetricTransport",
+    "LinearMatrixHistory",
+    "LinearPropagationHistory",
+    "LinearStepDiagnostics",
     "LinkDiagnostics",
     "OrbitalState",
     "PreparedConnectionAwareTransport",
@@ -52,11 +62,13 @@ __all__ = [
     "build_propagator",
     "cross_metric_residual",
     "density_from_orbitals",
+    "generalized_spectral_trajectory",
     "hamiltonian_residual",
     "hermitian_cleanup",
     "metric_density_residual",
     "metric_roundoff_limit",
     "orbital_metric_residual",
+    "propagate_linear_matrix_history",
     "pull_lower_matrix",
     "rational_map",
     "relative_frobenius",

@@ -1,0 +1,54 @@
+{
+  "schema": "aion.exact-one-electron-oh-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "purpose": "WP1 heteronuclear and oxygen-angular zero-field grid qualification",
+  "config": {
+    "schema": "aion.one-electron-ao-reference-input",
+    "schema_version": "1.0.0",
+    "atoms": [
+      {"symbol": "O", "position_au": [0.0, 0.0, -0.9]},
+      {"symbol": "H", "position_au": [0.0, 0.0, 0.9]}
+    ],
+    "basis": "sto-3g",
+    "ao_convention": "real_spherical_gaussian",
+    "nuclear_model": "all_electron_local",
+    "electromagnetic_origin_au": [0.0, 0.0, 0.0]
+  },
+  "config_id": "2cbf548c3a905d35a985996e4752cc62c52830cf9a3bf103b93fcf6857f4a412",
+  "reference_fingerprint_sha256": "9222dd9f3ba1ecc13fe4b950c4a16b3e2d24837d08a6bc072b60ccea28d42a40",
+  "dependencies": {
+    "python": "3.12.13",
+    "numpy": "2.5.2",
+    "scipy": "1.18.0",
+    "pyscf": "2.13.1",
+    "h5py": "3.16.0",
+    "platform": "linux"
+  },
+  "basis_metadata": {
+    "ao_labels": [
+      "0 O 1s    ",
+      "0 O 2s    ",
+      "0 O 2px   ",
+      "0 O 2py   ",
+      "0 O 2pz   ",
+      "1 H 1s    "
+    ],
+    "shell_to_atom": [0, 0, 0, 1],
+    "shell_angular_momenta": [0, 0, 1, 0],
+    "shell_primitive_counts": [3, 3, 3, 3],
+    "shell_contraction_counts": [1, 1, 1, 1],
+    "ao_locations": [0, 1, 2, 5, 6],
+    "fingerprint_sha256": "4eccc5030885cebb65c164da0408f646630a6d4e037607e36b67945dc514d081"
+  },
+  "ao_to_atom": [0, 0, 0, 0, 0, 1],
+  "pair_orientation": {
+    "matrix": "row_mu_bra_column_nu_ket",
+    "endpoint_path": "R_nu_to_R_mu",
+    "pair_displacement": "R_mu_minus_R_nu"
+  },
+  "fingerprints": {
+    "core_operators": "1da97c704c7a9c43f144b2e8c14965aacfcc147a62d4c8ad4a57e7bc1017c055",
+    "anchor_topology": "d437b75c3543e30c267e5d96c26442c3539c3213f952d503fe1a8523174cebdb"
+  }
+}
