@@ -1,0 +1,41 @@
+{
+  "schema": "aion.exact-one-electron-wp6-mixed-magnus-experiment-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "purpose": "test whether uncorrected fourth-order mixed-density Gauss-Magnus propagation resolves the G6 model-difference timestep instability",
+  "source_midpoint_supplement": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_h3_timestep_refinement_20260918T212428Z_3fd2a83b77d1",
+  "system_label": "one_electron_on_three_protons_is_H3_2plus_not_physical_H3_plus",
+  "basis": "cc-pvdz",
+  "grid_level": 4,
+  "block_size": 2048,
+  "pulse_duration_au": 4.0,
+  "comparison_intervals": [
+    8,
+    16,
+    32
+  ],
+  "geometries": [
+    "equilateral",
+    "distorted"
+  ],
+  "selection_roles": [
+    "sub_threshold",
+    "near_threshold",
+    "above_threshold"
+  ],
+  "models": [
+    "exact",
+    "p0",
+    "e1",
+    "geometric_b1",
+    "full_b1",
+    "complete_first_order"
+  ],
+  "experimental_criteria": {
+    "minimum_time_convergence_order": 3.5,
+    "fine_model_difference_refinement_fraction": 0.25,
+    "maximum_trace_drift": 2e-12,
+    "maximum_idempotency_residual": 2e-12,
+    "minimum_metric_eigenvalue": 1e-6
+  }
+}
