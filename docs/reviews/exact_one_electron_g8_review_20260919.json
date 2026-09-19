@@ -1,0 +1,43 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G8",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-19T15:39:06Z",
+  "scope": {
+    "accepted_evidence_chain": [
+      "G3 static pair physics",
+      "G4 first-order hierarchy",
+      "G5 multicentre loop-flux and generalized spectra",
+      "G6 fixed-centre linear one-electron dynamics",
+      "G7 action observables, continuity, Ward identities, and power",
+      "G8 authenticated bounded synthesis"
+    ],
+    "validity_statement": "fixed-centre linear exact one-electron Wilson dynamics and its P0, E1, gB1, B1, and C1 truncations over the explicitly tabulated systems, bases, geometries, fields, and source histories",
+    "interpretation_boundary": "all field ranges are scan brackets and every physical comparison retains its quadrature or timestep resolution companion"
+  },
+  "effect": "G8 accepted; the exact fixed-centre linear one-electron qualification is closed, option 1 is selected as the next scientific branch, and planning for Aion adiabatic pure-LDA/GGA TDDFT closure is authorized after creation of the archival qualification report",
+  "selected_branch": {
+    "plan_option": 1,
+    "identifier": "aion_adiabatic_pure_lda_gga_tddft_closure",
+    "label": "Aion adiabatic pure-LDA/GGA TDDFT closure"
+  },
+  "limitations": [
+    "acceptance does not extend beyond the authenticated systems, bases, geometries, fields, and source histories",
+    "self-consistent Hartree and exchange-correlation source response is not implemented or accepted",
+    "nonlinear SCEM propagation is not implemented or accepted",
+    "moving nuclei, pseudopotentials, periodic systems, general nonuniform-field power balance, and pointwise current-density reconstruction remain outside scope"
+  ],
+  "implementation_commit": "2fa0214fa659477637e95a5541a5d96d7acfa713",
+  "evidence": {
+    "candidate_review": "docs/reviews/exact_one_electron_g8_review_candidate_20260919.json",
+    "synthesis_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp8_synthesis_20260919T152644Z_2fa0214fa659",
+    "manifest_id": "f41bbd648891028d9665caf13f5ab1801b46c8d87eb535db3a5471c0f88f41c8",
+    "completed_sha256": "da2de4de08498cbfe69ce12448f8dc28a5069bd2866d2dc6cc5b8630445bc72d",
+    "manifest_sha256": "929ba2f569b824494f3a43c3fb1773d286f2ae818f1611b0e04fe20980420f81",
+    "summary_sha256": "4c5cb2146cf63390424ec1c8aa28c1d39d5827f6d146169a9db80b646b9f662c",
+    "synthesis_sha256": "e7f31b688e4e75f6e787828ecd073345fe6eafd98bca101129d52688d1ce8bc2"
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}
