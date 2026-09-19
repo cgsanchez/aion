@@ -47,7 +47,11 @@
     "candidate_review": "docs/reviews/exact_one_electron_g7_review_candidate_20260919.json",
     "cpu_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db",
     "gpu_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_gpu_20260919T145459Z_7d603105e1db",
-    "analysis_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db/analysis"
+    "analysis_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db/analysis",
+    "cpu_completed_sha256": "a87c7a68e65b20a55b6efd8bb00ada8ffbb0bb5864c3c43cfb23f2cb5f8b2688",
+    "gpu_completed_sha256": "2adcac32341b2465bfccf89dc59bc306abf7c5b935307bab0e76b2ddd17165f5",
+    "analysis_summary_sha256": "6d0c3d362fac13ecfe8eef6680d8a63a922531613b9e6c9b4ad38b0ba925210b",
+    "analysis_refinement_table_sha256": "e54451a0e239141b2423f37b2d6dd11ef56135895aa6e14c5b67e070a594ef18"
   },
   "accepted_measurements": {
     "electric_integrated_work_orders": [
