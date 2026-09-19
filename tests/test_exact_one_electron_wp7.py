@@ -16,6 +16,7 @@ from aion.config import (
 from aion.electromagnetism import UniformMagneticField, UniformMagneticSourceSample
 from aion.electronic_structure import (
     AOGridPolicy,
+    evaluate_exact_magnetic_field_source_direction,
     evaluate_exact_temporal_source_direction,
     evaluate_exact_wilson_one_electron_sample,
     prepare_ao_quadrature,
@@ -25,6 +26,9 @@ from aion.formulations import (
     EOMTriple,
     OneElectronActionMatrixDirection,
     exact_endpoint_link_action_direction,
+    exact_internal_magnetic_action_direction,
+    exact_magnetic_endpoint_action_direction,
+    exact_magnetic_field_action_direction,
     exact_site_scalar_action_direction,
     exact_wilson_one_electron_triple,
     one_electron_velocity_density,
@@ -381,3 +385,114 @@ def test_wp7_site_scalar_and_oriented_link_action_directions() -> None:
     )
     assert abs(float(link_derivative.metric_kinematic)) > 1.0e-8
     assert abs(float(link_derivative.mechanical)) > 1.0e-8
+
+
+@pytest.mark.integration
+def test_wp7_exact_finite_magnetic_source_direction_matches_fixed_history_difference() -> None:
+    quadrature = _quadrature()
+    field = np.asarray((0.017, -0.013, 0.031))
+    source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField(tuple(field)),
+        magnetic_field_dot_au=(0.003, -0.004, 0.007),
+        electric_field_origin_au=(0.013, -0.009, 0.017),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    sample = evaluate_exact_wilson_one_electron_sample(quadrature, source)
+    magnetic_direction = np.asarray((0.13, -0.07, 0.09))
+    response = evaluate_exact_magnetic_field_source_direction(
+        quadrature,
+        sample,
+        magnetic_direction,
+    )
+    total_direction = exact_magnetic_field_action_direction(
+        response,
+        quadrature.backend,
+    )
+    endpoint_direction = exact_magnetic_endpoint_action_direction(
+        response,
+        quadrature.backend,
+    )
+    internal_direction = exact_internal_magnetic_action_direction(
+        response,
+        quadrature.backend,
+    )
+    for total, endpoint, internal in (
+        (
+            total_direction.metric,
+            endpoint_direction.metric,
+            internal_direction.metric,
+        ),
+        (
+            total_direction.mechanical,
+            endpoint_direction.mechanical,
+            internal_direction.mechanical,
+        ),
+        (
+            total_direction.connection,
+            endpoint_direction.connection,
+            internal_direction.connection,
+        ),
+    ):
+        np.testing.assert_allclose(total, endpoint + internal, atol=3.0e-14, rtol=3.0e-14)
+
+    step = 2.0e-5
+
+    def displaced(sign: float) -> object:
+        displaced_source = UniformMagneticSourceSample(
+            source.time_au,
+            UniformMagneticField(tuple(field + sign * step * magnetic_direction)),
+            magnetic_field_dot_au=source.magnetic_field_dot_au,
+            electric_field_origin_au=source.electric_field_origin_au,
+            origin_au=source.origin_au,
+        )
+        return evaluate_exact_wilson_one_electron_sample(quadrature, displaced_source)
+
+    plus = displaced(1.0)
+    minus = displaced(-1.0)
+    for analytic, plus_value, minus_value in (
+        (total_direction.metric, plus.metric, minus.metric),
+        (total_direction.mechanical, plus.mechanical, minus.mechanical),
+        (
+            total_direction.connection,
+            plus.connection.connection,
+            minus.connection.connection,
+        ),
+    ):
+        finite_difference = (plus_value - minus_value) / (2.0 * step)
+        np.testing.assert_allclose(
+            analytic,
+            finite_difference,
+            atol=3.0e-9,
+            rtol=4.0e-8,
+        )
+
+    triple = exact_wilson_one_electron_triple(sample)
+    density = _state(sample.metric)
+    velocity_density = one_electron_velocity_density(
+        density,
+        triple,
+        quadrature.backend,
+    )
+    analytic_action = restricted_one_electron_action_directional_derivative(
+        density,
+        velocity_density,
+        total_direction,
+        quadrature.backend,
+    )
+
+    def action(displaced_sample: object) -> object:
+        return restricted_one_electron_action_value(
+            density,
+            velocity_density,
+            exact_wilson_one_electron_triple(displaced_sample),
+            quadrature.backend,
+        ).total
+
+    finite_action = (action(plus) - action(minus)) / (2.0 * step)
+    np.testing.assert_allclose(
+        analytic_action.total,
+        finite_action,
+        atol=3.0e-9,
+        rtol=4.0e-8,
+    )

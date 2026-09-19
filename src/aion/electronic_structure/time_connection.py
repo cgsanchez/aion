@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from aion.electromagnetism.magnetic import (
+    UniformMagneticField,
     UniformMagneticSourceSample,
     build_magnetic_pair_geometry,
     endpoint_line_integrals,
@@ -15,8 +16,10 @@ from aion.electromagnetism.magnetic import (
 )
 from aion.electronic_structure.ao_quadrature import AOQuadrature
 from aion.electronic_structure.magnetic_matrices import (
+    ExactStaticMagneticOneElectronDirection,
     ExactStaticMagneticOneElectronResult,
     OneElectronLowerMatrices,
+    evaluate_exact_static_magnetic_one_electron_direction,
     evaluate_exact_static_magnetic_one_electron_matrices,
 )
 from aion.errors import ConfigurationError
@@ -91,6 +94,43 @@ class ExactTemporalSourceDirection:
     connection: Any
     metric_rate: Any
     decomposition_residual: float
+
+
+@dataclass(frozen=True, slots=True)
+class ExactMagneticFieldSourceDirection:
+    """Exact action-matrix response to an instantaneous uniform ``B`` direction.
+
+    Endpoint, internal triangle, and anchored-vector responses remain
+    separately inspectable.  ``Bdot`` and the electric field at the origin
+    are held fixed while the instantaneous magnetic field is varied.
+    """
+
+    magnetic_field_direction_au: tuple[float, float, float]
+    metric_endpoint: Any
+    metric_internal: Any
+    mechanical_endpoint: Any
+    mechanical_internal_triangle: Any
+    mechanical_internal_anchored: Any
+    connection_endpoint: Any
+    connection_internal: Any
+    radial_electric_integral_direction: Any
+    static_direction: ExactStaticMagneticOneElectronDirection
+
+    @property
+    def metric(self) -> Any:
+        return self.metric_endpoint + self.metric_internal
+
+    @property
+    def mechanical_internal(self) -> Any:
+        return self.mechanical_internal_triangle + self.mechanical_internal_anchored
+
+    @property
+    def mechanical(self) -> Any:
+        return self.mechanical_endpoint + self.mechanical_internal
+
+    @property
+    def connection(self) -> Any:
+        return self.connection_endpoint + self.connection_internal
 
 
 def evaluate_exact_uniform_magnetic_time_connection(
@@ -413,6 +453,116 @@ def evaluate_exact_temporal_source_direction(
         connection=value.connection,
         metric_rate=value.metric_dot,
         decomposition_residual=residual,
+    )
+
+
+def evaluate_exact_magnetic_field_source_direction(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    magnetic_field_direction_au: object,
+    *,
+    memory_budget_bytes: int | None = None,
+) -> ExactMagneticFieldSourceDirection:
+    r"""Differentiate ``(S,K,omega_t)`` along instantaneous uniform ``B``.
+
+    The source direction is evaluated at arbitrary finite ``B``.  It uses
+    ``delta F=i delta(phi)F`` for the internal triangle holonomy, analytic
+    derivatives of both anchored kinetic vectors, and the exact derivative
+    of the endpoint link.  The prescribed ``Bdot`` and electric field at the
+    origin are not changed by this variation.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    if not isinstance(sample, ExactWilsonOneElectronSample):
+        raise TypeError("sample must be an ExactWilsonOneElectronSample")
+    if sample.static_result.reference_fingerprint_sha256 != (
+        quadrature.reference.fingerprint_sha256
+    ):
+        raise ConfigurationError("sample belongs to a different AO reference")
+    if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise ConfigurationError("sample belongs to a different AO quadrature grid")
+
+    direction = _direction_vector(
+        magnetic_field_direction_au,
+        "magnetic_field_direction_au",
+    )
+    static_direction = evaluate_exact_static_magnetic_one_electron_direction(
+        quadrature,
+        sample.static_result,
+        direction,
+        gauge=sample.source.gauge,
+        memory_budget_bytes=memory_budget_bytes,
+    )
+    backend = quadrature.backend
+    xp = backend.namespace
+    reference = quadrature.reference
+    geometry = build_magnetic_pair_geometry(
+        reference.core_operators.nuclei.coordinates_au,
+        reference.anchor_topology.ao_to_atom,
+        backend,
+    )
+    direction_field = UniformMagneticField(direction)
+    anchors = geometry.ao_anchor_coordinates_au
+    nao = reference.core_operators.nao
+    radial_direction = backend.zeros((nao, nao), dtype=xp.complex128)
+    for block in quadrature.blocks():
+        phase = triangle_phases(
+            block.coordinates_au,
+            geometry,
+            sample.source.field,
+            backend,
+            charge=sample.static_result.charge,
+            hbar=sample.static_result.hbar,
+        )
+        phase_direction = triangle_phases(
+            block.coordinates_au,
+            geometry,
+            direction_field,
+            backend,
+            charge=sample.static_result.charge,
+            hbar=sample.static_result.hbar,
+        )
+        factor_direction = 1j * phase_direction * xp.exp(1j * phase)
+        radial = sample.source.radial_electric_line_integrals(
+            anchors[None, :, :],
+            block.coordinates_au[:, None, :],
+            backend,
+        )
+        radial_direction += _pair_with_factor(
+            block.values,
+            block.weights_au,
+            factor_direction * radial[:, None, :],
+            xp,
+        )
+
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+    scalar_at_anchors = sample.source.scalar_potential(anchors, backend)
+    connection_endpoint = static_direction.endpoint_phase_direction * sample.connection.connection
+    connection_internal = (
+        prefactor
+        * sample.static_result.endpoint_link
+        * (static_direction.barred_overlap * scalar_at_anchors[None, :] - radial_direction)
+    )
+    mechanical_endpoint = static_direction.endpoint.mechanical
+    mechanical_internal_triangle = sample.static_result.endpoint_link * (
+        static_direction.barred_kinetic_triangle + static_direction.barred_nuclear_attraction
+    )
+    mechanical_internal_anchored = (
+        sample.static_result.endpoint_link * static_direction.barred_kinetic_anchored
+    )
+    backend.synchronize()
+    return ExactMagneticFieldSourceDirection(
+        magnetic_field_direction_au=direction,
+        metric_endpoint=static_direction.endpoint.overlap,
+        metric_internal=static_direction.internal.overlap,
+        mechanical_endpoint=mechanical_endpoint,
+        mechanical_internal_triangle=mechanical_internal_triangle,
+        mechanical_internal_anchored=mechanical_internal_anchored,
+        connection_endpoint=connection_endpoint,
+        connection_internal=connection_internal,
+        radial_electric_integral_direction=radial_direction,
+        static_direction=static_direction,
     )
 
 

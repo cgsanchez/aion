@@ -248,6 +248,34 @@ class ExactStaticMagneticOneElectronResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactStaticMagneticOneElectronDirection:
+    """Analytic derivative of exact static matrices along one uniform ``B`` direction.
+
+    The endpoint contribution differentiates only the centre-to-centre Wilson
+    link.  The internal contribution differentiates the gauge-invariant
+    triangle factor and, for the kinetic matrix, the two anchored magnetic
+    vectors.  All matrices use the row-bra/column-ket convention.
+    """
+
+    magnetic_field_direction_au: tuple[float, float, float]
+    endpoint_phase_direction: Any
+    barred_overlap: Any
+    barred_kinetic_triangle: Any
+    barred_kinetic_anchored: Any
+    barred_nuclear_attraction: Any
+    endpoint: OneElectronLowerMatrices
+    internal: OneElectronLowerMatrices
+    total: OneElectronLowerMatrices
+    reference_fingerprint_sha256: str
+    grid_fingerprint_sha256: str
+    backend: str
+    device_index: int | None
+    charge: float
+    mass: float
+    hbar: float
+
+
+@dataclass(frozen=True, slots=True)
 class GIAOOneElectronDerivatives:
     """Independent libcint lower, endpoint, and barred Cartesian B derivatives."""
 
@@ -390,6 +418,257 @@ def evaluate_exact_static_magnetic_one_electron_matrices(
     )
 
 
+def evaluate_exact_static_magnetic_one_electron_direction(
+    quadrature: AOQuadrature,
+    static_result: ExactStaticMagneticOneElectronResult,
+    magnetic_field_direction_au: object,
+    *,
+    gauge: AffineMagneticGauge | None = None,
+    memory_budget_bytes: int | None = None,
+) -> ExactStaticMagneticOneElectronDirection:
+    r"""Differentiate exact static one-electron matrices at arbitrary ``B``.
+
+    For a real direction ``delta B``, the exact uniform-field factors obey
+
+    ``delta F = i delta(phi) F``, ``delta C_mu = C_mu[delta B]``, and
+    ``delta Theta = (i q/hbar) delta(ell) Theta``.
+
+    These identities are contracted directly on the declared AO quadrature.
+    No finite-difference step enters the returned derivative.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    if not isinstance(static_result, ExactStaticMagneticOneElectronResult):
+        raise TypeError("static_result must be an ExactStaticMagneticOneElectronResult")
+    _validate_static_result(quadrature, static_result)
+    direction = _direction_vector(
+        magnetic_field_direction_au,
+        "magnetic_field_direction_au",
+    )
+    if memory_budget_bytes is not None:
+        if (
+            isinstance(memory_budget_bytes, bool)
+            or not isinstance(memory_budget_bytes, int)
+            or memory_budget_bytes <= 0
+        ):
+            raise ConfigurationError("magnetic memory_budget_bytes must be a positive integer")
+        required = estimate_magnetic_block_bytes(
+            quadrature.block_size,
+            quadrature.reference.core_operators.nao,
+        )
+        if required > memory_budget_bytes:
+            raise ConfigurationError(
+                f"magnetic block requires {required} bytes, exceeding "
+                f"memory_budget_bytes={memory_budget_bytes}"
+            )
+
+    backend = quadrature.backend
+    xp = backend.namespace
+    reference = quadrature.reference
+    geometry = build_magnetic_pair_geometry(
+        reference.core_operators.nuclei.coordinates_au,
+        reference.anchor_topology.ao_to_atom,
+        backend,
+    )
+    direction_field = UniformMagneticField(direction)
+    base_gauge = (
+        AffineMagneticGauge(
+            static_result.field,
+            origin_au=reference.electromagnetic_origin_au,
+        )
+        if gauge is None
+        else gauge
+    )
+    if not isinstance(base_gauge, AffineMagneticGauge):
+        raise TypeError("gauge must be an AffineMagneticGauge")
+    if base_gauge.field != static_result.field:
+        raise ConfigurationError("gauge and static result use different magnetic fields")
+    direction_gauge = AffineMagneticGauge(
+        direction_field,
+        kind=base_gauge.kind,
+        origin_au=base_gauge.origin_au,
+        landau_axis=base_gauge.landau_axis,
+    )
+    direction_line = direction_gauge.straight_line_integrals(
+        geometry.ao_anchor_coordinates_au[None, :, :],
+        geometry.ao_anchor_coordinates_au[:, None, :],
+        backend,
+    )
+    endpoint_phase_direction = (1j * static_result.charge / static_result.hbar) * direction_line
+
+    nao = reference.core_operators.nao
+    barred_overlap = backend.zeros((nao, nao), dtype=xp.complex128)
+    barred_kinetic_triangle = backend.zeros((nao, nao), dtype=xp.complex128)
+    barred_kinetic_anchored = backend.zeros((nao, nao), dtype=xp.complex128)
+    barred_nuclear = backend.zeros((nao, nao), dtype=xp.complex128)
+    nuclear_provider = bind_local_potential(
+        NuclearAttractionProvider(),
+        reference,
+        backend,
+    )
+    kinetic_scale = 1.0 / (2.0 * static_result.mass)
+
+    for block in quadrature.blocks():
+        values = block.values
+        gradients = xp.moveaxis(block.gradients, 0, -1)
+        bare_momentum = -1j * static_result.hbar * gradients
+        nuclear_weights = block.weights_au * nuclear_provider.values_au(block.coordinates_au)
+        phase = triangle_phases(
+            block.coordinates_au,
+            geometry,
+            static_result.field,
+            backend,
+            charge=static_result.charge,
+            hbar=static_result.hbar,
+        )
+        phase_direction = triangle_phases(
+            block.coordinates_au,
+            geometry,
+            direction_field,
+            backend,
+            charge=static_result.charge,
+            hbar=static_result.hbar,
+        )
+        factor = xp.exp(1j * phase)
+        factor_direction = 1j * phase_direction * factor
+        anchored = (
+            static_result.charge
+            * anchored_vectors(
+                block.coordinates_au,
+                geometry,
+                static_result.field,
+                backend,
+            )
+            * values[:, :, None]
+        )
+        anchored_direction = (
+            static_result.charge
+            * anchored_vectors(
+                block.coordinates_au,
+                geometry,
+                direction_field,
+                backend,
+            )
+            * values[:, :, None]
+        )
+
+        barred_overlap += _factorized_pair(
+            values,
+            values,
+            block.weights_au,
+            factor_direction,
+            xp,
+        )
+        barred_nuclear += _factorized_pair(
+            values,
+            values,
+            nuclear_weights,
+            factor_direction,
+            xp,
+        )
+        barred_kinetic_triangle += kinetic_scale * (
+            _factorized_vector_pair(
+                bare_momentum,
+                bare_momentum,
+                block.weights_au,
+                factor_direction,
+                xp,
+            )
+            + _factorized_vector_pair(
+                bare_momentum,
+                anchored,
+                block.weights_au,
+                factor_direction,
+                xp,
+            )
+            + _factorized_vector_pair(
+                anchored,
+                bare_momentum,
+                block.weights_au,
+                factor_direction,
+                xp,
+            )
+            + _factorized_vector_pair(
+                anchored,
+                anchored,
+                block.weights_au,
+                factor_direction,
+                xp,
+            )
+        )
+        barred_kinetic_anchored += kinetic_scale * (
+            _factorized_vector_pair(
+                bare_momentum,
+                anchored_direction,
+                block.weights_au,
+                factor,
+                xp,
+            )
+            + _factorized_vector_pair(
+                anchored_direction,
+                bare_momentum,
+                block.weights_au,
+                factor,
+                xp,
+            )
+            + _factorized_vector_pair(
+                anchored_direction,
+                anchored,
+                block.weights_au,
+                factor,
+                xp,
+            )
+            + _factorized_vector_pair(
+                anchored,
+                anchored_direction,
+                block.weights_au,
+                factor,
+                xp,
+            )
+        )
+
+    endpoint_link = static_result.endpoint_link
+    lower = static_result.lower_exact
+    endpoint = OneElectronLowerMatrices(
+        overlap=endpoint_phase_direction * lower.overlap,
+        kinetic=endpoint_phase_direction * lower.kinetic,
+        nuclear_attraction=endpoint_phase_direction * lower.nuclear_attraction,
+    )
+    internal = OneElectronLowerMatrices(
+        overlap=endpoint_link * barred_overlap,
+        kinetic=endpoint_link * (barred_kinetic_triangle + barred_kinetic_anchored),
+        nuclear_attraction=endpoint_link * barred_nuclear,
+    )
+    total = OneElectronLowerMatrices(
+        overlap=endpoint.overlap + internal.overlap,
+        kinetic=endpoint.kinetic + internal.kinetic,
+        nuclear_attraction=(endpoint.nuclear_attraction + internal.nuclear_attraction),
+    )
+    backend.synchronize()
+    return ExactStaticMagneticOneElectronDirection(
+        magnetic_field_direction_au=direction,
+        endpoint_phase_direction=xp.asarray(
+            endpoint_phase_direction,
+            dtype=xp.complex128,
+        ),
+        barred_overlap=barred_overlap,
+        barred_kinetic_triangle=barred_kinetic_triangle,
+        barred_kinetic_anchored=barred_kinetic_anchored,
+        barred_nuclear_attraction=barred_nuclear,
+        endpoint=endpoint,
+        internal=internal,
+        total=total,
+        reference_fingerprint_sha256=static_result.reference_fingerprint_sha256,
+        grid_fingerprint_sha256=static_result.grid_fingerprint_sha256,
+        backend=static_result.backend,
+        device_index=static_result.device_index,
+        charge=static_result.charge,
+        mass=static_result.mass,
+        hbar=static_result.hbar,
+    )
+
+
 def evaluate_magnetic_one_electron_first_derivatives(
     quadrature: AOQuadrature,
     *,
@@ -407,9 +686,7 @@ def evaluate_magnetic_one_electron_first_derivatives(
     """
 
     fields = tuple(
-        UniformMagneticField(
-            (float(direction[0]), float(direction[1]), float(direction[2]))
-        )
+        UniformMagneticField((float(direction[0]), float(direction[1]), float(direction[2])))
         for direction in np.eye(3)
     )
     results = evaluate_magnetic_one_electron_matrices(
@@ -427,12 +704,8 @@ def evaluate_magnetic_one_electron_first_derivatives(
     return MagneticOneElectronFirstDerivatives(
         metric=xp.stack([result.overlap.first_F for result in results]),
         kinetic_triangle=xp.stack([result.kinetic.first_F for result in results]),
-        kinetic_anchored_pC=xp.stack(
-            [result.kinetic.first_pC for result in results]
-        ),
-        kinetic_anchored_Cp=xp.stack(
-            [result.kinetic.first_Cp for result in results]
-        ),
+        kinetic_anchored_pC=xp.stack([result.kinetic.first_pC for result in results]),
+        kinetic_anchored_Cp=xp.stack([result.kinetic.first_Cp for result in results]),
         nuclear_attraction_triangle=xp.stack(
             [result.nuclear_attraction.first_F for result in results]
         ),
@@ -520,9 +793,7 @@ def _evaluate_magnetic_one_electron_matrices(
         (checked_hbar * checked_hbar / checked_mass) * reference.core_operators.kinetic,
         dtype=xp.complex128,
     )
-    nuclear_provider = bind_local_potential(
-        NuclearAttractionProvider(), reference, backend
-    )
+    nuclear_provider = bind_local_potential(NuclearAttractionProvider(), reference, backend)
     analytic_nuclear = nuclear_provider.zero_matrix_au
     accumulators = tuple(_new_accumulators(nao, backend) for _ in fields)
     absolute_product_integral = backend.zeros((nao, nao), dtype=xp.float64)
@@ -540,12 +811,8 @@ def _evaluate_magnetic_one_electron_matrices(
             absolute_values, absolute_values, block.weights_au, xp
         ).real
         zero_accumulator = accumulators[0]
-        zero_accumulator.overlap_zero += _ordinary_pair(
-            values, values, block.weights_au, xp
-        )
-        zero_accumulator.nuclear_zero += _ordinary_pair(
-            values, values, potential_weights, xp
-        )
+        zero_accumulator.overlap_zero += _ordinary_pair(values, values, block.weights_au, xp)
+        zero_accumulator.nuclear_zero += _ordinary_pair(values, values, potential_weights, xp)
         zero_accumulator.kinetic_zero += kinetic_scale * _ordinary_vector_pair(
             bare_momentum, bare_momentum, block.weights_au, xp
         )
@@ -605,48 +872,36 @@ def _evaluate_magnetic_one_electron_matrices(
                 anchored_momentum, bare_momentum, block.weights_au, xp
             )
             if not exact_only:
-                accumulator.kinetic_second_F2 += (
-                    kinetic_scale
-                    * _factorized_vector_pair(
-                        bare_momentum,
-                        bare_momentum,
-                        block.weights_au,
-                        second_factor,
-                        xp,
-                    )
+                accumulator.kinetic_second_F2 += kinetic_scale * _factorized_vector_pair(
+                    bare_momentum,
+                    bare_momentum,
+                    block.weights_au,
+                    second_factor,
+                    xp,
                 )
-                accumulator.kinetic_second_F_pC += (
-                    kinetic_scale
-                    * _factorized_vector_pair(
-                        bare_momentum,
-                        anchored_momentum,
-                        block.weights_au,
-                        first_factor,
-                        xp,
-                    )
+                accumulator.kinetic_second_F_pC += kinetic_scale * _factorized_vector_pair(
+                    bare_momentum,
+                    anchored_momentum,
+                    block.weights_au,
+                    first_factor,
+                    xp,
                 )
-                accumulator.kinetic_second_F_Cp += (
-                    kinetic_scale
-                    * _factorized_vector_pair(
-                        anchored_momentum,
-                        bare_momentum,
-                        block.weights_au,
-                        first_factor,
-                        xp,
-                    )
+                accumulator.kinetic_second_F_Cp += kinetic_scale * _factorized_vector_pair(
+                    anchored_momentum,
+                    bare_momentum,
+                    block.weights_au,
+                    first_factor,
+                    xp,
                 )
             accumulator.kinetic_second_C2 += kinetic_scale * _ordinary_vector_pair(
                 anchored_momentum, anchored_momentum, block.weights_au, xp
             )
-            accumulator.kinetic_exact_pp_correction += (
-                kinetic_scale
-                * _factorized_vector_pair(
-                    bare_momentum,
-                    bare_momentum,
-                    block.weights_au,
-                    exact_minus_one,
-                    xp,
-                )
+            accumulator.kinetic_exact_pp_correction += kinetic_scale * _factorized_vector_pair(
+                bare_momentum,
+                bare_momentum,
+                block.weights_au,
+                exact_minus_one,
+                xp,
             )
             accumulator.kinetic_exact_pC += kinetic_scale * _factorized_vector_pair(
                 bare_momentum, anchored_momentum, block.weights_au, exact_factor, xp
@@ -669,15 +924,12 @@ def _evaluate_magnetic_one_electron_matrices(
                 line_gradients = gauge.anchor_to_point_line_integral_gradients(
                     geometry.ao_anchor_coordinates_au, block.coordinates_au, backend
                 )
-                point_vector_potential = gauge.vector_potential(
-                    block.coordinates_au, backend
-                )
+                point_vector_potential = gauge.vector_potential(block.coordinates_au, backend)
                 direct_residual = line_gradients - point_vector_potential[:, None, :]
                 wilson = xp.exp((1j * checked_charge / checked_hbar) * line_integrals)
                 dressed_values = wilson * values
                 dressed_momentum = wilson[:, :, None] * (
-                    bare_momentum
-                    + checked_charge * direct_residual * values[:, :, None]
+                    bare_momentum + checked_charge * direct_residual * values[:, :, None]
                 )
                 accumulator.direct_overlap += _ordinary_pair(
                     dressed_values, dressed_values, block.weights_au, xp
@@ -701,17 +953,12 @@ def _evaluate_magnetic_one_electron_matrices(
             charge=checked_charge,
             hbar=checked_hbar,
         )
-        overlap_exact_grid = (
-            common_accumulator.overlap_zero + accumulator.overlap_exact_correction
-        )
+        overlap_exact_grid = common_accumulator.overlap_zero + accumulator.overlap_exact_correction
         overlap_exact = analytic_overlap + accumulator.overlap_exact_correction
-        nuclear_exact_grid = (
-            common_accumulator.nuclear_zero + accumulator.nuclear_exact_correction
-        )
+        nuclear_exact_grid = common_accumulator.nuclear_zero + accumulator.nuclear_exact_correction
         nuclear_exact = analytic_nuclear + accumulator.nuclear_exact_correction
         grid_sectors = KineticExactSectors(
-            pp=common_accumulator.kinetic_zero
-            + accumulator.kinetic_exact_pp_correction,
+            pp=common_accumulator.kinetic_zero + accumulator.kinetic_exact_pp_correction,
             pC=accumulator.kinetic_exact_pC,
             Cp=accumulator.kinetic_exact_Cp,
             C2=accumulator.kinetic_exact_C2,
@@ -846,9 +1093,7 @@ def pyscf_giao_one_electron_derivatives(
         + 0.5 * np.asarray(molecule.intor("int1e_giao_irjxp", comp=3))
     )
     nuclear_lower = -1j * np.asarray(molecule.intor("int1e_ignuc", comp=3))
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     endpoint_derivatives = []
     from aion.backends import NumPyBackend
 
@@ -858,20 +1103,14 @@ def pyscf_giao_one_electron_derivatives(
             (float(direction[0]), float(direction[1]), float(direction[2]))
         )
         gauge = AffineMagneticGauge(field)
-        line = gauge.straight_line_integrals(
-            anchors[None, :, :], anchors[:, None, :], cpu
-        )
+        line = gauge.straight_line_integrals(anchors[None, :, :], anchors[:, None, :], cpu)
         endpoint_derivatives.append(-1j * line)
     theta_derivative = np.asarray(endpoint_derivatives)
     overlap_endpoint = theta_derivative * reference.core_operators.overlap[None, :, :]
     kinetic_endpoint = theta_derivative * reference.core_operators.kinetic[None, :, :]
-    nuclear_endpoint = (
-        theta_derivative * reference.core_operators.nuclear_attraction[None, :, :]
-    )
+    nuclear_endpoint = theta_derivative * reference.core_operators.nuclear_attraction[None, :, :]
     lower = OneElectronLowerMatrices(overlap_lower, kinetic_lower, nuclear_lower)
-    endpoint = OneElectronLowerMatrices(
-        overlap_endpoint, kinetic_endpoint, nuclear_endpoint
-    )
+    endpoint = OneElectronLowerMatrices(overlap_endpoint, kinetic_endpoint, nuclear_endpoint)
     barred = OneElectronLowerMatrices(
         overlap_lower - overlap_endpoint,
         kinetic_lower - kinetic_endpoint,
@@ -903,23 +1142,15 @@ def _ordinary_pair(left: Any, right: Any, weights: Any, xp: Any) -> Any:
     return xp.einsum("p,pm,pn->mn", weights, left.conj(), right, optimize=True)
 
 
-def _factorized_pair(
-    left: Any, right: Any, weights: Any, factor: Any, xp: Any
-) -> Any:
-    return xp.einsum(
-        "p,pm,pn,pmn->mn", weights, left.conj(), right, factor, optimize=True
-    )
+def _factorized_pair(left: Any, right: Any, weights: Any, factor: Any, xp: Any) -> Any:
+    return xp.einsum("p,pm,pn,pmn->mn", weights, left.conj(), right, factor, optimize=True)
 
 
 def _ordinary_vector_pair(left: Any, right: Any, weights: Any, xp: Any) -> Any:
-    return xp.einsum(
-        "p,pmx,pnx->mn", weights, left.conj(), right, optimize=True
-    )
+    return xp.einsum("p,pmx,pnx->mn", weights, left.conj(), right, optimize=True)
 
 
-def _factorized_vector_pair(
-    left: Any, right: Any, weights: Any, factor: Any, xp: Any
-) -> Any:
+def _factorized_vector_pair(left: Any, right: Any, weights: Any, factor: Any, xp: Any) -> Any:
     return xp.einsum(
         "p,pmx,pnx,pmn->mn",
         weights,
@@ -928,6 +1159,30 @@ def _factorized_vector_pair(
         factor,
         optimize=True,
     )
+
+
+def _validate_static_result(
+    quadrature: AOQuadrature,
+    result: ExactStaticMagneticOneElectronResult,
+) -> None:
+    if result.reference_fingerprint_sha256 != quadrature.reference.fingerprint_sha256:
+        raise ConfigurationError("static result belongs to a different AO reference")
+    if result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise ConfigurationError("static result belongs to a different AO quadrature grid")
+    if result.backend != quadrature.backend_config.kind.value:
+        raise ConfigurationError("static result belongs to a different array backend")
+    if result.device_index != quadrature.backend_config.device_index:
+        raise ConfigurationError("static result belongs to a different backend device")
+
+
+def _direction_vector(value: object, name: str) -> tuple[float, float, float]:
+    try:
+        array = np.asarray(value, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError(f"{name} must be a finite Cartesian vector") from exc
+    if array.shape != (3,) or not np.all(np.isfinite(array)):
+        raise ConfigurationError(f"{name} must be a finite Cartesian vector")
+    return (float(array[0]), float(array[1]), float(array[2]))
 
 
 def _finite_parameter(value: float, name: str) -> float:

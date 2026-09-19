@@ -13,7 +13,10 @@ from aion.electronic_structure.magnetic_matrices import (
     MagneticOneElectronFirstDerivatives,
     evaluate_magnetic_one_electron_first_derivatives,
 )
-from aion.electronic_structure.time_connection import ExactWilsonOneElectronSample
+from aion.electronic_structure.time_connection import (
+    ExactMagneticFieldSourceDirection,
+    ExactWilsonOneElectronSample,
+)
 from aion.errors import FormulationError
 from aion.formulations.action import OneElectronActionMatrixDirection
 from aion.formulations.types import EOMTriple
@@ -302,6 +305,51 @@ def exact_endpoint_link_action_direction(
     )
 
 
+def exact_magnetic_field_action_direction(
+    response: ExactMagneticFieldSourceDirection,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    """Return the complete physical instantaneous-``B`` action direction."""
+
+    _validate_magnetic_response(response, backend)
+    xp = backend.namespace
+    return OneElectronActionMatrixDirection(
+        metric=xp.asarray(response.metric, dtype=xp.complex128),
+        mechanical=xp.asarray(response.mechanical, dtype=xp.complex128),
+        connection=xp.asarray(response.connection, dtype=xp.complex128),
+    )
+
+
+def exact_internal_magnetic_action_direction(
+    response: ExactMagneticFieldSourceDirection,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    """Return only triangle and anchored-vector magnetic source response."""
+
+    _validate_magnetic_response(response, backend)
+    xp = backend.namespace
+    return OneElectronActionMatrixDirection(
+        metric=xp.asarray(response.metric_internal, dtype=xp.complex128),
+        mechanical=xp.asarray(response.mechanical_internal, dtype=xp.complex128),
+        connection=xp.asarray(response.connection_internal, dtype=xp.complex128),
+    )
+
+
+def exact_magnetic_endpoint_action_direction(
+    response: ExactMagneticFieldSourceDirection,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    """Return only the endpoint-link part of a physical magnetic direction."""
+
+    _validate_magnetic_response(response, backend)
+    xp = backend.namespace
+    return OneElectronActionMatrixDirection(
+        metric=xp.asarray(response.metric_endpoint, dtype=xp.complex128),
+        mechanical=xp.asarray(response.mechanical_endpoint, dtype=xp.complex128),
+        connection=xp.asarray(response.connection_endpoint, dtype=xp.complex128),
+    )
+
+
 def _compatible_connection(metric: Any, metric_dot: Any, sigma: Any) -> Any:
     """Return ``S Sigma + 1/2(D_t S)`` with no internal residual."""
 
@@ -322,6 +370,31 @@ def _validate_sample_backend(
         ("exact temporal connection", sample.connection.connection),
     ):
         backend.assert_resident(value, name=name)
+
+
+def _validate_magnetic_response(
+    response: ExactMagneticFieldSourceDirection,
+    backend: ArrayBackend,
+) -> None:
+    if not isinstance(response, ExactMagneticFieldSourceDirection):
+        raise TypeError("response must be an ExactMagneticFieldSourceDirection")
+    for name, value in (
+        ("magnetic metric endpoint response", response.metric_endpoint),
+        ("magnetic metric internal response", response.metric_internal),
+        ("magnetic mechanical endpoint response", response.mechanical_endpoint),
+        (
+            "magnetic mechanical triangle response",
+            response.mechanical_internal_triangle,
+        ),
+        (
+            "magnetic mechanical anchored response",
+            response.mechanical_internal_anchored,
+        ),
+        ("magnetic connection endpoint response", response.connection_endpoint),
+        ("magnetic connection internal response", response.connection_internal),
+    ):
+        backend.assert_resident(value, name=name)
+        _require_finite(value, backend, name)
 
 
 def _require_finite(value: Any, backend: ArrayBackend, name: str) -> None:

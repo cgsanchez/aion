@@ -16,6 +16,7 @@ from aion.config import (
 from aion.electromagnetism import UniformMagneticField, UniformMagneticSourceSample
 from aion.electronic_structure import (
     AOGridPolicy,
+    evaluate_exact_magnetic_field_source_direction,
     evaluate_exact_temporal_source_direction,
     evaluate_exact_wilson_one_electron_sample,
     prepare_ao_quadrature,
@@ -24,6 +25,7 @@ from aion.electronic_structure import (
 from aion.formulations import (
     OneElectronActionMatrixDirection,
     exact_endpoint_link_action_direction,
+    exact_magnetic_field_action_direction,
     exact_site_scalar_action_direction,
     exact_wilson_one_electron_triple,
     one_electron_velocity_density,
@@ -102,6 +104,43 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
             rtol=2.0e-10,
         )
 
+    magnetic_direction = (0.13, -0.07, 0.09)
+    cpu_magnetic = evaluate_exact_magnetic_field_source_direction(
+        cpu_quadrature,
+        cpu_sample,
+        magnetic_direction,
+    )
+    gpu_magnetic = evaluate_exact_magnetic_field_source_direction(
+        gpu_quadrature,
+        gpu_sample,
+        magnetic_direction,
+    )
+    for cpu_value, gpu_value in (
+        (cpu_magnetic.metric_endpoint, gpu_magnetic.metric_endpoint),
+        (cpu_magnetic.metric_internal, gpu_magnetic.metric_internal),
+        (cpu_magnetic.mechanical_endpoint, gpu_magnetic.mechanical_endpoint),
+        (
+            cpu_magnetic.mechanical_internal_triangle,
+            gpu_magnetic.mechanical_internal_triangle,
+        ),
+        (
+            cpu_magnetic.mechanical_internal_anchored,
+            gpu_magnetic.mechanical_internal_anchored,
+        ),
+        (cpu_magnetic.connection_endpoint, gpu_magnetic.connection_endpoint),
+        (cpu_magnetic.connection_internal, gpu_magnetic.connection_internal),
+        (cpu_magnetic.metric, gpu_magnetic.metric),
+        (cpu_magnetic.mechanical, gpu_magnetic.mechanical),
+        (cpu_magnetic.connection, gpu_magnetic.connection),
+    ):
+        gpu.assert_resident(gpu_value, name="WP7 GPU magnetic source direction")
+        np.testing.assert_allclose(
+            gpu.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
+
     coefficient = np.asarray(((0.71 + 0.19j,), (-0.23 + 0.41j,)))
     coefficient /= np.sqrt((coefficient.conj().T @ cpu_sample.metric @ coefficient).real.item())
     cpu_density = coefficient @ coefficient.conj().T
@@ -141,6 +180,28 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
     np.testing.assert_allclose(
         gpu.to_host(gpu_action.total),
         cpu_action.total,
+        atol=2.0e-10,
+        rtol=2.0e-10,
+    )
+
+    cpu_magnetic_action = restricted_one_electron_action_directional_derivative(
+        cpu_density,
+        cpu_velocity,
+        exact_magnetic_field_action_direction(
+            cpu_magnetic,
+            cpu_quadrature.backend,
+        ),
+        cpu_quadrature.backend,
+    )
+    gpu_magnetic_action = restricted_one_electron_action_directional_derivative(
+        gpu_density,
+        gpu_velocity,
+        exact_magnetic_field_action_direction(gpu_magnetic, gpu),
+        gpu,
+    )
+    np.testing.assert_allclose(
+        gpu.to_host(gpu_magnetic_action.total),
+        cpu_magnetic_action.total,
         atol=2.0e-10,
         rtol=2.0e-10,
     )
