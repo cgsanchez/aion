@@ -1,0 +1,92 @@
+{
+  "schema": "aion.exact-one-electron-gate-review-candidate",
+  "version": "1.0.0",
+  "gate": "G7",
+  "status": "awaiting_user_review",
+  "decision": null,
+  "scope": {
+    "implemented_model": "fixed-centre linear exact one-electron Wilson action",
+    "trajectory_system": "H2/STO-3G",
+    "included": [
+      "fixed-history action source derivatives",
+      "site-scalar and oriented endpoint-link derivatives",
+      "uniform electric, magnetic-rate, and finite instantaneous magnetic-field directions",
+      "off-shell pure-gauge Ward identity",
+      "action-derived site charge and oriented-link continuity current",
+      "uniform-electric source current and mechanical-energy power identity",
+      "localized Gaussian weak continuum-current pairings",
+      "CPU time-step refinement and physical-GPU trajectory parity"
+    ],
+    "excluded": [
+      "self-consistent Hartree or exchange-correlation source response",
+      "nonlinear SCEM propagation",
+      "general magnetic-source power beyond the uniform-electric specialization",
+      "pointwise current-density reconstruction from reduced source parameters"
+    ]
+  },
+  "implementation_commits": [
+    "56e5327 WP7: add exact action source directions",
+    "c5abc6e WP7: add exact finite-B source direction",
+    "0bf1d75 WP7: add exact off-shell Ward direction",
+    "a207bc4 WP7: add exact discrete continuity diagnostics",
+    "88c03d8 WP7: add exact uniform-electric power identity",
+    "ea643f0 WP7: add weak continuum current pairings",
+    "7d60310 WP7: add observable history campaign",
+    "99cdb5a WP7: analyze observable qualification histories"
+  ],
+  "executed_tests": {
+    "cpu_fast_suite": "88 passed, 133 deselected",
+    "cpu_wp7_integration": "8 passed, 1 deselected",
+    "physical_gpu_wp7": "1 passed, 1 warning (CuPy contraction engine)",
+    "source_derivative_checks": [
+      "generic restricted-action derivative against central finite difference",
+      "uniform-electric and magnetic-rate connection directions against rebuilt samples",
+      "finite-B S, K, omega_t, and action directions against rebuilt samples",
+      "site-scalar and oriented-link directions against independent finite differences",
+      "localized Gaussian weak vector-potential pairing against nonlinear dressed-AO finite differences"
+    ]
+  },
+  "executed_campaigns": {
+    "cpu": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db",
+    "gpu": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_gpu_20260919T145459Z_7d603105e1db",
+    "analysis": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db/analysis"
+  },
+  "review_metrics": {
+    "electric_integrated_work_orders": [
+      3.965816871587252,
+      3.991355349593821
+    ],
+    "electric_trajectory_power_orders": [
+      1.9464307124316511,
+      1.993113993142796
+    ],
+    "finest_cpu_electric": {
+      "step_au": 0.125,
+      "integrated_work_defect_ha": -1.235653879130133e-09,
+      "maximum_instantaneous_power_residual": 4.883111059603151e-16,
+      "maximum_continuity_residual": 2.572686152926057e-15,
+      "maximum_ward_residual": 3.885780586188048e-16,
+      "maximum_total_charge_error": 1.2212453270876722e-15
+    },
+    "finest_cpu_magnetic": {
+      "step_au": 0.125,
+      "maximum_cross_metric_residual": 3.303265484085838e-12,
+      "maximum_continuity_residual": 3.929593635701905e-15,
+      "maximum_ward_residual": 4.440892098500626e-16,
+      "maximum_total_charge_error": 6.661338147750939e-16
+    },
+    "cpu_gpu_n32_maximum_absolute_difference": {
+      "electric_density": 1.9394513633927674e-15,
+      "electric_diagnostics": 3.1754496486526603e-15,
+      "magnetic_density": 1.5289843393218264e-15,
+      "magnetic_diagnostics": 4.138926862453208e-15
+    }
+  },
+  "gate_assessment": {
+    "finite_action_differences_match_analytic_source_covectors": "executed_pass",
+    "pure_gauge_ward_residual_reaches_declared_floor": "executed_pass",
+    "continuity_and_power_descend_from_propagated_model_action": "executed_pass",
+    "no_inserted_current_operator_used_as_variational_evidence": "implemented_and_executed",
+    "user_review": "pending"
+  }
+}
