@@ -1,5 +1,12 @@
 """Bare and gauge-covariant formulation contracts and implementations."""
 
+from aion.formulations.action import (
+    OneElectronActionContraction,
+    OneElectronActionMatrixDirection,
+    one_electron_velocity_density,
+    restricted_one_electron_action_directional_derivative,
+    restricted_one_electron_action_value,
+)
 from aion.formulations.api import build_formulation
 from aion.formulations.bare import BareLengthGauge, BareVelocityGauge
 from aion.formulations.base import FormulationContext
@@ -9,7 +16,9 @@ from aion.formulations.exact_one_electron import (
     ExactOneElectronModelContext,
     ExactOneElectronModelTriples,
     OneElectronModelTriple,
+    exact_endpoint_link_action_direction,
     exact_one_electron_model_triples,
+    exact_site_scalar_action_direction,
     exact_wilson_one_electron_triple,
     prepare_exact_one_electron_model_context,
 )
@@ -62,6 +71,8 @@ __all__ = [
     "FormulationSourceSample",
     "InstantaneousEvaluation",
     "MechanicalCurrent",
+    "OneElectronActionContraction",
+    "OneElectronActionMatrixDirection",
     "OneElectronModelTriple",
     "P0Geometry",
     "PowerLedger",
@@ -72,18 +83,23 @@ __all__ = [
     "covariant_ambient_mechanical_current",
     "density_derivative",
     "e1_tensors",
+    "exact_endpoint_link_action_direction",
     "exact_one_electron_model_triples",
+    "exact_site_scalar_action_direction",
     "exact_wilson_one_electron_triple",
     "generic_mechanical_current",
     "inverse_dressed_density",
     "inverse_dressed_density_dot",
     "metric_unitary_impulse",
+    "one_electron_velocity_density",
     "p0_continuity_residual",
     "p0_geometry",
     "p0_graph_current",
     "p0_pair_currents",
     "p0_source_power",
     "prepare_exact_one_electron_model_context",
+    "restricted_one_electron_action_directional_derivative",
+    "restricted_one_electron_action_value",
     "site_charge_derivatives",
     "site_charges",
     "uniform_mechanical_current",

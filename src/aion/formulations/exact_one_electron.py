@@ -14,6 +14,8 @@ from aion.electronic_structure.magnetic_matrices import (
     evaluate_magnetic_one_electron_first_derivatives,
 )
 from aion.electronic_structure.time_connection import ExactWilsonOneElectronSample
+from aion.errors import FormulationError
+from aion.formulations.action import OneElectronActionMatrixDirection
 from aion.formulations.types import EOMTriple
 
 
@@ -142,19 +144,10 @@ def exact_one_electron_model_triples(
     theta = sample.static_result.endpoint_link
     theta_dot = sample.connection.endpoint_link_dot
     overlap0 = sample.static_result.overlap.zero
-    mechanical0 = (
-        sample.static_result.kinetic.zero
-        + sample.static_result.nuclear_attraction.zero
-    )
-    overlap_first = xp.einsum(
-        "x,xmn->mn", field, context.derivatives.metric, optimize=True
-    )
-    overlap_first_dot = xp.einsum(
-        "x,xmn->mn", field_dot, context.derivatives.metric, optimize=True
-    )
-    mechanical_first = xp.einsum(
-        "x,xmn->mn", field, context.derivatives.mechanical, optimize=True
-    )
+    mechanical0 = sample.static_result.kinetic.zero + sample.static_result.nuclear_attraction.zero
+    overlap_first = xp.einsum("x,xmn->mn", field, context.derivatives.metric, optimize=True)
+    overlap_first_dot = xp.einsum("x,xmn->mn", field_dot, context.derivatives.metric, optimize=True)
+    mechanical_first = xp.einsum("x,xmn->mn", field, context.derivatives.mechanical, optimize=True)
     metric_p0 = theta * overlap0
     metric_p0_dot = theta_dot * overlap0
     metric_b1 = theta * (overlap0 + overlap_first)
@@ -168,11 +161,15 @@ def exact_one_electron_model_triples(
     )
     sigma = (1j * context.charge / context.hbar) * scalar_at_anchors
     electric_at_pairs = sample.source.electric_field(context.pair_midpoints_au, backend)
-    electric_eta = (-1j / context.hbar) * theta * xp.einsum(
-        "mnx,xmn->mn",
-        electric_at_pairs,
-        context.central_dipoles,
-        optimize=True,
+    electric_eta = (
+        (-1j / context.hbar)
+        * theta
+        * xp.einsum(
+            "mnx,xmn->mn",
+            electric_at_pairs,
+            context.central_dipoles,
+            optimize=True,
+        )
     )
     connection_p0 = _compatible_connection(metric_p0, metric_p0_dot, sigma)
     connection_b1 = _compatible_connection(metric_b1, metric_b1_dot, sigma)
@@ -211,9 +208,127 @@ def exact_one_electron_model_triples(
     )
 
 
+def exact_site_scalar_action_direction(
+    sample: ExactWilsonOneElectronSample,
+    site_scalar_direction: object,
+    ao_to_site: object,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    r"""Return the electronic action direction for independent site scalars.
+
+    The direction contains only the exact anchor-scalar sector
+
+    ``delta omega_mn=(i q/hbar) S_mn delta Phi_site(n)``.
+
+    Internal electric and endpoint-link directions are deliberately held
+    fixed so this discrete source component can be qualified separately.
+    """
+
+    _validate_sample_backend(sample, backend)
+    xp = backend.namespace
+    mapping = backend.asarray(ao_to_site, dtype=xp.int64)
+    backend.assert_resident(mapping, name="AO-to-site map")
+    values = backend.asarray(site_scalar_direction, dtype=xp.float64)
+    backend.assert_resident(values, name="site scalar direction")
+    if mapping.ndim != 1 or mapping.shape[0] != sample.metric.shape[0]:
+        raise FormulationError("AO-to-site map has an incompatible shape")
+    if values.ndim != 1 or values.shape[0] == 0:
+        raise FormulationError("site scalar direction must be a nonempty vector")
+    if _control_bool(xp.any(mapping < 0), backend) or _control_bool(
+        xp.any(mapping >= values.shape[0]), backend
+    ):
+        raise FormulationError("AO-to-site map contains an invalid site index")
+    _require_finite(values, backend, "site scalar direction")
+    scalar_at_ket = values[mapping]
+    connection = (
+        (1j * sample.static_result.charge / sample.static_result.hbar)
+        * sample.metric
+        * scalar_at_ket[None, :]
+    )
+    zero = xp.zeros_like(sample.metric, dtype=xp.complex128)
+    return OneElectronActionMatrixDirection(
+        metric=zero,
+        mechanical=xp.zeros_like(zero),
+        connection=xp.asarray(connection, dtype=xp.complex128),
+    )
+
+
+def exact_endpoint_link_action_direction(
+    sample: ExactWilsonOneElectronSample,
+    site_link_direction: object,
+    ao_to_site: object,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    r"""Differentiate only the oriented endpoint link of the exact action.
+
+    ``site_link_direction[a,b]`` is the real line-integral direction from site
+    ``b`` to site ``a`` and must therefore be antisymmetric.  The internal
+    triangle, anchored-vector, and temporal-electric amplitudes are held
+    fixed.  This is the discrete oriented-link source direction requested by
+    WP7, not a complete physical magnetic-field variation.
+    """
+
+    _validate_sample_backend(sample, backend)
+    xp = backend.namespace
+    mapping = backend.asarray(ao_to_site, dtype=xp.int64)
+    links = backend.asarray(site_link_direction, dtype=xp.float64)
+    backend.assert_resident(mapping, name="AO-to-site map")
+    backend.assert_resident(links, name="site link direction")
+    if mapping.ndim != 1 or mapping.shape[0] != sample.metric.shape[0]:
+        raise FormulationError("AO-to-site map has an incompatible shape")
+    if links.ndim != 2 or links.shape[0] != links.shape[1] or links.shape[0] == 0:
+        raise FormulationError("site link direction must be a nonempty square matrix")
+    if _control_bool(xp.any(mapping < 0), backend) or _control_bool(
+        xp.any(mapping >= links.shape[0]), backend
+    ):
+        raise FormulationError("AO-to-site map contains an invalid site index")
+    _require_finite(links, backend, "site link direction")
+    antisymmetry = xp.linalg.norm(links + links.T)
+    scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(links))
+    if backend.scalar_to_float(antisymmetry / scale) > 1.0e-13:
+        raise FormulationError("site link direction must be antisymmetric")
+    ao_links = links[mapping[:, None], mapping[None, :]]
+    phase_direction = (1j * sample.static_result.charge / sample.static_result.hbar) * ao_links
+    return OneElectronActionMatrixDirection(
+        metric=xp.asarray(phase_direction * sample.metric, dtype=xp.complex128),
+        mechanical=xp.asarray(
+            phase_direction * sample.mechanical,
+            dtype=xp.complex128,
+        ),
+        connection=xp.asarray(
+            phase_direction * sample.connection.connection,
+            dtype=xp.complex128,
+        ),
+    )
+
+
 def _compatible_connection(metric: Any, metric_dot: Any, sigma: Any) -> Any:
     """Return ``S Sigma + 1/2(D_t S)`` with no internal residual."""
 
     return metric * sigma[None, :] + 0.5 * (
         metric_dot + sigma[:, None] * metric - metric * sigma[None, :]
     )
+
+
+def _validate_sample_backend(
+    sample: ExactWilsonOneElectronSample,
+    backend: ArrayBackend,
+) -> None:
+    if not isinstance(sample, ExactWilsonOneElectronSample):
+        raise TypeError("sample must be an ExactWilsonOneElectronSample")
+    for name, value in (
+        ("exact metric", sample.metric),
+        ("exact mechanical matrix", sample.mechanical),
+        ("exact temporal connection", sample.connection.connection),
+    ):
+        backend.assert_resident(value, name=name)
+
+
+def _require_finite(value: Any, backend: ArrayBackend, name: str) -> None:
+    xp = backend.namespace
+    if not _control_bool(xp.all(xp.isfinite(value)), backend):
+        raise FormulationError(f"{name} contains non-finite values")
+
+
+def _control_bool(value: Any, backend: ArrayBackend) -> bool:
+    return bool(backend.scalar_to_float(backend.namespace.asarray(value)))

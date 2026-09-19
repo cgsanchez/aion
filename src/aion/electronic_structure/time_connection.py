@@ -73,6 +73,26 @@ class ExactWilsonOneElectronSample:
         return self.lower_exact.mechanical
 
 
+@dataclass(frozen=True, slots=True)
+class ExactTemporalSourceDirection:
+    """Exact temporal-connection response to one physical source direction.
+
+    ``electric_origin_direction_au`` varies the uniform electric field at the
+    electromagnetic origin. ``magnetic_field_rate_direction_au`` varies
+    ``Bdot`` at fixed instantaneous ``B``.  The response is split into the
+    anchor scalar-potential and internal radial-electric contributions before
+    recording their action-consistent sum.
+    """
+
+    electric_origin_direction_au: tuple[float, float, float]
+    magnetic_field_rate_direction_au: tuple[float, float, float]
+    site_scalar_connection: Any
+    internal_electric_connection: Any
+    connection: Any
+    metric_rate: Any
+    decomposition_residual: float
+
+
 def evaluate_exact_uniform_magnetic_time_connection(
     quadrature: AOQuadrature,
     source: UniformMagneticSourceSample,
@@ -133,20 +153,14 @@ def evaluate_exact_uniform_magnetic_time_connection(
     scalar_at_anchors = source.scalar_potential(anchors, backend)
     ket_displacements = xp.empty_like(position0)
     for axis in range(3):
-        ket_displacements[axis] = (
-            position0[axis] - overlap0 * anchors[None, :, axis]
-        )
-    bare_radial = xp.einsum(
-        "nx,xmn->mn", electric_at_anchors, ket_displacements, optimize=True
-    )
+        ket_displacements[axis] = position0[axis] - overlap0 * anchors[None, :, axis]
+    bare_radial = xp.einsum("nx,xmn->mn", electric_at_anchors, ket_displacements, optimize=True)
 
     magnetic_dot = backend.asarray(source.magnetic_field_dot_au, dtype=xp.float64)
     flux_rate_vectors = 0.5 * xp.cross(geometry.pair_displacements_au, magnetic_dot)
     central_positions = xp.empty_like(position0)
     for axis in range(3):
-        central_positions[axis] = (
-            position0[axis] - overlap0 * pair_midpoints[:, :, axis]
-        )
+        central_positions[axis] = position0[axis] - overlap0 * pair_midpoints[:, :, axis]
     bare_barred_metric_dot = prefactor * xp.einsum(
         "xmn,mnx->mn", central_positions, flux_rate_vectors, optimize=True
     )
@@ -208,27 +222,19 @@ def evaluate_exact_uniform_magnetic_time_connection(
             xp,
         )
 
-        line = gauge.anchor_to_point_line_integrals(
-            anchors, block.coordinates_au, backend
-        )
-        line_dot = gauge_rate.anchor_to_point_line_integrals(
-            anchors, block.coordinates_au, backend
-        )
+        line = gauge.anchor_to_point_line_integrals(anchors, block.coordinates_au, backend)
+        line_dot = gauge_rate.anchor_to_point_line_integrals(anchors, block.coordinates_au, backend)
         wilson = xp.exp(prefactor * line)
         direct_pair_factor = wilson.conj()[:, :, None] * wilson[:, None, :]
         scalar = source.scalar_potential(block.coordinates_au, backend)
-        direct_temporal_factor = prefactor * (
-            line_dot[:, None, :] + scalar[:, None, None]
-        )
+        direct_temporal_factor = prefactor * (line_dot[:, None, :] + scalar[:, None, None])
         direct_connection += _pair_with_factor(
             values,
             block.weights_au,
             direct_pair_factor * direct_temporal_factor,
             xp,
         )
-        direct_metric_factor = prefactor * (
-            line_dot[:, None, :] - line_dot[:, :, None]
-        )
+        direct_metric_factor = prefactor * (line_dot[:, None, :] - line_dot[:, :, None])
         direct_metric_dot += _pair_with_factor(
             values,
             block.weights_au,
@@ -239,11 +245,11 @@ def evaluate_exact_uniform_magnetic_time_connection(
     radial_exact = bare_radial + radial_correction
     barred_overlap_exact = static_result.overlap.exact
     barred_overlap_grid = static_result.overlap.exact_grid
-    connection = prefactor * endpoint * (
-        barred_overlap_exact * scalar_at_anchors[None, :] - radial_exact
+    connection = (
+        prefactor * endpoint * (barred_overlap_exact * scalar_at_anchors[None, :] - radial_exact)
     )
-    factorized_connection_grid = prefactor * endpoint * (
-        barred_overlap_grid * scalar_at_anchors[None, :] - radial_grid
+    factorized_connection_grid = (
+        prefactor * endpoint * (barred_overlap_grid * scalar_at_anchors[None, :] - radial_grid)
     )
     barred_metric_dot_exact = bare_barred_metric_dot + barred_metric_dot_correction
     metric_dot = endpoint_dot * barred_overlap_exact + endpoint * barred_metric_dot_exact
@@ -319,9 +325,7 @@ def evaluate_exact_wilson_one_electron_sample(
         charge=charge,
         hbar=hbar,
     )
-    ordinary = static_result.lower_exact.mechanical - 1j * float(hbar) * (
-        connection.connection
-    )
+    ordinary = static_result.lower_exact.mechanical - 1j * float(hbar) * (connection.connection)
     return ExactWilsonOneElectronSample(
         source=source,
         lower_exact=static_result.lower_exact,
@@ -329,6 +333,86 @@ def evaluate_exact_wilson_one_electron_sample(
         connection=connection,
         ordinary_derivative_matrix=ordinary,
         static_result=static_result,
+    )
+
+
+def evaluate_exact_temporal_source_direction(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    *,
+    electric_origin_direction_au: object = (0.0, 0.0, 0.0),
+    magnetic_field_rate_direction_au: object = (0.0, 0.0, 0.0),
+) -> ExactTemporalSourceDirection:
+    r"""Evaluate an analytic source direction of the exact time connection.
+
+    At fixed instantaneous magnetic field, the exact temporal connection is
+    linear in the uniform electric field at the origin and in ``Bdot``.  A
+    direction can therefore be evaluated directly with the same quadrature
+    contraction, without a finite-difference step.  Finite differences of
+    independently rebuilt samples remain the qualification oracle.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    if not isinstance(sample, ExactWilsonOneElectronSample):
+        raise TypeError("sample must be an ExactWilsonOneElectronSample")
+    if sample.static_result.reference_fingerprint_sha256 != (
+        quadrature.reference.fingerprint_sha256
+    ):
+        raise ConfigurationError("sample belongs to a different AO reference")
+    if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise ConfigurationError("sample belongs to a different AO quadrature grid")
+    electric = _direction_vector(
+        electric_origin_direction_au,
+        "electric_origin_direction_au",
+    )
+    magnetic_rate = _direction_vector(
+        magnetic_field_rate_direction_au,
+        "magnetic_field_rate_direction_au",
+    )
+    source = UniformMagneticSourceSample(
+        time_au=sample.source.time_au,
+        field=sample.source.field,
+        magnetic_field_dot_au=magnetic_rate,
+        electric_field_origin_au=electric,
+        origin_au=sample.source.origin_au,
+        gauge_kind=sample.source.gauge_kind,
+        landau_axis=sample.source.landau_axis,
+    )
+    value = evaluate_exact_uniform_magnetic_time_connection(
+        quadrature,
+        source,
+        sample.static_result,
+        charge=sample.static_result.charge,
+        hbar=sample.static_result.hbar,
+    )
+    backend = quadrature.backend
+    xp = backend.namespace
+    geometry = build_magnetic_pair_geometry(
+        quadrature.reference.core_operators.nuclei.coordinates_au,
+        quadrature.reference.anchor_topology.ao_to_atom,
+        backend,
+    )
+    scalar_at_anchors = source.scalar_potential(
+        geometry.ao_anchor_coordinates_au,
+        backend,
+    )
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+    site = (
+        prefactor
+        * sample.static_result.endpoint_link
+        * (sample.static_result.overlap.exact * scalar_at_anchors[None, :])
+    )
+    internal = -prefactor * sample.static_result.endpoint_link * value.radial_electric_integral
+    residual = _relative_frobenius(site + internal - value.connection, value.connection, backend)
+    return ExactTemporalSourceDirection(
+        electric_origin_direction_au=electric,
+        magnetic_field_rate_direction_au=magnetic_rate,
+        site_scalar_connection=xp.asarray(site, dtype=xp.complex128),
+        internal_electric_connection=xp.asarray(internal, dtype=xp.complex128),
+        connection=value.connection,
+        metric_rate=value.metric_dot,
+        decomposition_residual=residual,
     )
 
 
@@ -341,6 +425,13 @@ def _pair_with_factor(values: Any, weights: Any, factor: Any, xp: Any) -> Any:
         factor,
         optimize=True,
     )
+
+
+def _direction_vector(value: object, name: str) -> tuple[float, float, float]:
+    array = np.asarray(value, dtype=np.float64)
+    if array.shape != (3,) or not np.all(np.isfinite(array)):
+        raise ConfigurationError(f"{name} must be a finite Cartesian vector")
+    return (float(array[0]), float(array[1]), float(array[2]))
 
 
 def _relative_frobenius(value: Any, reference: Any, backend: Any) -> float:

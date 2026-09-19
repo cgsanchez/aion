@@ -116,8 +116,10 @@ from aion.electronic_structure.spatial_connection import (
     evaluate_magnetic_spatial_connections,
 )
 from aion.electronic_structure.time_connection import (
+    ExactTemporalSourceDirection,
     ExactWilsonOneElectronSample,
     ExactWilsonTimeConnection,
+    evaluate_exact_temporal_source_direction,
     evaluate_exact_uniform_magnetic_time_connection,
     evaluate_exact_wilson_one_electron_sample,
 )
@@ -147,6 +149,7 @@ __all__ = [
     "ExactStaticKineticMagneticMatrix",
     "ExactStaticMagneticOneElectronResult",
     "ExactStaticScalarMagneticMatrix",
+    "ExactTemporalSourceDirection",
     "ExactWilsonOneElectronSample",
     "ExactWilsonTimeConnection",
     "GIAOOneElectronDerivatives",
@@ -194,6 +197,7 @@ __all__ = [
     "estimate_magnetic_block_bytes",
     "estimate_spatial_connection_block_bytes",
     "evaluate_exact_static_magnetic_one_electron_matrices",
+    "evaluate_exact_temporal_source_direction",
     "evaluate_exact_uniform_electric_internal_connections",
     "evaluate_exact_uniform_magnetic_time_connection",
     "evaluate_exact_wilson_one_electron_sample",
