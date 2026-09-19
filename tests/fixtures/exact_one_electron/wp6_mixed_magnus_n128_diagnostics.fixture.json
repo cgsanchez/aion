@@ -1,0 +1,33 @@
+{
+  "schema": "aion.exact-one-electron-wp6-mixed-magnus-n128-diagnostics-fixture",
+  "version": "1.0.0",
+  "status": "immutable_input_no_numerical_claim",
+  "purpose": "resolve the distorted above-threshold P0/E1 asymptotic order and attribute the long pre-asymptotic regime to metric or generator behavior",
+  "source_mixed_magnus_execution": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_20260918T231057Z_38ce83eb2fe9",
+  "source_n64_execution": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_n64_20260919T120325Z_57ef2fb6d40e",
+  "system_label": "one_electron_on_three_protons_is_H3_2plus_not_physical_H3_plus",
+  "basis": "cc-pvdz",
+  "grid_level": 4,
+  "block_size": 2048,
+  "pulse_duration_au": 4.0,
+  "coarse_intervals": 32,
+  "medium_intervals": 64,
+  "new_intervals": 128,
+  "geometry": "distorted",
+  "selection_role": "above_threshold",
+  "models": [
+    "exact",
+    "p0",
+    "e1",
+    "geometric_b1",
+    "full_b1",
+    "complete_first_order"
+  ],
+  "experimental_criteria": {
+    "minimum_time_convergence_order": 3.5,
+    "fine_model_difference_refinement_fraction": 0.25,
+    "maximum_trace_drift": 2e-12,
+    "maximum_idempotency_residual": 2e-12,
+    "minimum_metric_eigenvalue": 1e-6
+  }
+}
