@@ -1,0 +1,121 @@
+{
+  "schema": "aion.exact-one-electron-gate-review-candidate",
+  "version": "1.0.0",
+  "gate": "G8",
+  "status": "awaiting_user_review",
+  "decision": null,
+  "scope": {
+    "evidence_chain": [
+      "accepted G3 static pair physics",
+      "accepted G4 first-order hierarchy",
+      "accepted G5 multicentre loop-flux and spectra",
+      "accepted G6 fixed-centre linear one-electron dynamics",
+      "accepted G7 action observables, continuity, Ward identities, and power"
+    ],
+    "validity_statement": "fixed-centre linear exact one-electron Wilson dynamics and its P0, E1, gB1, B1, and C1 truncations over the explicitly tabulated systems, bases, geometries, fields, and source histories",
+    "interpretation_boundary": "all field ranges are scan brackets and every physical comparison retains its quadrature or timestep resolution companion"
+  },
+  "implementation_commit": "2fa0214fa659477637e95a5541a5d96d7acfa713",
+  "executed_synthesis": {
+    "root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp8_synthesis_20260919T152644Z_2fa0214fa659",
+    "manifest_id": "f41bbd648891028d9665caf13f5ab1801b46c8d87eb535db3a5471c0f88f41c8",
+    "completed_sha256": "da2de4de08498cbfe69ce12448f8dc28a5069bd2866d2dc6cc5b8630445bc72d",
+    "manifest_sha256": "929ba2f569b824494f3a43c3fb1773d286f2ae818f1611b0e04fe20980420f81",
+    "summary_sha256": "4c5cb2146cf63390424ec1c8aa28c1d39d5827f6d146169a9db80b646b9f662c",
+    "synthesis_sha256": "e7f31b688e4e75f6e787828ecd073345fe6eafd98bca101129d52688d1ce8bc2",
+    "verification": "authenticated_derived_executed_unreviewed; five tables verified"
+  },
+  "measured_findings": {
+    "pair_coverage": {
+      "systems": [
+        "H2",
+        "O-H",
+        "N2",
+        "CO"
+      ],
+      "bases": [
+        "STO-3G",
+        "cc-pVDZ",
+        "aug-cc-pVDZ"
+      ],
+      "bond_scales": [
+        0.8,
+        1.0,
+        1.25
+      ],
+      "uniform_magnetic_field_range_au": [
+        1e-07,
+        1.0
+      ]
+    },
+    "global_conservative_field_brackets": {
+      "relative_threshold_1e-4": {
+        "P0_all_families_last_below_au": 0.0001,
+        "gB1_overlap_last_below_au": 0.0031622776601683794,
+        "gB1_other_families_last_below_au": 0.0001,
+        "B1_C1_overlap_kinetic_mechanical_last_below_au": 0.0031622776601683794,
+        "B1_C1_nuclear_attraction_last_below_au": 0.01
+      },
+      "relative_threshold_1e-2": {
+        "P0_all_families_last_below_au": 0.01,
+        "gB1_overlap_last_below_au": 0.03162277660168379,
+        "gB1_other_families_last_below_au": 0.01,
+        "B1_C1_overlap_kinetic_mechanical_last_below_au": 0.03162277660168379,
+        "B1_C1_nuclear_attraction_last_below_au": 0.1
+      }
+    },
+    "channel_attribution": {
+      "mechanical_B1_required_blocks": 1502,
+      "onsite_blocks": 372,
+      "offsite_blocks": 1130,
+      "median_B1_error_reduction_factor": 183.0957075398244
+    },
+    "electric_E1": {
+      "maximum_exact_parent_residual": 1.3564979818152668e-14,
+      "maximum_level5_position_quadrature_relative_residual": 7.358565359533126e-07
+    },
+    "distorted_above_threshold_endpoint": {
+      "exact_absorbed_energy_ha": 2.805396957050732e-05,
+      "C1_absorbed_energy_ha": 2.7832309730246863e-05,
+      "C1_absolute_energy_difference_ha": 2.2165984026045749e-07,
+      "C1_energy_difference_timestep_uncertainty_ha": 7.949196856316121e-14,
+      "C1_density_distance": 0.0008825377461220754,
+      "C1_density_distance_timestep_uncertainty": 3.39500152383293e-10
+    }
+  },
+  "interpretation": [
+    "P0 has no universal molecule-independent cutoff; adequacy is restricted to the tabulated system, basis, geometry, family, direction, and threshold brackets",
+    "triangle-flux corrections extend the overlap-metric range, while anchored-vector corrections are required for the resolved onsite and offsite mechanical channels",
+    "neither E1 nor B1 alone reproduces the simultaneous electric and magnetic above-threshold trajectory; C1 is the only tested first-order truncation that closely tracks the exact endpoint observables in that fixture",
+    "loop flux exposes the missing channels in multicentre generalized spectra"
+  ],
+  "extrapolation_and_untested_regions": [
+    "self-consistent Hartree and exchange-correlation source response",
+    "nonlinear SCEM propagation",
+    "moving nuclei",
+    "pseudopotentials",
+    "periodic systems",
+    "general nonuniform-field power balance",
+    "pointwise current-density reconstruction",
+    "systems, bases, geometries, fields, and source histories outside the authenticated tables"
+  ],
+  "branch_recommendation": {
+    "plan_option": 1,
+    "identifier": "aion_adiabatic_pure_lda_gga_tddft_closure",
+    "label": "Aion adiabatic pure-LDA/GGA TDDFT closure",
+    "decision_status": "recommended_pending_user_review",
+    "reason": "the measured implementation boundary is now the nonlinear self-consistent Hartree/XC feedback loop; the exact fixed-centre linear one-electron matrices, connection-aware propagation, action observables, and CPU/GPU parity already have accepted evidence",
+    "deferred_not_rejected": [
+      "Alekto nonorthogonal DFTB2 closure",
+      "nonuniform-field and higher-order curvature qualification",
+      "alternative equivariant projector and dressing constructions",
+      "independent continuum-grid benchmark"
+    ]
+  },
+  "gate_assessment": {
+    "every_scientific_statement_links_to_authenticated_records": "executed_pass",
+    "evidence_interpretation_and_extrapolation_are_separated": "executed_pass",
+    "branch_recommendation_follows_measured_limitation": "candidate_for_user_review",
+    "user_review": "pending"
+  }
+}
