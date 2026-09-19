@@ -16,6 +16,7 @@ from aion.electronic_structure.magnetic_matrices import (
 from aion.electronic_structure.time_connection import (
     ExactMagneticFieldSourceDirection,
     ExactWilsonOneElectronSample,
+    evaluate_exact_temporal_source_direction,
 )
 from aion.errors import FormulationError
 from aion.formulations.action import (
@@ -95,6 +96,18 @@ class ExactDiscreteContinuity:
     continuity_residual: Any
     total_electronic_charge: Any
     metric_particle_number: Any
+
+
+@dataclass(frozen=True, slots=True)
+class ExactUniformElectricPower:
+    """Action-derived uniform-electric polarization, current, and power."""
+
+    electronic_dipole: Any
+    source_current: Any
+    source_work_rate: Any
+    mechanical_energy: Any
+    mechanical_energy_rate: Any
+    power_residual: Any
 
 
 def prepare_exact_one_electron_model_context(
@@ -570,6 +583,105 @@ def evaluate_exact_discrete_continuity(
         continuity_residual=continuity,
         total_electronic_charge=xp.sum(charges),
         metric_particle_number=particle_number,
+    )
+
+
+def evaluate_exact_uniform_electric_power(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    density: Any,
+    *,
+    velocity_density: Any | None = None,
+) -> ExactUniformElectricPower:
+    r"""Evaluate ``dU/dt = E dot J_src`` from the same exact action.
+
+    This specialization is deliberately restricted to zero ``B`` and
+    ``Bdot``.  The three electric-field action derivatives define the
+    electronic polarization.  Applying those same covectors to ``Pdot``
+    gives the source current; no ambient momentum operator is inserted.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    backend = quadrature.backend
+    _validate_sample_backend(sample, backend)
+    if sample.static_result.reference_fingerprint_sha256 != (
+        quadrature.reference.fingerprint_sha256
+    ):
+        raise FormulationError("sample belongs to a different AO reference")
+    if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise FormulationError("sample belongs to a different AO quadrature grid")
+    if any(component != 0.0 for component in sample.source.field.magnetic_field_au):
+        raise FormulationError("uniform-electric power requires zero magnetic field")
+    if any(component != 0.0 for component in sample.source.magnetic_field_dot_au):
+        raise FormulationError("uniform-electric power requires zero magnetic-field rate")
+    xp = backend.namespace
+    dimension = sample.metric.shape[0]
+    backend.assert_resident(density, name="density")
+    if density.shape != (dimension, dimension):
+        raise FormulationError("density has an incompatible shape")
+    _require_finite(density, backend, "density")
+    triple = exact_wilson_one_electron_triple(sample)
+    velocity = (
+        one_electron_velocity_density(
+            density,
+            triple,
+            backend,
+            hbar=sample.static_result.hbar,
+        )
+        if velocity_density is None
+        else velocity_density
+    )
+    backend.assert_resident(velocity, name="velocity density")
+    if velocity.shape != (dimension, dimension):
+        raise FormulationError("velocity density has an incompatible shape")
+    _require_finite(velocity, backend, "velocity density")
+    density_dot = velocity + velocity.conj().T
+    zero = backend.zeros((dimension, dimension), dtype=xp.complex128)
+    dipole = backend.zeros((3,), dtype=xp.float64)
+    current = backend.zeros((3,), dtype=xp.float64)
+    for axis in range(3):
+        electric_direction = [0.0, 0.0, 0.0]
+        electric_direction[axis] = 1.0
+        response = evaluate_exact_temporal_source_direction(
+            quadrature,
+            sample,
+            electric_origin_direction_au=electric_direction,
+        )
+        direction = OneElectronActionMatrixDirection(
+            metric=zero,
+            mechanical=zero,
+            connection=response.connection,
+        )
+        dipole[axis] = restricted_one_electron_action_directional_derivative(
+            density,
+            zero,
+            direction,
+            backend,
+            hbar=sample.static_result.hbar,
+        ).total
+        current[axis] = restricted_one_electron_action_directional_derivative(
+            density_dot,
+            zero,
+            direction,
+            backend,
+            hbar=sample.static_result.hbar,
+        ).total
+
+    electric_field = backend.asarray(
+        sample.source.electric_field_origin_au,
+        dtype=xp.float64,
+    )
+    source_power = xp.dot(electric_field, current)
+    mechanical_energy = xp.real(xp.einsum("ij,ji->", density, sample.mechanical, optimize=True))
+    mechanical_rate = xp.real(xp.einsum("ij,ji->", density_dot, sample.mechanical, optimize=True))
+    return ExactUniformElectricPower(
+        electronic_dipole=dipole,
+        source_current=current,
+        source_work_rate=source_power,
+        mechanical_energy=mechanical_energy,
+        mechanical_energy_rate=mechanical_rate,
+        power_residual=mechanical_rate - source_power,
     )
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import scipy.linalg
 
 from aion.backends import NumPyBackend
 from aion.config import (
@@ -26,6 +27,7 @@ from aion.formulations import (
     EOMTriple,
     OneElectronActionMatrixDirection,
     evaluate_exact_discrete_continuity,
+    evaluate_exact_uniform_electric_power,
     exact_endpoint_link_action_direction,
     exact_internal_magnetic_action_direction,
     exact_magnetic_endpoint_action_direction,
@@ -633,3 +635,70 @@ def test_wp7_exact_action_derived_charge_and_local_continuity() -> None:
         rtol=0.0,
     )
     assert np.linalg.norm(continuity.pair_currents) > 1.0e-6
+
+
+@pytest.mark.integration
+def test_wp7_exact_uniform_electric_power_identity() -> None:
+    quadrature = _quadrature()
+    source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.0, 0.0, 0.0)),
+        electric_field_origin_au=(0.013, -0.009, 0.017),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    sample = evaluate_exact_wilson_one_electron_sample(quadrature, source)
+    density = _state(sample.metric)
+    power = evaluate_exact_uniform_electric_power(
+        quadrature,
+        sample,
+        density,
+    )
+    np.testing.assert_allclose(
+        power.mechanical_energy_rate,
+        power.source_work_rate,
+        atol=2.0e-13,
+        rtol=2.0e-13,
+    )
+    np.testing.assert_allclose(
+        power.power_residual,
+        0.0,
+        atol=2.0e-13,
+        rtol=0.0,
+    )
+
+    generator = np.linalg.solve(
+        sample.metric,
+        -sample.connection.connection - 1j * sample.mechanical,
+    )
+    step = 2.0e-5
+
+    def displaced_density(sign: float) -> np.ndarray:
+        propagator = scipy.linalg.expm(sign * step * generator)
+        return propagator @ density @ propagator.conj().T
+
+    plus_power = evaluate_exact_uniform_electric_power(
+        quadrature,
+        sample,
+        displaced_density(1.0),
+    )
+    minus_power = evaluate_exact_uniform_electric_power(
+        quadrature,
+        sample,
+        displaced_density(-1.0),
+    )
+    finite_energy_rate = (plus_power.mechanical_energy - minus_power.mechanical_energy) / (
+        2.0 * step
+    )
+    finite_current = (plus_power.electronic_dipole - minus_power.electronic_dipole) / (2.0 * step)
+    np.testing.assert_allclose(
+        power.mechanical_energy_rate,
+        finite_energy_rate,
+        atol=3.0e-10,
+        rtol=3.0e-9,
+    )
+    np.testing.assert_allclose(
+        power.source_current,
+        finite_current,
+        atol=3.0e-10,
+        rtol=3.0e-9,
+    )

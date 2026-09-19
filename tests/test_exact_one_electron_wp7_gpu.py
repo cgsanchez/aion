@@ -25,6 +25,7 @@ from aion.electronic_structure import (
 from aion.formulations import (
     OneElectronActionMatrixDirection,
     evaluate_exact_discrete_continuity,
+    evaluate_exact_uniform_electric_power,
     exact_endpoint_link_action_direction,
     exact_magnetic_field_action_direction,
     exact_pure_gauge_action_direction,
@@ -310,6 +311,60 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
         )
     np.testing.assert_allclose(
         gpu.to_host(gpu_continuity.continuity_residual),
+        0.0,
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+
+    electric_source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.0, 0.0, 0.0)),
+        electric_field_origin_au=(0.013, -0.009, 0.017),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    cpu_electric_sample = evaluate_exact_wilson_one_electron_sample(
+        cpu_quadrature,
+        electric_source,
+    )
+    gpu_electric_sample = evaluate_exact_wilson_one_electron_sample(
+        gpu_quadrature,
+        electric_source,
+    )
+    electric_coefficient = np.asarray(((0.71 + 0.19j,), (-0.23 + 0.41j,)))
+    electric_coefficient /= np.sqrt(
+        (
+            electric_coefficient.conj().T @ cpu_electric_sample.metric @ electric_coefficient
+        ).real.item()
+    )
+    cpu_electric_density = electric_coefficient @ electric_coefficient.conj().T
+    gpu_electric_density = gpu.asarray(cpu_electric_density)
+    cpu_power = evaluate_exact_uniform_electric_power(
+        cpu_quadrature,
+        cpu_electric_sample,
+        cpu_electric_density,
+    )
+    gpu_power = evaluate_exact_uniform_electric_power(
+        gpu_quadrature,
+        gpu_electric_sample,
+        gpu_electric_density,
+    )
+    for cpu_value, gpu_value in (
+        (cpu_power.electronic_dipole, gpu_power.electronic_dipole),
+        (cpu_power.source_current, gpu_power.source_current),
+        (cpu_power.source_work_rate, gpu_power.source_work_rate),
+        (cpu_power.mechanical_energy, gpu_power.mechanical_energy),
+        (cpu_power.mechanical_energy_rate, gpu_power.mechanical_energy_rate),
+        (cpu_power.power_residual, gpu_power.power_residual),
+    ):
+        gpu.assert_resident(gpu_value, name="WP7 GPU electric power data")
+        np.testing.assert_allclose(
+            gpu.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
+    np.testing.assert_allclose(
+        gpu.to_host(gpu_power.power_residual),
         0.0,
         atol=2.0e-10,
         rtol=0.0,
