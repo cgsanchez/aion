@@ -1,0 +1,84 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G7",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-19T15:14:46Z",
+  "scope": {
+    "implemented_model": "fixed-centre linear exact one-electron Wilson action",
+    "trajectory_system": "H2/STO-3G",
+    "included": [
+      "fixed-history action source derivatives",
+      "site-scalar and oriented endpoint-link derivatives",
+      "uniform electric, magnetic-rate, and finite instantaneous magnetic-field directions",
+      "off-shell pure-gauge Ward identity",
+      "action-derived site charge and oriented-link continuity current",
+      "uniform-electric source current and mechanical-energy power identity",
+      "localized Gaussian weak continuum-current pairings",
+      "CPU time-step refinement and physical-GPU trajectory parity"
+    ]
+  },
+  "effect": "G7 accepted and WP8 authorized; accepted evidence may be synthesized into a bounded validity statement and used to choose the next scientific branch",
+  "limitations": [
+    "acceptance is restricted to fixed-centre linear one-electron dynamics",
+    "self-consistent Hartree and exchange-correlation source response is not implemented or accepted",
+    "nonlinear SCEM propagation is not implemented or accepted",
+    "general magnetic-source power beyond the uniform-electric specialization is not implemented or accepted",
+    "localized weak continuum-current pairings do not constitute a pointwise current-density reconstruction"
+  ],
+  "implementation_commits": [
+    "56e5327 WP7: add exact action source directions",
+    "c5abc6e WP7: add exact finite-B source direction",
+    "0bf1d75 WP7: add exact off-shell Ward direction",
+    "a207bc4 WP7: add exact discrete continuity diagnostics",
+    "88c03d8 WP7: add exact uniform-electric power identity",
+    "ea643f0 WP7: add weak continuum current pairings",
+    "7d60310 WP7: add observable history campaign",
+    "99cdb5a WP7: analyze observable qualification histories",
+    "d249b94 WP7: record G7 review candidate"
+  ],
+  "executed_tests": {
+    "cpu_fast_suite": "88 passed, 133 deselected",
+    "cpu_wp7_integration": "8 passed, 1 deselected",
+    "physical_gpu_wp7": "1 passed, 1 warning (CuPy contraction engine)"
+  },
+  "evidence": {
+    "candidate_review": "docs/reviews/exact_one_electron_g7_review_candidate_20260919.json",
+    "cpu_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db",
+    "gpu_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_gpu_20260919T145459Z_7d603105e1db",
+    "analysis_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp7_observables_cpu_20260919T145221Z_7d603105e1db/analysis"
+  },
+  "accepted_measurements": {
+    "electric_integrated_work_orders": [
+      3.965816871587252,
+      3.991355349593821
+    ],
+    "electric_trajectory_power_orders": [
+      1.9464307124316511,
+      1.993113993142796
+    ],
+    "finest_cpu_electric": {
+      "step_au": 0.125,
+      "integrated_work_defect_ha": -1.235653879130133e-09,
+      "maximum_instantaneous_power_residual": 4.883111059603151e-16,
+      "maximum_continuity_residual": 2.572686152926057e-15,
+      "maximum_ward_residual": 3.885780586188048e-16,
+      "maximum_total_charge_error": 1.2212453270876722e-15
+    },
+    "finest_cpu_magnetic": {
+      "step_au": 0.125,
+      "maximum_cross_metric_residual": 3.303265484085838e-12,
+      "maximum_continuity_residual": 3.929593635701905e-15,
+      "maximum_ward_residual": 4.440892098500626e-16,
+      "maximum_total_charge_error": 6.661338147750939e-16
+    },
+    "cpu_gpu_n32_maximum_absolute_difference": {
+      "electric_density": 1.9394513633927674e-15,
+      "electric_diagnostics": 3.1754496486526603e-15,
+      "magnetic_density": 1.5289843393218264e-15,
+      "magnetic_diagnostics": 4.138926862453208e-15
+    }
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}
