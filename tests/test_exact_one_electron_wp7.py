@@ -25,6 +25,7 @@ from aion.electronic_structure import (
 from aion.formulations import (
     EOMTriple,
     OneElectronActionMatrixDirection,
+    evaluate_exact_discrete_continuity,
     exact_endpoint_link_action_direction,
     exact_internal_magnetic_action_direction,
     exact_magnetic_endpoint_action_direction,
@@ -588,3 +589,47 @@ def test_wp7_exact_off_shell_pure_gauge_ward_identity() -> None:
         atol=2.0e-10,
         rtol=0.0,
     )
+
+
+@pytest.mark.integration
+def test_wp7_exact_action_derived_charge_and_local_continuity() -> None:
+    quadrature = _quadrature()
+    source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.017, -0.013, 0.031)),
+        magnetic_field_dot_au=(0.003, -0.004, 0.007),
+        electric_field_origin_au=(0.013, -0.009, 0.017),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    sample = evaluate_exact_wilson_one_electron_sample(quadrature, source)
+    density = _state(sample.metric)
+    continuity = evaluate_exact_discrete_continuity(
+        quadrature,
+        sample,
+        density,
+    )
+    np.testing.assert_allclose(
+        continuity.metric_particle_number,
+        1.0,
+        atol=3.0e-14,
+        rtol=3.0e-14,
+    )
+    np.testing.assert_allclose(
+        continuity.total_electronic_charge,
+        -1.0,
+        atol=3.0e-14,
+        rtol=3.0e-14,
+    )
+    np.testing.assert_allclose(
+        continuity.site_charges.sum(),
+        sample.static_result.charge * continuity.metric_particle_number,
+        atol=3.0e-14,
+        rtol=3.0e-14,
+    )
+    np.testing.assert_allclose(
+        continuity.continuity_residual,
+        0.0,
+        atol=2.0e-13,
+        rtol=0.0,
+    )
+    assert np.linalg.norm(continuity.pair_currents) > 1.0e-6

@@ -21,6 +21,8 @@ from aion.errors import FormulationError
 from aion.formulations.action import (
     OneElectronActionHistoryDirection,
     OneElectronActionMatrixDirection,
+    one_electron_velocity_density,
+    restricted_one_electron_action_directional_derivative,
 )
 from aion.formulations.types import EOMTriple
 
@@ -81,6 +83,18 @@ class ExactPureGaugeActionDirection:
     gauge_parameter_rate_at_ao: Any
     matrix: OneElectronActionMatrixDirection
     history: OneElectronActionHistoryDirection
+
+
+@dataclass(frozen=True, slots=True)
+class ExactDiscreteContinuity:
+    """Exact site charge, oriented-link current, and continuity diagnostics."""
+
+    site_charges: Any
+    site_charge_derivatives: Any
+    pair_currents: Any
+    continuity_residual: Any
+    total_electronic_charge: Any
+    metric_particle_number: Any
 
 
 def prepare_exact_one_electron_model_context(
@@ -447,6 +461,115 @@ def exact_pure_gauge_action_direction(
         gauge_parameter_rate_at_ao=gauge_rates[mapping],
         matrix=matrix_direction,
         history=history_direction,
+    )
+
+
+def evaluate_exact_discrete_continuity(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    density: Any,
+    *,
+    velocity_density: Any | None = None,
+) -> ExactDiscreteContinuity:
+    r"""Evaluate the exact action-derived graph continuity identity.
+
+    Site charges are derivatives with respect to independent anchor scalar
+    potentials.  Each pair current is minus the fixed-history action
+    derivative with respect to the once-oriented endpoint line integral from
+    site ``b`` to site ``a`` for the stored pair ``a<b``.  Consequently the
+    declared incidence convention obeys ``Qdot + incidence @ I = 0``.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    backend = quadrature.backend
+    _validate_sample_backend(sample, backend)
+    if sample.static_result.reference_fingerprint_sha256 != (
+        quadrature.reference.fingerprint_sha256
+    ):
+        raise FormulationError("sample belongs to a different AO reference")
+    if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise FormulationError("sample belongs to a different AO quadrature grid")
+    xp = backend.namespace
+    dimension = sample.metric.shape[0]
+    backend.assert_resident(density, name="density")
+    if density.shape != (dimension, dimension):
+        raise FormulationError("density has an incompatible shape")
+    _require_finite(density, backend, "density")
+    triple = exact_wilson_one_electron_triple(sample)
+    velocity = (
+        one_electron_velocity_density(
+            density,
+            triple,
+            backend,
+            hbar=sample.static_result.hbar,
+        )
+        if velocity_density is None
+        else velocity_density
+    )
+    backend.assert_resident(velocity, name="velocity density")
+    if velocity.shape != (dimension, dimension):
+        raise FormulationError("velocity density has an incompatible shape")
+    _require_finite(velocity, backend, "velocity density")
+
+    topology = quadrature.reference.anchor_topology
+    mapping = backend.asarray(topology.ao_to_atom, dtype=xp.int64)
+    projectors = backend.asarray(
+        topology.site_projector_diagonals,
+        dtype=xp.float64,
+    )
+    pairs = tuple((int(pair[0]), int(pair[1])) for pair in topology.pair_indices)
+    incidence = backend.asarray(topology.incidence, dtype=xp.float64)
+    density_dot = velocity + velocity.conj().T
+    metric_dot = sample.connection.metric_dot
+    charges = backend.zeros((projectors.shape[0],), dtype=xp.float64)
+    charge_dots = backend.zeros((projectors.shape[0],), dtype=xp.float64)
+    for site in range(projectors.shape[0]):
+        diagonal = projectors[site]
+        operator = 0.5 * (diagonal[:, None] * sample.metric + sample.metric * diagonal[None, :])
+        operator_dot = 0.5 * (diagonal[:, None] * metric_dot + metric_dot * diagonal[None, :])
+        charges[site] = sample.static_result.charge * xp.real(
+            xp.einsum("ij,ji->", density, operator, optimize=True)
+        )
+        charge_dots[site] = sample.static_result.charge * xp.real(
+            xp.einsum("ij,ji->", density_dot, operator, optimize=True)
+            + xp.einsum("ij,ji->", density, operator_dot, optimize=True)
+        )
+
+    currents = backend.zeros((len(pairs),), dtype=xp.float64)
+    link_direction = backend.zeros(
+        (projectors.shape[0], projectors.shape[0]),
+        dtype=xp.float64,
+    )
+    for pair_index, (a, b) in enumerate(pairs):
+        link_direction[a, b] = 1.0
+        link_direction[b, a] = -1.0
+        direction = exact_endpoint_link_action_direction(
+            sample,
+            link_direction,
+            mapping,
+            backend,
+        )
+        derivative = restricted_one_electron_action_directional_derivative(
+            density,
+            velocity,
+            direction,
+            backend,
+            hbar=sample.static_result.hbar,
+        )
+        currents[pair_index] = -derivative.total
+        link_direction[a, b] = 0.0
+        link_direction[b, a] = 0.0
+
+    continuity = charge_dots + incidence @ currents
+    particle_number = xp.real(xp.einsum("ij,ji->", density, sample.metric, optimize=True))
+    return ExactDiscreteContinuity(
+        site_charges=charges,
+        site_charge_derivatives=charge_dots,
+        pair_currents=currents,
+        continuity_residual=continuity,
+        total_electronic_charge=xp.sum(charges),
+        metric_particle_number=particle_number,
     )
 
 

@@ -17,10 +17,12 @@ from aion.formulations.base import FormulationContext
 from aion.formulations.covariant import P0, P0E1
 from aion.formulations.events import apply_electric_kick, metric_unitary_impulse
 from aion.formulations.exact_one_electron import (
+    ExactDiscreteContinuity,
     ExactOneElectronModelContext,
     ExactOneElectronModelTriples,
     ExactPureGaugeActionDirection,
     OneElectronModelTriple,
+    evaluate_exact_discrete_continuity,
     exact_endpoint_link_action_direction,
     exact_internal_magnetic_action_direction,
     exact_magnetic_endpoint_action_direction,
@@ -73,6 +75,7 @@ __all__ = [
     "E1Tensors",
     "EOMTriple",
     "EnergyLedger",
+    "ExactDiscreteContinuity",
     "ExactOneElectronModelContext",
     "ExactOneElectronModelTriples",
     "ExactPureGaugeActionDirection",
@@ -95,6 +98,7 @@ __all__ = [
     "covariant_ambient_mechanical_current",
     "density_derivative",
     "e1_tensors",
+    "evaluate_exact_discrete_continuity",
     "exact_endpoint_link_action_direction",
     "exact_internal_magnetic_action_direction",
     "exact_magnetic_endpoint_action_direction",

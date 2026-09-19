@@ -24,6 +24,7 @@ from aion.electronic_structure import (
 )
 from aion.formulations import (
     OneElectronActionMatrixDirection,
+    evaluate_exact_discrete_continuity,
     exact_endpoint_link_action_direction,
     exact_magnetic_field_action_direction,
     exact_pure_gauge_action_direction,
@@ -267,6 +268,48 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
     )
     np.testing.assert_allclose(
         gpu.to_host(gpu_ward.total.total),
+        0.0,
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+
+    cpu_continuity = evaluate_exact_discrete_continuity(
+        cpu_quadrature,
+        cpu_sample,
+        cpu_density,
+        velocity_density=cpu_velocity,
+    )
+    gpu_continuity = evaluate_exact_discrete_continuity(
+        gpu_quadrature,
+        gpu_sample,
+        gpu_density,
+        velocity_density=gpu_velocity,
+    )
+    for cpu_value, gpu_value in (
+        (cpu_continuity.site_charges, gpu_continuity.site_charges),
+        (
+            cpu_continuity.site_charge_derivatives,
+            gpu_continuity.site_charge_derivatives,
+        ),
+        (cpu_continuity.pair_currents, gpu_continuity.pair_currents),
+        (
+            cpu_continuity.continuity_residual,
+            gpu_continuity.continuity_residual,
+        ),
+        (
+            cpu_continuity.total_electronic_charge,
+            gpu_continuity.total_electronic_charge,
+        ),
+    ):
+        gpu.assert_resident(gpu_value, name="WP7 GPU continuity data")
+        np.testing.assert_allclose(
+            gpu.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
+    np.testing.assert_allclose(
+        gpu.to_host(gpu_continuity.continuity_residual),
         0.0,
         atol=2.0e-10,
         rtol=0.0,
