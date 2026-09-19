@@ -29,10 +29,12 @@ from aion.formulations import (
     exact_internal_magnetic_action_direction,
     exact_magnetic_endpoint_action_direction,
     exact_magnetic_field_action_direction,
+    exact_pure_gauge_action_direction,
     exact_site_scalar_action_direction,
     exact_wilson_one_electron_triple,
     one_electron_velocity_density,
     restricted_one_electron_action_directional_derivative,
+    restricted_one_electron_action_full_directional_derivative,
     restricted_one_electron_action_value,
 )
 
@@ -495,4 +497,94 @@ def test_wp7_exact_finite_magnetic_source_direction_matches_fixed_history_differ
         finite_action,
         atol=3.0e-9,
         rtol=4.0e-8,
+    )
+
+
+@pytest.mark.integration
+def test_wp7_exact_off_shell_pure_gauge_ward_identity() -> None:
+    quadrature = _quadrature()
+    source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.017, -0.013, 0.031)),
+        magnetic_field_dot_au=(0.003, -0.004, 0.007),
+        electric_field_origin_au=(0.013, -0.009, 0.017),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    sample = evaluate_exact_wilson_one_electron_sample(quadrature, source)
+    triple = exact_wilson_one_electron_triple(sample)
+    density = _state(sample.metric)
+    velocity_density = np.asarray(((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j)))
+    mapping = np.asarray(quadrature.reference.anchor_topology.ao_to_atom)
+    gauge_values = np.asarray((0.37, -0.21))
+    gauge_rates = np.asarray((-0.16, 0.29))
+    direction = exact_pure_gauge_action_direction(
+        sample,
+        density,
+        velocity_density,
+        gauge_values,
+        gauge_rates,
+        mapping,
+        quadrature.backend,
+    )
+    ward = restricted_one_electron_action_full_directional_derivative(
+        density,
+        velocity_density,
+        triple,
+        direction.matrix,
+        direction.history,
+        quadrature.backend,
+    )
+    assert abs(float(ward.source.total)) > 1.0e-6
+    np.testing.assert_allclose(
+        ward.total.total,
+        0.0,
+        atol=3.0e-15,
+        rtol=0.0,
+    )
+
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+    eta = prefactor * gauge_values[mapping]
+    eta_dot = prefactor * gauge_rates[mapping]
+
+    def transformed_action(amplitude: float) -> object:
+        transform = np.diag(np.exp(amplitude * eta))
+        transform_dagger = transform.conj().T
+        rate = np.diag(eta_dot)
+        transformed_density = transform @ density @ transform_dagger
+        transformed_velocity = (
+            transform @ (velocity_density + amplitude * rate @ density) @ transform_dagger
+        )
+        transformed_triple = EOMTriple(
+            transform @ sample.metric @ transform_dagger,
+            transform @ sample.mechanical @ transform_dagger,
+            transform
+            @ (sample.connection.connection - amplitude * sample.metric @ rate)
+            @ transform_dagger,
+        )
+        return restricted_one_electron_action_value(
+            transformed_density,
+            transformed_velocity,
+            transformed_triple,
+            quadrature.backend,
+        ).total
+
+    reference_action = restricted_one_electron_action_value(
+        density,
+        velocity_density,
+        triple,
+        quadrature.backend,
+    ).total
+    np.testing.assert_allclose(
+        transformed_action(0.23),
+        reference_action,
+        atol=4.0e-15,
+        rtol=4.0e-15,
+    )
+    step = 2.0e-5
+    finite_difference = (transformed_action(step) - transformed_action(-step)) / (2.0 * step)
+    np.testing.assert_allclose(
+        ward.total.total,
+        finite_difference,
+        atol=2.0e-10,
+        rtol=0.0,
     )

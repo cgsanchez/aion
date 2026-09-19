@@ -21,6 +21,14 @@ class OneElectronActionMatrixDirection:
 
 
 @dataclass(frozen=True, slots=True)
+class OneElectronActionHistoryDirection:
+    """Directional derivatives ``(delta P, delta R)`` of a coefficient history."""
+
+    density: Any
+    velocity_density: Any
+
+
+@dataclass(frozen=True, slots=True)
 class OneElectronActionContraction:
     """Resolved real contributions to an action value or source derivative."""
 
@@ -28,6 +36,15 @@ class OneElectronActionContraction:
     connection_kinematic: Any
     mechanical: Any
     total: Any
+
+
+@dataclass(frozen=True, slots=True)
+class OneElectronActionFullContraction:
+    """Source, history, and total differential of the restricted action."""
+
+    source: OneElectronActionContraction
+    history: OneElectronActionContraction
+    total: OneElectronActionContraction
 
 
 def one_electron_velocity_density(
@@ -121,6 +138,82 @@ def restricted_one_electron_action_directional_derivative(
         direction.connection,
         checked_hbar,
         backend,
+    )
+
+
+def restricted_one_electron_action_history_directional_derivative(
+    direction: OneElectronActionHistoryDirection,
+    triple: EOMTriple,
+    backend: ArrayBackend,
+    *,
+    hbar: float = 1.0,
+) -> OneElectronActionContraction:
+    """Contract a coefficient-history direction at fixed matrix data."""
+
+    if not isinstance(direction, OneElectronActionHistoryDirection):
+        raise TypeError("direction must be a OneElectronActionHistoryDirection")
+    checked_hbar = _positive_hbar(hbar)
+    dimension = _validate_triple(triple, backend)
+    _validate_square(direction.density, dimension, backend, "density direction")
+    _validate_square(
+        direction.velocity_density,
+        dimension,
+        backend,
+        "velocity-density direction",
+    )
+    return _contract(
+        direction.density,
+        direction.velocity_density,
+        triple.metric,
+        triple.hamiltonian_eom,
+        triple.connection,
+        checked_hbar,
+        backend,
+    )
+
+
+def restricted_one_electron_action_full_directional_derivative(
+    density: Any,
+    velocity_density: Any,
+    triple: EOMTriple,
+    matrix_direction: OneElectronActionMatrixDirection,
+    history_direction: OneElectronActionHistoryDirection,
+    backend: ArrayBackend,
+    *,
+    hbar: float = 1.0,
+) -> OneElectronActionFullContraction:
+    """Evaluate the full first variation in source and coefficient history."""
+
+    source = restricted_one_electron_action_directional_derivative(
+        density,
+        velocity_density,
+        matrix_direction,
+        backend,
+        hbar=hbar,
+    )
+    history = restricted_one_electron_action_history_directional_derivative(
+        history_direction,
+        triple,
+        backend,
+        hbar=hbar,
+    )
+    total = OneElectronActionContraction(
+        metric_kinematic=source.metric_kinematic + history.metric_kinematic,
+        connection_kinematic=(source.connection_kinematic + history.connection_kinematic),
+        mechanical=source.mechanical + history.mechanical,
+        total=source.total + history.total,
+    )
+    for name, value in (
+        ("full metric action direction", total.metric_kinematic),
+        ("full connection action direction", total.connection_kinematic),
+        ("full mechanical action direction", total.mechanical),
+        ("full action direction", total.total),
+    ):
+        _assert_finite(value, backend, name)
+    return OneElectronActionFullContraction(
+        source=source,
+        history=history,
+        total=total,
     )
 
 

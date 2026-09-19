@@ -26,10 +26,12 @@ from aion.formulations import (
     OneElectronActionMatrixDirection,
     exact_endpoint_link_action_direction,
     exact_magnetic_field_action_direction,
+    exact_pure_gauge_action_direction,
     exact_site_scalar_action_direction,
     exact_wilson_one_electron_triple,
     one_electron_velocity_density,
     restricted_one_electron_action_directional_derivative,
+    restricted_one_electron_action_full_directional_derivative,
 )
 
 pytestmark = pytest.mark.gpu
@@ -207,6 +209,69 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
     )
 
     mapping = np.asarray(reference.anchor_topology.ao_to_atom)
+    gauge_values = np.asarray((0.37, -0.21))
+    gauge_rates = np.asarray((-0.16, 0.29))
+    cpu_gauge = exact_pure_gauge_action_direction(
+        cpu_sample,
+        cpu_density,
+        cpu_velocity,
+        gauge_values,
+        gauge_rates,
+        mapping,
+        cpu_quadrature.backend,
+    )
+    gpu_gauge = exact_pure_gauge_action_direction(
+        gpu_sample,
+        gpu_density,
+        gpu_velocity,
+        gpu.asarray(gauge_values),
+        gpu.asarray(gauge_rates),
+        gpu.asarray(mapping),
+        gpu,
+    )
+    for cpu_value, gpu_value in (
+        (cpu_gauge.matrix.metric, gpu_gauge.matrix.metric),
+        (cpu_gauge.matrix.mechanical, gpu_gauge.matrix.mechanical),
+        (cpu_gauge.matrix.connection, gpu_gauge.matrix.connection),
+        (cpu_gauge.history.density, gpu_gauge.history.density),
+        (cpu_gauge.history.velocity_density, gpu_gauge.history.velocity_density),
+    ):
+        gpu.assert_resident(gpu_value, name="WP7 GPU pure-gauge direction")
+        np.testing.assert_allclose(
+            gpu.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
+    cpu_ward = restricted_one_electron_action_full_directional_derivative(
+        cpu_density,
+        cpu_velocity,
+        exact_wilson_one_electron_triple(cpu_sample),
+        cpu_gauge.matrix,
+        cpu_gauge.history,
+        cpu_quadrature.backend,
+    )
+    gpu_ward = restricted_one_electron_action_full_directional_derivative(
+        gpu_density,
+        gpu_velocity,
+        exact_wilson_one_electron_triple(gpu_sample),
+        gpu_gauge.matrix,
+        gpu_gauge.history,
+        gpu,
+    )
+    np.testing.assert_allclose(
+        gpu.to_host(gpu_ward.total.total),
+        cpu_ward.total.total,
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+    np.testing.assert_allclose(
+        gpu.to_host(gpu_ward.total.total),
+        0.0,
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+
     scalar_values = np.asarray((0.31, -0.17))
     links = np.asarray(((0.0, 0.29), (-0.29, 0.0)))
     cpu_scalar = exact_site_scalar_action_direction(

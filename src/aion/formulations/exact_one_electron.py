@@ -18,7 +18,10 @@ from aion.electronic_structure.time_connection import (
     ExactWilsonOneElectronSample,
 )
 from aion.errors import FormulationError
-from aion.formulations.action import OneElectronActionMatrixDirection
+from aion.formulations.action import (
+    OneElectronActionHistoryDirection,
+    OneElectronActionMatrixDirection,
+)
 from aion.formulations.types import EOMTriple
 
 
@@ -68,6 +71,16 @@ class ExactOneElectronModelTriples:
     geometric_b1: OneElectronModelTriple
     full_b1: OneElectronModelTriple
     complete_first_order: OneElectronModelTriple
+
+
+@dataclass(frozen=True, slots=True)
+class ExactPureGaugeActionDirection:
+    """Coupled source and coefficient-history direction of a pure gauge."""
+
+    gauge_parameter_at_ao: Any
+    gauge_parameter_rate_at_ao: Any
+    matrix: OneElectronActionMatrixDirection
+    history: OneElectronActionHistoryDirection
 
 
 def prepare_exact_one_electron_model_context(
@@ -347,6 +360,93 @@ def exact_magnetic_endpoint_action_direction(
         metric=xp.asarray(response.metric_endpoint, dtype=xp.complex128),
         mechanical=xp.asarray(response.mechanical_endpoint, dtype=xp.complex128),
         connection=xp.asarray(response.connection_endpoint, dtype=xp.complex128),
+    )
+
+
+def exact_pure_gauge_action_direction(
+    sample: ExactWilsonOneElectronSample,
+    density: Any,
+    velocity_density: Any,
+    site_gauge_parameter: object,
+    site_gauge_parameter_rate: object,
+    ao_to_site: object,
+    backend: ArrayBackend,
+) -> ExactPureGaugeActionDirection:
+    r"""Return the exact infinitesimal pure-gauge action direction.
+
+    If ``D=exp(i q lambda_site/hbar)``, exact Wilson matrices transform as
+
+    ``S' = D S D^dagger``, ``K' = D K D^dagger``, and
+    ``omega' = D omega D^dagger + D S dot(D^dagger)``.
+
+    The coefficient history transforms as ``C'=D C``.  This routine returns
+    both sides of that coupled variation, so the off-shell Ward identity can
+    be tested without invoking an equation of motion.
+    """
+
+    _validate_sample_backend(sample, backend)
+    xp = backend.namespace
+    dimension = sample.metric.shape[0]
+    backend.assert_resident(density, name="density")
+    backend.assert_resident(velocity_density, name="velocity density")
+    if density.shape != (dimension, dimension):
+        raise FormulationError("density has an incompatible shape")
+    if velocity_density.shape != (dimension, dimension):
+        raise FormulationError("velocity density has an incompatible shape")
+    _require_finite(density, backend, "density")
+    _require_finite(velocity_density, backend, "velocity density")
+
+    mapping = backend.asarray(ao_to_site, dtype=xp.int64)
+    gauge_values = backend.asarray(site_gauge_parameter, dtype=xp.float64)
+    gauge_rates = backend.asarray(site_gauge_parameter_rate, dtype=xp.float64)
+    backend.assert_resident(mapping, name="AO-to-site map")
+    backend.assert_resident(gauge_values, name="site gauge parameter")
+    backend.assert_resident(gauge_rates, name="site gauge-parameter rate")
+    if mapping.ndim != 1 or mapping.shape[0] != dimension:
+        raise FormulationError("AO-to-site map has an incompatible shape")
+    if (
+        gauge_values.ndim != 1
+        or gauge_values.shape[0] == 0
+        or gauge_rates.shape != gauge_values.shape
+    ):
+        raise FormulationError("site gauge parameters must be equal-size nonempty vectors")
+    if _control_bool(xp.any(mapping < 0), backend) or _control_bool(
+        xp.any(mapping >= gauge_values.shape[0]), backend
+    ):
+        raise FormulationError("AO-to-site map contains an invalid site index")
+    _require_finite(gauge_values, backend, "site gauge parameter")
+    _require_finite(gauge_rates, backend, "site gauge-parameter rate")
+
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+    eta = prefactor * gauge_values[mapping]
+    eta_dot = prefactor * gauge_rates[mapping]
+
+    def commutator_direction(matrix: Any) -> Any:
+        return eta[:, None] * matrix - matrix * eta[None, :]
+
+    matrix_direction = OneElectronActionMatrixDirection(
+        metric=xp.asarray(commutator_direction(sample.metric), dtype=xp.complex128),
+        mechanical=xp.asarray(
+            commutator_direction(sample.mechanical),
+            dtype=xp.complex128,
+        ),
+        connection=xp.asarray(
+            commutator_direction(sample.connection.connection) - sample.metric * eta_dot[None, :],
+            dtype=xp.complex128,
+        ),
+    )
+    history_direction = OneElectronActionHistoryDirection(
+        density=xp.asarray(commutator_direction(density), dtype=xp.complex128),
+        velocity_density=xp.asarray(
+            eta_dot[:, None] * density + commutator_direction(velocity_density),
+            dtype=xp.complex128,
+        ),
+    )
+    return ExactPureGaugeActionDirection(
+        gauge_parameter_at_ao=gauge_values[mapping],
+        gauge_parameter_rate_at_ao=gauge_rates[mapping],
+        matrix=matrix_direction,
+        history=history_direction,
     )
 
 
