@@ -2,10 +2,11 @@
 
 ## Status and scope
 
-This note records an experiment inside WP6. It does not change Aion's selected
-production propagator, does not replace the Cholesky-corrected midpoint
-baseline, and does not by itself satisfy the WP6 acceptance gate. The public
-names carry the `Experimental` qualifier for that reason.
+This note records the mixed-index experiment accepted for the fixed-centre
+linear one-electron G6 scope on 2026-09-19. It does not yet change Aion's
+selected nonlinear production propagator. The public names retain the
+`Experimental` qualifier because the self-consistent Gauss-node TDDFT problem
+has not been implemented or qualified.
 
 Four distinct claims are kept separate:
 
@@ -15,8 +16,9 @@ Four distinct claims are kept separate:
    in `aion.propagation.tensorial`.
 3. The automated tests execute manufactured convergence, invariant, smooth
    frame-transformation, and physical CPU/GPU parity checks.
-4. Acceptance for self-consistent exact-Wilson dynamics still requires the
-   remaining WP6 physical timestep and model-difference evidence.
+4. The physical timestep and model-difference evidence has been executed and
+   accepted for precomputed linear exact-Wilson histories; self-consistent
+   exact-Wilson dynamics remains outside that acceptance.
 
 ## Tensorial equation of motion
 
@@ -159,6 +161,8 @@ integrating another ODE. The tests verify:
   frames; and
 - physical CuPy execution and CPU/GPU parity without host fallback.
 
-These are strong internal checks of the tensor equation and discrete link, but
-they are not a substitute for the pending exact-Wilson physical trajectory and
-timestep qualification.
+The corresponding exact-Wilson physical trajectories and targeted 64- and
+128-interval continuations establish fourth-order asymptotic convergence and
+timestep-stable model differences in the selected hard case. The immutable
+user decision is recorded in
+`docs/reviews/exact_one_electron_g6_review_20260919.json`.

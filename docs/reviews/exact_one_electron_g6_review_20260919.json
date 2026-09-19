@@ -1,0 +1,53 @@
+{
+  "schema": "aion.exact-one-electron-gate-review",
+  "version": "1.0.0",
+  "gate": "G6",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-19T14:09:26Z",
+  "scope": [
+    "exact_fixed_centre_time_connection",
+    "maxwell_consistent_uniform_time_dependent_magnetic_source",
+    "affine_gauge_covariance",
+    "exact_p0_e1_geometric_b1_full_b1_and_complete_first_order_histories",
+    "mixed_index_density_equation",
+    "uncorrected_fourth_order_two_node_gauss_magnus_transport",
+    "positive_metric_three_centre_trajectory_comparisons",
+    "targeted_n64_and_n128_pre_asymptotic_resolution",
+    "field_free_endpoint_energy_excitation_and_density_comparison"
+  ],
+  "effect": "G6 accepted and WP7 authorized; action derivatives, charge, current, continuity, and power qualification may begin",
+  "limitations": [
+    "acceptance is restricted to fixed-centre linear one-electron histories",
+    "nonlinear self-consistent Gauss-node TDDFT propagation is not implemented or accepted",
+    "P0 and E1 require finer timesteps than EX and C1 in the distorted above-threshold fixture",
+    "the raw and derived evidence records retain their executed-unreviewed status"
+  ],
+  "evidence": {
+    "primary_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_linear_qualification_20260918T2055Z_3fd2a83b77d1",
+    "primary_completed_sha256": "3402c929ab8d3ef4ad08f5328956df884a548d708d9f22abca4317234a22a0c6",
+    "midpoint_timestep_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_h3_timestep_refinement_20260918T212428Z_3fd2a83b77d1",
+    "midpoint_timestep_completed_sha256": "b27e51c715c1a64fbb73de71729075191560d3578f2fb32840cc605d095a75e8",
+    "mixed_magnus_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_20260918T231057Z_38ce83eb2fe9",
+    "mixed_magnus_completed_sha256": "2ae73bd7655007ae7778b982b603027ed8b30d3f21d7941f89cb36c533e586dd",
+    "n64_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_n64_20260919T120325Z_57ef2fb6d40e",
+    "n64_completed_sha256": "0ae5345069c161d41da55aa62c4f064b485a8ae7ac7c02f79e978a3f19f056c2",
+    "n128_execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_n128_diagnostics_20260919T124656Z_73f6dc1cb760",
+    "n128_completed_sha256": "0bd20c8f59ceb4cc82ab16cacc3af111f2f61f1315933ac4bf867819889a9c37",
+    "n128_result_sha256": "09f91ee6b39dfab8bcc063f016fd2890a7bd3de232ec9814f5104c8f42ff9d06",
+    "endpoint_observable_summary_sha256": "aaa8620ef7a7a1dc489dc0c7fb418faa66e69822d7fb002c465cc317fa9ffd52",
+    "endpoint_observable_table_sha256": "1fdaee471ff5419eb916aaa7148461943795b3b6e1210f19f36aded5c6cf1c8d"
+  },
+  "accepted_measurements": {
+    "minimum_n32_n64_n128_global_order": 3.706787694830194,
+    "maximum_n64_n128_model_difference_refinement_fraction": 0.004454010784710237,
+    "minimum_metric_eigenvalue": 0.006536456839923005,
+    "maximum_trace_drift": 6.663376361887663e-16,
+    "maximum_idempotency_residual": 5.4391364198524074e-15,
+    "c1_n128_absorbed_energy_ha": 2.7832309730246863e-05,
+    "exact_n128_absorbed_energy_ha": 2.805396957050732e-05,
+    "c1_n128_excitation_probability": 2.1899679085057855e-05,
+    "exact_n128_excitation_probability": 2.199458296647805e-05
+  },
+  "raw_artifact_policy": "Raw manifests remain executed_unreviewed and immutable; this separate review record carries the acceptance decision."
+}

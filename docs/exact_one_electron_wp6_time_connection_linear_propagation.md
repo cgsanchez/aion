@@ -1,8 +1,12 @@
 # WP6: exact time connection and linear one-electron propagation
 
-Status: implemented; the primary campaign and predeclared three-centre
-timestep supplement are executed, but gate G6 remains in progress because the
-supplement failed its model-difference stability criterion.
+Status: implemented, numerically executed, reviewed, and accepted for the
+fixed-centre linear one-electron scope.  The initial midpoint checkpoint
+failed its model-difference stability criterion; the accepted result uses the
+subsequent mixed-index fourth-order Gauss--Magnus experiment and its targeted
+64- and 128-interval continuations.  The user accepted gate G6 on
+2026-09-19; the immutable decision record is
+`docs/reviews/exact_one_electron_g6_review_20260919.json`.
 
 ## 1. Scope and boundary
 
@@ -29,8 +33,8 @@ derivative; it is not independently assembled and must not be interpreted as
 the mechanical energy.
 
 This work package does not implement a self-consistent Hartree--XC closure,
-persistent workflow restart, action-derived charge/current/power observables,
-or a physical many-electron H3 calculation.  The three-centre system contains
+action-derived charge/current/power observables, or a physical many-electron
+H3 calculation.  The three-centre system contains
 one electron on three protons and is therefore H3(^{2+}), used only as a
 geometric qualification fixture.
 
@@ -189,11 +193,58 @@ These are comparison models descended from declared action levels.  They are
 not assembled by borrowing an observable or connection from a different
 level.
 
-## 6. Linear propagator
+## 6. Accepted linear propagator
 
-`LinearMatrixHistory` contains one endpoint metric per time boundary and one
-complete EOM triple per midpoint.  At midpoint (t_{n+1/2}), the coefficient
-generator is
+The original checkpoint used one complete EOM triple per midpoint, a diagonal
+([2/2]) Padé coefficient step, and a right-Cholesky endpoint correction.
+That implementation remains preserved as failed historical evidence; it is
+not the algorithm accepted at G6.
+
+The accepted experiment propagates the natural mixed-index density
+
+\[
+ D^\mu{}_{\nu}=P^{\mu\lambda}S_{\lambda\nu}=PS.
+\]
+
+Metric compatibility reduces its equation of motion to
+
+\[
+ \dot D=[G,D],\qquad
+ G=S^{-1}\left(-\omega_t-\frac{\mathrm i}{\hbar}K\right).
+\]
+
+For a step of length (h), the complete generator is evaluated at the two
+Gauss--Legendre nodes (t_-) and (t_+).  The fourth-order Magnus exponent is
+
+\[
+ \Omega_4=\frac h2(G_-+G_+)
+ -\frac{\sqrt3h^2}{12}[G_-,G_+],
+\]
+
+and the transport link is the diagonal ([2/2]) Padé approximation to
+(\exp\Omega_4).  The density advances by the tensorial similarity
+
+\[
+ D_{n+1}=U_nD_nU_n^{-1}.
+\]
+
+This preserves trace, eigenvalues, and mixed-density idempotency algebraically.
+The contravariant density is recovered by solving (P=DS^{-1}) without forming
+an explicit inverse.
+
+No orthogonalization, endpoint Cholesky factor, or metric correction enters
+the accepted experimental step.  Instead, the raw cross-metric residual
+
+\[
+ U_n^\dagger S(t_{n+1})U_n-S(t_n)
+\]
+
+and the mixed metric-Hermiticity residual are measured against independently
+evaluated endpoint metrics.  The implementation remains explicitly named
+`Experimental` because G6 qualifies precomputed linear histories, not the
+nonlinear self-consistent Gauss-node problem required for adiabatic TDDFT.
+
+The superseded midpoint generator was
 
 \[
  G_{n+1/2}
@@ -201,25 +252,7 @@ generator is
  \left(-\omega_{t,n+1/2}-\frac{\mathrm i}{\hbar}K_{n+1/2}\right).
 \]
 
-The raw step uses the diagonal ([2/2]) Padé rational map,
-
-\[
- U_{\rm raw}=R_{22}(\Delta t\,G_{n+1/2}),
-\]
-
-which is fourth order for a constant generator and symmetric in time.  A
-right-Cholesky link then enforces the cross-metric constraint
-
-\[
- U_n^\dagger S_{n+1}U_n=S_n.
-\]
-
-This correction is explicitly recorded.  It is a finite-step
-roundoff/discretization correction, not a replacement for the analytic
-temporal connection.  Qualification therefore records the uncorrected
-cross-metric residual, the correction norm, and their behaviour under
-time-step refinement.  No Löwdin orthogonalization and no metric
-regularization are used.
+and is retained only to make the failed checkpoint reproducible.
 
 For a time-independent generalized Hamiltonian, an independent reference
 trajectory is obtained by Cholesky reduction of
@@ -286,7 +319,37 @@ differences: the largest 16-to-32 refinement change is (3.338413) times the
 limit.  Consequently this is executed evidence of a failed numerical
 checkpoint and not a G6 pass.
 
-## 9. Implemented, executed, and not yet claimed
+The replacement mixed-density Gauss--Magnus execution is
+
+`/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_20260918T231057Z_38ce83eb2fe9`.
+
+Its targeted 64- and 128-interval continuations are
+
+`/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_n64_20260919T120325Z_57ef2fb6d40e`
+
+and
+
+`/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/exact_one_electron_qualification/wp6_mixed_magnus_n128_diagnostics_20260919T124656Z_73f6dc1cb760`.
+
+In the distorted above-threshold fixture, the measured global orders from the
+32/64/128 density changes are 3.978 (EX), 3.707 (P0), 3.716 (E1), 3.986
+(gB1), 3.990 (B1), and 3.978 (C1).  The largest change in a model-minus-exact
+difference under 64-to-128 refinement is 0.00446 of the final difference,
+well below the declared 0.25 limit.  Trace drift remains below
+(6.7\times10^{-16}), the idempotency defect below (5.5\times10^{-15}), and
+the minimum metric eigenvalue is (6.54\times10^{-3}).  The continuation shows
+that the earlier P0/E1 anomaly was a pre-asymptotic timestep effect caused by
+their larger and more strongly noncommuting approximate generators, not a
+metric singularity or failure of the tensorial equation.
+
+At the field-free endpoint, C1 gives an absorbed energy of
+(2.78323\times10^{-5}) Ha versus (2.80540\times10^{-5}) Ha for EX and an
+excitation probability of (2.18997\times10^{-5}) versus
+(2.19946\times10^{-5}).  The remaining C1--EX separation is stable under
+timestep refinement and is therefore a model-truncation difference at the
+tested grid and basis, not a propagation error.
+
+## 9. Accepted claim and remaining boundary
 
 The following are implemented features:
 
@@ -294,12 +357,13 @@ The following are implemented features:
 - exact direct and endpoint-factorized temporal connections;
 - independently differentiated exact metric rates;
 - action-consistent EX/P0/E1/gB1/B1/C1 triples;
-- midpoint Padé propagation with recorded cross-metric correction;
+- mixed-index density propagation with an uncorrected fourth-order two-node
+  Gauss--Magnus/[2/2]-Padé link;
 - CPU and physical-GPU matrix/propagation paths;
 - authenticated raw and derived campaign artifacts.
 
-The unit/integration tests and the qualification campaign are executed
-numerical evidence.  They are not mathematical identities and do not by
-themselves constitute user review.  Gate G6 remains unaccepted until the user
-reviews the tables, figures, and stated limitations and gives an explicit
-decision.
+The user reviewed the targeted convergence and endpoint-observable evidence
+and accepted gate G6 on 2026-09-19.  This authorizes WP7 for the same
+fixed-centre linear one-electron scope.  It does not claim a nonlinear
+self-consistent propagator, a Hartree--XC closure, resolved continuum current
+density, nuclear motion, or production-readiness of the experimental API.
