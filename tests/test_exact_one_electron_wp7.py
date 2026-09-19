@@ -14,9 +14,15 @@ from aion.config import (
     ElectromagneticOrigin,
     OneElectronReferenceConfig,
 )
-from aion.electromagnetism import UniformMagneticField, UniformMagneticSourceSample
+from aion.electromagnetism import (
+    GaussianVectorPotentialVariation,
+    UniformMagneticField,
+    UniformMagneticSourceSample,
+)
 from aion.electronic_structure import (
     AOGridPolicy,
+    NuclearAttractionProvider,
+    bind_local_potential,
     evaluate_exact_magnetic_field_source_direction,
     evaluate_exact_temporal_source_direction,
     evaluate_exact_wilson_one_electron_sample,
@@ -28,6 +34,7 @@ from aion.formulations import (
     OneElectronActionMatrixDirection,
     evaluate_exact_discrete_continuity,
     evaluate_exact_uniform_electric_power,
+    evaluate_exact_weak_current_pairing,
     exact_endpoint_link_action_direction,
     exact_internal_magnetic_action_direction,
     exact_magnetic_endpoint_action_direction,
@@ -701,4 +708,140 @@ def test_wp7_exact_uniform_electric_power_identity() -> None:
         finite_current,
         atol=3.0e-10,
         rtol=3.0e-9,
+    )
+
+
+@pytest.mark.integration
+def test_wp7_exact_weak_continuum_current_pairing() -> None:
+    quadrature = _quadrature()
+    source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.0, 0.0, 0.0)),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    sample = evaluate_exact_wilson_one_electron_sample(quadrature, source)
+    density = _state(sample.metric)
+    velocity_density = np.asarray(((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j)))
+    variation = GaussianVectorPotentialVariation(
+        amplitude_au=(0.19, -0.13, 0.07),
+        center_au=(0.23, -0.17, 0.11),
+        exponent_au_inverse2=0.41,
+        path_quadrature_order=24,
+    )
+    pairing = evaluate_exact_weak_current_pairing(
+        quadrature,
+        sample,
+        density,
+        velocity_density,
+        variation,
+    )
+    doubled = evaluate_exact_weak_current_pairing(
+        quadrature,
+        sample,
+        density,
+        velocity_density,
+        GaussianVectorPotentialVariation(
+            amplitude_au=(0.38, -0.26, 0.14),
+            center_au=variation.center_au,
+            exponent_au_inverse2=variation.exponent_au_inverse2,
+            path_quadrature_order=variation.path_quadrature_order,
+        ),
+    )
+    np.testing.assert_allclose(doubled.value, 2.0 * pairing.value, atol=2.0e-13, rtol=2.0e-13)
+
+    backend = quadrature.backend
+    starts = np.asarray(((0.1, -0.2, 0.3), (-0.4, 0.2, 0.1)))
+    ends = np.asarray(((0.7, 0.1, -0.2), (0.3, -0.5, 0.4)))
+    gradients = variation.straight_line_integral_gradients(starts, ends, backend)
+    endpoint_step = 2.0e-5
+    finite_gradients = np.empty_like(gradients)
+    for axis in range(3):
+        displacement = np.zeros_like(ends)
+        displacement[:, axis] = endpoint_step
+        finite_gradients[:, axis] = (
+            variation.straight_line_integrals(starts, ends + displacement, backend)
+            - variation.straight_line_integrals(starts, ends - displacement, backend)
+        ) / (2.0 * endpoint_step)
+    np.testing.assert_allclose(
+        gradients,
+        finite_gradients,
+        atol=3.0e-11,
+        rtol=3.0e-10,
+    )
+
+    reference = quadrature.reference
+    mapping = np.asarray(reference.anchor_topology.ao_to_atom)
+    anchors = reference.core_operators.nuclei.coordinates_au[mapping]
+    nuclear = bind_local_potential(
+        NuclearAttractionProvider(),
+        reference,
+        backend,
+    )
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+
+    def perturbed_triple(amplitude: float) -> EOMTriple:
+        metric = np.zeros_like(sample.metric)
+        kinetic = np.zeros_like(sample.mechanical)
+        attraction = np.zeros_like(sample.mechanical)
+        for block in quadrature.blocks():
+            values = block.values
+            gradients_ao = np.moveaxis(block.gradients, 0, -1)
+            momentum = -1j * sample.static_result.hbar * gradients_ao
+            line = variation.straight_line_integrals(
+                anchors[None, :, :],
+                block.coordinates_au[:, None, :],
+                backend,
+            )
+            line_gradient = variation.straight_line_integral_gradients(
+                anchors[None, :, :],
+                block.coordinates_au[:, None, :],
+                backend,
+            )
+            vector = variation.vector_potential(block.coordinates_au, backend)
+            residual = line_gradient - vector[:, None, :]
+            wilson = np.exp(amplitude * prefactor * line)
+            dressed_values = wilson * values
+            dressed_momentum = wilson[:, :, None] * (
+                momentum + amplitude * sample.static_result.charge * residual * values[:, :, None]
+            )
+            metric += np.einsum(
+                "p,pm,pn->mn",
+                block.weights_au,
+                dressed_values.conj(),
+                dressed_values,
+                optimize=True,
+            )
+            kinetic += (1.0 / (2.0 * sample.static_result.mass)) * np.einsum(
+                "p,pmx,pnx->mn",
+                block.weights_au,
+                dressed_momentum.conj(),
+                dressed_momentum,
+                optimize=True,
+            )
+            nuclear_weights = block.weights_au * nuclear.values_au(block.coordinates_au)
+            attraction += np.einsum(
+                "p,pm,pn->mn",
+                nuclear_weights,
+                dressed_values.conj(),
+                dressed_values,
+                optimize=True,
+            )
+        return EOMTriple(metric, kinetic + attraction, np.zeros_like(metric))
+
+    source_step = 2.0e-5
+
+    def action(amplitude: float) -> object:
+        return restricted_one_electron_action_value(
+            density,
+            velocity_density,
+            perturbed_triple(amplitude),
+            backend,
+        ).total
+
+    finite_action = (action(source_step) - action(-source_step)) / (2.0 * source_step)
+    np.testing.assert_allclose(
+        pairing.value,
+        finite_action,
+        atol=3.0e-9,
+        rtol=3.0e-8,
     )

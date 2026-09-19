@@ -14,7 +14,12 @@ from aion.electromagnetism.magnetic import (
     endpoint_line_integrals,
     triangle_phases,
 )
+from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
 from aion.electronic_structure.ao_quadrature import AOQuadrature
+from aion.electronic_structure.local_potentials import (
+    NuclearAttractionProvider,
+    bind_local_potential,
+)
 from aion.electronic_structure.magnetic_matrices import (
     ExactStaticMagneticOneElectronDirection,
     ExactStaticMagneticOneElectronResult,
@@ -131,6 +136,21 @@ class ExactMagneticFieldSourceDirection:
     @property
     def connection(self) -> Any:
         return self.connection_endpoint + self.connection_internal
+
+
+@dataclass(frozen=True, slots=True)
+class ExactWeakVectorPotentialSourceDirection:
+    """Exact matrix response paired with one smooth static test variation."""
+
+    variation: GaussianVectorPotentialVariation
+    metric: Any
+    kinetic: Any
+    nuclear_attraction: Any
+    connection: Any
+
+    @property
+    def mechanical(self) -> Any:
+        return self.kinetic + self.nuclear_attraction
 
 
 def evaluate_exact_uniform_magnetic_time_connection(
@@ -566,6 +586,149 @@ def evaluate_exact_magnetic_field_source_direction(
     )
 
 
+def evaluate_exact_weak_vector_potential_source_direction(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    variation: GaussianVectorPotentialVariation,
+) -> ExactWeakVectorPotentialSourceDirection:
+    r"""Differentiate exact dressed-AO data along a smooth static ``alpha(r)``.
+
+    This is a weak continuum-current probe: it returns the response paired
+    with the supplied spatial test variation and does not claim to reconstruct
+    a pointwise current density.  The variation has zero time derivative and
+    this first implementation requires a temporally static source
+    (``E_origin=Bdot=0``), so ``delta omega_t=0``.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    if not isinstance(sample, ExactWilsonOneElectronSample):
+        raise TypeError("sample must be an ExactWilsonOneElectronSample")
+    if not isinstance(variation, GaussianVectorPotentialVariation):
+        raise TypeError("variation must be a GaussianVectorPotentialVariation")
+    if sample.static_result.reference_fingerprint_sha256 != (
+        quadrature.reference.fingerprint_sha256
+    ):
+        raise ConfigurationError("sample belongs to a different AO reference")
+    if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
+        raise ConfigurationError("sample belongs to a different AO quadrature grid")
+    if any(component != 0.0 for component in sample.source.electric_field_origin_au):
+        raise ConfigurationError("weak static vector variation requires zero electric field")
+    if any(component != 0.0 for component in sample.source.magnetic_field_dot_au):
+        raise ConfigurationError("weak static vector variation requires zero Bdot")
+
+    backend = quadrature.backend
+    xp = backend.namespace
+    reference = quadrature.reference
+    geometry = build_magnetic_pair_geometry(
+        reference.core_operators.nuclei.coordinates_au,
+        reference.anchor_topology.ao_to_atom,
+        backend,
+    )
+    anchors = geometry.ao_anchor_coordinates_au
+    gauge = sample.source.gauge
+    prefactor = 1j * sample.static_result.charge / sample.static_result.hbar
+    nuclear_provider = bind_local_potential(
+        NuclearAttractionProvider(),
+        reference,
+        backend,
+    )
+    nao = reference.core_operators.nao
+    metric = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic = backend.zeros((nao, nao), dtype=xp.complex128)
+    nuclear = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic_scale = 1.0 / (2.0 * sample.static_result.mass)
+
+    for block in quadrature.blocks():
+        values = block.values
+        gradients = xp.moveaxis(block.gradients, 0, -1)
+        bare_momentum = -1j * sample.static_result.hbar * gradients
+        base_line = gauge.anchor_to_point_line_integrals(
+            anchors,
+            block.coordinates_au,
+            backend,
+        )
+        base_line_gradient = gauge.anchor_to_point_line_integral_gradients(
+            anchors,
+            block.coordinates_au,
+            backend,
+        )
+        base_vector = gauge.vector_potential(block.coordinates_au, backend)
+        base_residual = base_line_gradient - base_vector[:, None, :]
+        wilson = xp.exp(prefactor * base_line)
+        dressed_values = wilson * values
+        reduced_momentum = (
+            bare_momentum + sample.static_result.charge * base_residual * values[:, :, None]
+        )
+        dressed_momentum = wilson[:, :, None] * reduced_momentum
+
+        direction_line = variation.straight_line_integrals(
+            anchors[None, :, :],
+            block.coordinates_au[:, None, :],
+            backend,
+        )
+        direction_line_gradient = variation.straight_line_integral_gradients(
+            anchors[None, :, :],
+            block.coordinates_au[:, None, :],
+            backend,
+        )
+        direction_vector = variation.vector_potential(block.coordinates_au, backend)
+        direction_residual = direction_line_gradient - direction_vector[:, None, :]
+        dressed_values_direction = prefactor * direction_line * dressed_values
+        dressed_momentum_direction = wilson[:, :, None] * (
+            prefactor * direction_line[:, :, None] * reduced_momentum
+            + sample.static_result.charge * direction_residual * values[:, :, None]
+        )
+
+        metric += _ordinary_pair(
+            dressed_values_direction,
+            dressed_values,
+            block.weights_au,
+            xp,
+        ) + _ordinary_pair(
+            dressed_values,
+            dressed_values_direction,
+            block.weights_au,
+            xp,
+        )
+        kinetic += kinetic_scale * (
+            _ordinary_vector_pair(
+                dressed_momentum_direction,
+                dressed_momentum,
+                block.weights_au,
+                xp,
+            )
+            + _ordinary_vector_pair(
+                dressed_momentum,
+                dressed_momentum_direction,
+                block.weights_au,
+                xp,
+            )
+        )
+        nuclear_weights = block.weights_au * nuclear_provider.values_au(block.coordinates_au)
+        nuclear += _ordinary_pair(
+            dressed_values_direction,
+            dressed_values,
+            nuclear_weights,
+            xp,
+        ) + _ordinary_pair(
+            dressed_values,
+            dressed_values_direction,
+            nuclear_weights,
+            xp,
+        )
+
+    connection = backend.zeros((nao, nao), dtype=xp.complex128)
+    backend.synchronize()
+    return ExactWeakVectorPotentialSourceDirection(
+        variation=variation,
+        metric=metric,
+        kinetic=kinetic,
+        nuclear_attraction=nuclear,
+        connection=connection,
+    )
+
+
 def _pair_with_factor(values: Any, weights: Any, factor: Any, xp: Any) -> Any:
     return xp.einsum(
         "p,pm,pn,pmn->mn",
@@ -573,6 +736,26 @@ def _pair_with_factor(values: Any, weights: Any, factor: Any, xp: Any) -> Any:
         values.conj(),
         values,
         factor,
+        optimize=True,
+    )
+
+
+def _ordinary_pair(left: Any, right: Any, weights: Any, xp: Any) -> Any:
+    return xp.einsum(
+        "p,pm,pn->mn",
+        weights,
+        left.conj(),
+        right,
+        optimize=True,
+    )
+
+
+def _ordinary_vector_pair(left: Any, right: Any, weights: Any, xp: Any) -> Any:
+    return xp.einsum(
+        "p,pmx,pnx->mn",
+        weights,
+        left.conj(),
+        right,
         optimize=True,
     )
 

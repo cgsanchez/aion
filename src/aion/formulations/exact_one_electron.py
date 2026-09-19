@@ -7,6 +7,7 @@ from typing import Any
 
 from aion.backends import ArrayBackend
 from aion.electromagnetism import build_magnetic_pair_geometry
+from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
 from aion.electronic_structure.ao_quadrature import AOQuadrature
 from aion.electronic_structure.electric_matrices import evaluate_uniform_electric_e1_tensor
 from aion.electronic_structure.magnetic_matrices import (
@@ -15,11 +16,14 @@ from aion.electronic_structure.magnetic_matrices import (
 )
 from aion.electronic_structure.time_connection import (
     ExactMagneticFieldSourceDirection,
+    ExactWeakVectorPotentialSourceDirection,
     ExactWilsonOneElectronSample,
     evaluate_exact_temporal_source_direction,
+    evaluate_exact_weak_vector_potential_source_direction,
 )
 from aion.errors import FormulationError
 from aion.formulations.action import (
+    OneElectronActionContraction,
     OneElectronActionHistoryDirection,
     OneElectronActionMatrixDirection,
     one_electron_velocity_density,
@@ -108,6 +112,18 @@ class ExactUniformElectricPower:
     mechanical_energy: Any
     mechanical_energy_rate: Any
     power_residual: Any
+
+
+@dataclass(frozen=True, slots=True)
+class ExactWeakCurrentPairing:
+    """Variational current paired with one smooth vector-potential test field."""
+
+    response: ExactWeakVectorPotentialSourceDirection
+    action_contraction: OneElectronActionContraction
+
+    @property
+    def value(self) -> Any:
+        return self.action_contraction.total
 
 
 def prepare_exact_one_electron_model_context(
@@ -387,6 +403,29 @@ def exact_magnetic_endpoint_action_direction(
         metric=xp.asarray(response.metric_endpoint, dtype=xp.complex128),
         mechanical=xp.asarray(response.mechanical_endpoint, dtype=xp.complex128),
         connection=xp.asarray(response.connection_endpoint, dtype=xp.complex128),
+    )
+
+
+def exact_weak_vector_potential_action_direction(
+    response: ExactWeakVectorPotentialSourceDirection,
+    backend: ArrayBackend,
+) -> OneElectronActionMatrixDirection:
+    """Adapt one weak continuum test response to the action interface."""
+
+    if not isinstance(response, ExactWeakVectorPotentialSourceDirection):
+        raise TypeError("response must be an ExactWeakVectorPotentialSourceDirection")
+    xp = backend.namespace
+    for name, value in (
+        ("weak metric response", response.metric),
+        ("weak mechanical response", response.mechanical),
+        ("weak connection response", response.connection),
+    ):
+        backend.assert_resident(value, name=name)
+        _require_finite(value, backend, name)
+    return OneElectronActionMatrixDirection(
+        metric=xp.asarray(response.metric, dtype=xp.complex128),
+        mechanical=xp.asarray(response.mechanical, dtype=xp.complex128),
+        connection=xp.asarray(response.connection, dtype=xp.complex128),
     )
 
 
@@ -682,6 +721,37 @@ def evaluate_exact_uniform_electric_power(
         mechanical_energy=mechanical_energy,
         mechanical_energy_rate=mechanical_rate,
         power_residual=mechanical_rate - source_power,
+    )
+
+
+def evaluate_exact_weak_current_pairing(
+    quadrature: AOQuadrature,
+    sample: ExactWilsonOneElectronSample,
+    density: Any,
+    velocity_density: Any,
+    variation: GaussianVectorPotentialVariation,
+) -> ExactWeakCurrentPairing:
+    """Pair the exact variational source current with one smooth test field."""
+
+    response = evaluate_exact_weak_vector_potential_source_direction(
+        quadrature,
+        sample,
+        variation,
+    )
+    direction = exact_weak_vector_potential_action_direction(
+        response,
+        quadrature.backend,
+    )
+    contraction = restricted_one_electron_action_directional_derivative(
+        density,
+        velocity_density,
+        direction,
+        quadrature.backend,
+        hbar=sample.static_result.hbar,
+    )
+    return ExactWeakCurrentPairing(
+        response=response,
+        action_contraction=contraction,
     )
 
 

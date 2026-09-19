@@ -46,6 +46,7 @@ from aion.electromagnetism.sources import (
     UniformPotentialSource,
     ZeroUniformSource,
 )
+from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
 
 __all__ = [
     "TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD",
@@ -56,6 +57,7 @@ __all__ = [
     "DiscreteKickEvent",
     "EventSchedule",
     "GatedUniformSource",
+    "GaussianVectorPotentialVariation",
     "MagneticGaugeKind",
     "MagneticPairGeometry",
     "PhysicalSourceSeries",

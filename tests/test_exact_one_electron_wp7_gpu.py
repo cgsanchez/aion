@@ -13,7 +13,11 @@ from aion.config import (
     ElectromagneticOrigin,
     OneElectronReferenceConfig,
 )
-from aion.electromagnetism import UniformMagneticField, UniformMagneticSourceSample
+from aion.electromagnetism import (
+    GaussianVectorPotentialVariation,
+    UniformMagneticField,
+    UniformMagneticSourceSample,
+)
 from aion.electronic_structure import (
     AOGridPolicy,
     evaluate_exact_magnetic_field_source_direction,
@@ -26,6 +30,7 @@ from aion.formulations import (
     OneElectronActionMatrixDirection,
     evaluate_exact_discrete_continuity,
     evaluate_exact_uniform_electric_power,
+    evaluate_exact_weak_current_pairing,
     exact_endpoint_link_action_direction,
     exact_magnetic_field_action_direction,
     exact_pure_gauge_action_direction,
@@ -369,6 +374,65 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
         atol=2.0e-10,
         rtol=0.0,
     )
+
+    static_source = UniformMagneticSourceSample(
+        0.41,
+        UniformMagneticField((0.0, 0.0, 0.0)),
+        origin_au=(0.11, -0.07, 0.05),
+    )
+    cpu_static_sample = evaluate_exact_wilson_one_electron_sample(
+        cpu_quadrature,
+        static_source,
+    )
+    gpu_static_sample = evaluate_exact_wilson_one_electron_sample(
+        gpu_quadrature,
+        static_source,
+    )
+    static_coefficient = np.asarray(((0.71 + 0.19j,), (-0.23 + 0.41j,)))
+    static_coefficient /= np.sqrt(
+        (static_coefficient.conj().T @ cpu_static_sample.metric @ static_coefficient).real.item()
+    )
+    cpu_static_density = static_coefficient @ static_coefficient.conj().T
+    gpu_static_density = gpu.asarray(cpu_static_density)
+    cpu_static_velocity = np.asarray(((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j)))
+    gpu_static_velocity = gpu.asarray(cpu_static_velocity)
+    variation = GaussianVectorPotentialVariation(
+        amplitude_au=(0.19, -0.13, 0.07),
+        center_au=(0.23, -0.17, 0.11),
+        exponent_au_inverse2=0.41,
+        path_quadrature_order=24,
+    )
+    cpu_weak = evaluate_exact_weak_current_pairing(
+        cpu_quadrature,
+        cpu_static_sample,
+        cpu_static_density,
+        cpu_static_velocity,
+        variation,
+    )
+    gpu_weak = evaluate_exact_weak_current_pairing(
+        gpu_quadrature,
+        gpu_static_sample,
+        gpu_static_density,
+        gpu_static_velocity,
+        variation,
+    )
+    for cpu_value, gpu_value in (
+        (cpu_weak.response.metric, gpu_weak.response.metric),
+        (cpu_weak.response.kinetic, gpu_weak.response.kinetic),
+        (
+            cpu_weak.response.nuclear_attraction,
+            gpu_weak.response.nuclear_attraction,
+        ),
+        (cpu_weak.response.connection, gpu_weak.response.connection),
+        (cpu_weak.value, gpu_weak.value),
+    ):
+        gpu.assert_resident(gpu_value, name="WP7 GPU weak current pairing")
+        np.testing.assert_allclose(
+            gpu.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
 
     scalar_values = np.asarray((0.31, -0.17))
     links = np.asarray(((0.0, 0.29), (-0.29, 0.0)))
