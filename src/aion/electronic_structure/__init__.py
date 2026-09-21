@@ -146,6 +146,12 @@ from aion.electronic_structure.wilson_density import (
     evaluate_exact_uniform_magnetic_wilson_density_matter_direction,
     evaluate_exact_uniform_magnetic_wilson_density_source_direction,
 )
+from aion.electronic_structure.wilson_lda import (
+    WilsonLDAEvaluator,
+    WilsonLDAProvenance,
+    WilsonLDAResult,
+    prepare_wilson_lda,
+)
 
 __all__ = [
     "AOBasisMetadata",
@@ -215,6 +221,9 @@ __all__ = [
     "StaticMagneticModelSet",
     "StraightLineVectorPotentialDirection",
     "UniformElectricE1Tensor",
+    "WilsonLDAEvaluator",
+    "WilsonLDAProvenance",
+    "WilsonLDAResult",
     "ZeroFieldOneElectronResult",
     "ZeroFieldOverlapKineticResult",
     "analytic_uniform_magnetic_overlap",
@@ -259,6 +268,7 @@ __all__ = [
     "prepare_one_electron_ao_reference",
     "prepare_pyscf_reference",
     "prepare_ri_wilson_hartree",
+    "prepare_wilson_lda",
     "pyscf_giao_one_electron_derivatives",
     "reconstruct_mean_field",
     "reconstruct_one_electron_molecule",
