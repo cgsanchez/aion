@@ -1,0 +1,65 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ4",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-21T23:45:03Z",
+  "scope": {
+    "implemented_contract": "nonlinear stationary Hartree and restricted unpolarized pure-LDA Kohn-Sham states assembled from the accepted exact-Wilson one-electron, RI-Wilson Hartree, and Wilson-LDA actions",
+    "fixtures": "H2 and equilateral H3+ in STO-3G with the lda,vwn functional, unpruned PySCF molecular grids, exact affine straight-Wilson phases, and static uniform magnetic fields",
+    "included": [
+      "direct generalized Hermitian stationary solve in the Wilson metric without Löwdin or Cholesky propagation coordinates",
+      "self-consistent Hartree and Kohn-Sham branches with one fixed closed-shell occupation",
+      "orbital, density fixed-point, mixed-index commutator, metric orthonormality, particle-number, occupation-spectrum, and density-factorization identities",
+      "field-free comparison to independent PySCF RHF and RKS references",
+      "electromagnetic gauge covariance of energy, density, coefficients, and lower matrices",
+      "stationarity finite differences, SCF-tolerance refinement, and molecular-grid refinement",
+      "exact-minus-P0 one-electron diagnostics evaluated on exact stationary states",
+      "CPU and physical-GPU regression coverage of the accepted action stack"
+    ]
+  },
+  "effect": "NQ4 accepted and NQ5 source-derivative and static-observable qualification authorized",
+  "limitations": [
+    "the accepted nonlinear Kohn-Sham closure remains restricted, spin unpolarized, and pure LDA",
+    "the accepted stationary campaign is bounded to fixed nuclei, finite molecular Gaussian bases, uniform static magnetic fields, and the dipole approximation",
+    "exact-minus-P0 values are one-electron diagnostics on exact stationary states, not self-consistent reduced-model results",
+    "time-dependent propagation, source derivatives of the complete nonlinear action, Ward identities, continuity, and finite-region balance are not accepted by this decision",
+    "the first incomplete campaign root, the completed root with incorrect traceability labels, and the documented first analysis pass remain superseded evidence"
+  ],
+  "implementation_commit": "38cc97358ca7f8df393a38ab4fac9d51863715b1",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 84 source files",
+    "cpu_fast_suite": "89 passed, 170 deselected",
+    "cpu_complete_integration": "146 passed, 113 deselected",
+    "physical_gpu_stack": "3 passed, 1 warning",
+    "authenticated_analysis": "all proposed thresholds passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq4_stationary_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq4_stationary_20260921T232232Z_6197d6828bb3",
+    "accepted_analysis": "analysis_final_v2/summary.json",
+    "result_sha256": "85c5eab8b60afe396c4e605ff3966b3c6153cc792a32f2458a57d9a6785966e3",
+    "provenance_sha256": "7a23f0222205c107f64fd984f16cba31eef75d91877323b95e2d1f7c380c0185",
+    "completed_sha256": "05436aae6c54838f0fc4d0b0585e352e9ed2c5a56e250c977844c8d01f5b70ce",
+    "analysis_summary_sha256": "ecb49bdd4f6a594c4e027b72ef56f33b26a749611329656d1b25914c2f07214e"
+  },
+  "accepted_measurements": {
+    "field_free_energy_absolute_residual_max_au": 1.201902177783154e-08,
+    "field_free_density_relative_residual_max": 7.128124697296134e-08,
+    "orbital_residual_max": 2.492799597395936e-13,
+    "density_fixed_point_residual_max": 9.040426441736905e-13,
+    "commutator_residual_max": 3.525714508888931e-13,
+    "metric_minimum_eigenvalue_min": 0.03486036186024211,
+    "gauge_energy_absolute_residual_max_au": 2.899902540320909e-13,
+    "gauge_physical_density_relative_residual_max": 8.607335406853483e-13,
+    "level4_to_level5_energy_residual_max_au": 6.529122131837539e-09,
+    "stationarity_best_derivative_max_au": 6.5281113847959205e-09,
+    "stationarity_coarse_order_min": 1.9993726073605251,
+    "phase_spread_rms_max": 0.06009566940851388,
+    "exact_minus_p0_mechanical_relative_frobenius_max": 0.021428166280490654,
+    "exact_minus_p0_one_electron_energy_max_abs_au": 0.0024904433017696906
+  },
+  "raw_artifact_policy": "Raw campaign artifacts and all documented superseded roots and analysis passes remain immutable; this separate review record carries the acceptance decision."
+}

@@ -2,18 +2,20 @@
 
 Date: 2026-09-21
 
-Gate state: **implemented, executed, and analyzed; awaiting user review**
+Gate state: **accepted by the user**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq3_review_20260921.json`
+
+Acceptance record: `docs/reviews/chapter13_nq4_review_20260921.json`
 
 Controlling plan:
 `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`
 
 This document is the review entry point for NQ4. It describes the reusable
 stationary implementation, the independent checks, the authenticated H3+
-campaign, and the interpretation boundary of the evidence. Passing the
-proposed numerical thresholds does not accept the gate; acceptance requires a
-separate user decision and review record.
+campaign, and the interpretation boundary of the evidence. The numerical
+evidence and stated boundaries were accepted by the user on 2026-09-21; the
+separate review record carries that decision and authorizes NQ5.
 
 ## 1. Scope and physical states
 
