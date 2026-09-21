@@ -1,0 +1,69 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ3",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-21T22:20:13Z",
+  "scope": {
+    "implemented_contract": "one restricted unpolarized pure-LDA energy, lower matrix, and fixed-history electromagnetic derivative from the same exact-Wilson molecular-grid action",
+    "fixtures": "H2 and LiH in STO-3G with the lda,vwn functional, unpruned PySCF molecular grids, and exact affine straight-Wilson phases",
+    "included": [
+      "complete complex Wilson-density contraction before the real functional boundary",
+      "one fixed lda,vwn quadrature energy and lower XC matrix from the same finite sum",
+      "unrestricted real and imaginary matter derivatives",
+      "physical and pure-gauge fixed-history source derivatives",
+      "independent zero-field PySCF/libxc comparison on identical grids",
+      "grid refinement kept distinct from functional selection",
+      "electromagnetic gauge covariance and general complex coefficient-frame covariance",
+      "explicit CPU PySCF/libxc pointwise boundary with backend-resident Aion contractions",
+      "CPU and physical-GPU parity"
+    ]
+  },
+  "effect": "NQ3 accepted and NQ4 nonlinear stationary Hartree and Kohn--Sham qualification authorized",
+  "limitations": [
+    "the accepted XC closure is restricted, spin unpolarized, and pure LDA only",
+    "pointwise PySCF/libxc evaluation remains host-side on a GPU execution",
+    "GGA density gradients, hybrid exchange, nonlocal correlation, and spin polarization are not accepted",
+    "nonlinear stationary states, nonlinear source assembly, and nonlinear propagation are not implemented or accepted by this decision",
+    "acceptance is bounded to the declared fixed-centre uniform-magnetic complex128 realization"
+  ],
+  "implementation_commit": "4f94cb4fb8af23a836242c9aef8697ce075b3594",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 83 source files",
+    "cpu_fast_suite": "89 passed, 160 deselected",
+    "cpu_complete_integration": "137 passed, 112 deselected",
+    "physical_gpu_action_and_source": "1 passed, 1 warning (CuPy contraction engine)",
+    "authenticated_analysis": "all proposed thresholds passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq3_wilson_lda_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq3_wilson_lda_20260921T211147Z_def189b",
+    "result_sha256": "5d6ddec7cf34628dc20aa57ef384ece3562a34ee9ac8209f327e672744ed8845",
+    "provenance_sha256": "9a7aa0ea6b402582a25745633fcc11a83e2eca27cd191dae2aa54a0c2b24029e",
+    "completed_sha256": "f7c691d33ab539c23055ef4540ed6e5a1bc542d6ebecaeb3975650255fb91c36",
+    "analysis_summary_sha256": "92c26c202e78fd9454d1e48782984d13abf045f25f55e3f7817eb956f1b20455"
+  },
+  "accepted_measurements": {
+    "same_grid_energy_absolute_residual_max_au": 1.3322676295501878e-15,
+    "same_grid_lower_relative_residual_max": 3.389183394281937e-16,
+    "same_grid_electron_count_absolute_residual_max": 4.440892098500626e-16,
+    "level4_to_level5_energy_absolute_residual_max_au": 3.271351189937377e-09,
+    "level4_to_level5_lower_relative_residual_max": 1.0122844455985062e-08,
+    "lower_hermiticity_residual_max": 6.559221817787722e-17,
+    "density_imaginary_max_abs": 5.204170427930421e-18,
+    "density_real_minimum": 4.059001985119306e-51,
+    "gauge_density_relative_residual_max": 2.8795620905815036e-16,
+    "gauge_lower_covariance_relative_residual_max": 1.665363151877228e-16,
+    "frame_density_relative_residual_max": 4.050582427436029e-16,
+    "frame_lower_congruence_relative_residual_max": 4.045768602807257e-16,
+    "matter_best_central_absolute_error_max_au": 1.558941864487906e-11,
+    "matter_minimum_coarse_order": 1.9980962455060438,
+    "physical_source_best_central_absolute_error_max_au": 3.299287926195049e-12,
+    "physical_source_minimum_coarse_order": 1.9963946055082469,
+    "pure_gauge_source_best_central_absolute_error_max_au": 4.518800156110003e-14,
+    "source_density_imaginary_max_abs": 3.3306690738754696e-16
+  },
+  "raw_artifact_policy": "Raw campaign artifacts and the documented superseded first analysis pass remain immutable; this separate review record carries the acceptance decision."
+}

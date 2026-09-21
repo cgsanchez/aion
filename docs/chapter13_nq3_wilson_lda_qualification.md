@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Gate state: **executed, awaiting user review**
+Gate state: **accepted**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq2_review_20260921.json`
 
@@ -253,4 +253,9 @@ Status separation at this boundary is:
   **implemented**;
 - CPU refinement/oracle/derivative/covariance campaign and physical-GPU
   parity: **executed**;
-- NQ3 scientific decision: **awaiting user review**.
+- NQ3 scientific decision: **accepted by the user on 2026-09-21**.
+
+The acceptance record is
+`docs/reviews/chapter13_nq3_review_20260921.json`. Acceptance is bounded to
+the declared restricted unpolarized H2/LiH, STO-3G, `lda,vwn`, unpruned-grid,
+uniform-magnetic, complex128 realization and does not extend to NQ4.
