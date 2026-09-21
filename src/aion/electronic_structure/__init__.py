@@ -129,6 +129,11 @@ from aion.electronic_structure.time_connection import (
     evaluate_exact_weak_vector_potential_source_direction,
     evaluate_exact_wilson_one_electron_sample,
 )
+from aion.electronic_structure.wilson_density import (
+    ExactWilsonDensityResult,
+    estimate_wilson_density_block_bytes,
+    evaluate_exact_uniform_magnetic_wilson_density,
+)
 
 __all__ = [
     "AOBasisMetadata",
@@ -159,6 +164,7 @@ __all__ = [
     "ExactStaticScalarMagneticMatrix",
     "ExactTemporalSourceDirection",
     "ExactWeakVectorPotentialSourceDirection",
+    "ExactWilsonDensityResult",
     "ExactWilsonOneElectronSample",
     "ExactWilsonTimeConnection",
     "GIAOOneElectronDerivatives",
@@ -205,12 +211,14 @@ __all__ = [
     "estimate_ao_block_bytes",
     "estimate_magnetic_block_bytes",
     "estimate_spatial_connection_block_bytes",
+    "estimate_wilson_density_block_bytes",
     "evaluate_exact_magnetic_field_source_direction",
     "evaluate_exact_static_magnetic_one_electron_direction",
     "evaluate_exact_static_magnetic_one_electron_matrices",
     "evaluate_exact_temporal_source_direction",
     "evaluate_exact_uniform_electric_internal_connections",
     "evaluate_exact_uniform_magnetic_time_connection",
+    "evaluate_exact_uniform_magnetic_wilson_density",
     "evaluate_exact_weak_vector_potential_source_direction",
     "evaluate_exact_wilson_one_electron_sample",
     "evaluate_local_potential_magnetic_matrices",

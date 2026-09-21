@@ -50,7 +50,11 @@ def resolve_velocity_fraction(
 
 @dataclass(frozen=True, slots=True)
 class AODensity:
-    """A lower-index AO density using ``P=C f C^dagger``."""
+    """Contravariant AO coefficient density ``P=C f C^dagger``.
+
+    The historical class name is retained, but this is not a lower-index
+    operator matrix.  Its natural mixed-index form is ``D=P S``.
+    """
 
     matrix: Any
     backend: ArrayBackend

@@ -48,12 +48,13 @@ class DFTInternalEnergy:
 
 @dataclass(frozen=True, slots=True)
 class AdiabaticPureRKS:
-    """Validated PySCF/GPU4PySCF pure LDA/GGA functional bridge.
+    """Validated field-free/P0 PySCF pure-LDA/GGA functional bridge.
 
     Real Gaussian AOs make the real-space density depend only on the real
     symmetric part of a Hermitian AO density.  The complete complex density is
     retained in all operator contractions; only its real part is supplied to
-    PySCF's real LDA/GGA quadrature and Coulomb builders.
+    PySCF's real LDA/GGA quadrature and Coulomb builders.  This real-density
+    shortcut is not the finite-field exact Wilson closure of Chapter 13.
     """
 
     workspace: Workspace
