@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Gate state: **implemented and executed; awaiting user review**
+Gate state: **accepted**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq1_review_20260921.json`
 
@@ -293,10 +293,11 @@ Status separation at this boundary is:
   **implemented**;
 - CPU convergence/derivative/invariance campaign and physical-GPU parity:
   **executed**;
-- NQ2 scientific decision: **awaiting user review**.
+- NQ2 scientific decision: **accepted by the user on 2026-09-21**.
 
-The evidence supports accepting NQ2 for the declared H2/LiH, STO-3G,
-`weigend`, unpruned-grid, uniform-magnetic, complex128 realization. If
-accepted, the next gate is NQ3: one declared Wilson LDA grid energy, its
-lower matrix, and its fixed-history source derivative, again descending
-from one discrete action.
+The acceptance record is
+`docs/reviews/chapter13_nq2_review_20260921.json`. Acceptance is bounded to
+the declared H2/LiH, STO-3G, `weigend`, unpruned-grid, uniform-magnetic,
+complex128 realization. It authorizes NQ3: one declared Wilson LDA grid
+energy, its lower matrix, and its fixed-history source derivative, again
+descending from one discrete action.

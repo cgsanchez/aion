@@ -1,0 +1,67 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ2",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-21T20:52:24Z",
+  "scope": {
+    "implemented_contract": "one Coulomb-metric RI-Wilson Hartree energy with unrestricted matter and fixed-history electromagnetic derivatives from the same discrete action",
+    "fixtures": "H2 and LiH in STO-3G with the weigend auxiliary basis, unpruned PySCF molecular grids, and exact affine straight-Wilson phases",
+    "included": [
+      "analytic PySCF auxiliary Coulomb metric and auxiliary potentials on the molecular grid",
+      "complete complex Wilson three-index contraction",
+      "stored Hartree energy, lower Coulomb matrix, and fitted coefficients",
+      "one-half pair counting and explicit common-field self-interaction convention",
+      "unrestricted real and imaginary matter derivatives",
+      "physical and pure-gauge fixed-history source derivatives",
+      "field-free analytic three-index and exact four-center Coulomb references",
+      "separate grid, auxiliary-basis, retained-rank, and solve-accuracy evidence",
+      "electromagnetic gauge and general complex coefficient-frame invariance",
+      "CPU and physical-GPU parity"
+    ]
+  },
+  "effect": "NQ2 accepted and NQ3 Wilson LDA quadrature-action qualification authorized",
+  "limitations": [
+    "the selected weigend auxiliary basis is an approximation to the exact four-center Coulomb interaction",
+    "the qualified Hartree branch includes self-interaction by definition",
+    "Wilson LDA/GGA exchange-correlation closure is not implemented or accepted by this decision",
+    "nonlinear stationary states, nonlinear source assembly, and nonlinear propagation are not implemented or accepted",
+    "acceptance is bounded to the declared fixed-centre uniform-magnetic complex128 realization"
+  ],
+  "implementation_commit": "d340b652b1e2261247895509fb40f1468c216812",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 82 source files",
+    "cpu_fast_suite": "89 passed, 152 deselected",
+    "cpu_relevant_integration": "39 passed, 1 deselected",
+    "physical_gpu_action_and_source": "1 passed, 1 warning (CuPy contraction engine)",
+    "authenticated_analysis": "all proposed thresholds passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq2_ri_wilson_hartree_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq2_ri_wilson_hartree_20260921T200959Z_6a59d5421654",
+    "result_sha256": "643f65cfc029b968a259de8cbd64cac77115af5b9871f0443687aef751fc293d",
+    "provenance_sha256": "862f8f3ba7f2afb41fad670a089f4ecba007865daa11454c92b76b595c63d8ad",
+    "completed_sha256": "34c38621f89b34c02526609ebb05fd3b736ff3c22ae1ab5e01e41b9136708f47",
+    "analysis_summary_sha256": "31ecee0c93ac15ce36b91fc0f69d9c15641e590a7da17211f25ec7d3a79bfd83"
+  },
+  "accepted_measurements": {
+    "finest_grid_energy_relative_max": 1.5303894270935547e-10,
+    "finest_grid_lower_relative_max": 4.22578852359808e-10,
+    "finest_grid_three_index_relative_max": 5.154603382584677e-10,
+    "selected_auxiliary_exact_energy_relative_max": 6.9044328190975e-05,
+    "production_pair_counting_residual_max": 1.7763568394002505e-15,
+    "production_lower_hermiticity_residual_max": 6.417945572037824e-17,
+    "production_solve_relative_residual_max": 5.044150873815944e-13,
+    "production_stationary_energy_residual_max_au": 2.7204904995414836e-12,
+    "gauge_energy_absolute_residual_max_au": 5.197620112085133e-12,
+    "frame_lower_congruence_relative_residual_max": 6.813000649005477e-13,
+    "matter_best_central_absolute_error_max_au": 1.5179073553639455e-09,
+    "matter_minimum_coarse_order": 1.996616852805247,
+    "source_best_central_absolute_error_max_au": 1.9089143869777114e-08,
+    "physical_source_minimum_coarse_order": 1.9964822669660205,
+    "source_moment_imaginary_max_abs": 7.112366251504909e-17
+  },
+  "raw_artifact_policy": "Raw campaign artifacts and the two documented pilot roots remain immutable; this separate review record carries the acceptance decision."
+}
