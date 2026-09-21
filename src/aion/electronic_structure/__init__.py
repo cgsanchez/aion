@@ -130,9 +130,14 @@ from aion.electronic_structure.time_connection import (
     evaluate_exact_wilson_one_electron_sample,
 )
 from aion.electronic_structure.wilson_density import (
+    ExactWilsonDensityDirectionResult,
     ExactWilsonDensityResult,
+    StraightLineVectorPotentialDirection,
+    contract_wilson_density_block,
     estimate_wilson_density_block_bytes,
     evaluate_exact_uniform_magnetic_wilson_density,
+    evaluate_exact_uniform_magnetic_wilson_density_matter_direction,
+    evaluate_exact_uniform_magnetic_wilson_density_source_direction,
 )
 
 __all__ = [
@@ -164,6 +169,7 @@ __all__ = [
     "ExactStaticScalarMagneticMatrix",
     "ExactTemporalSourceDirection",
     "ExactWeakVectorPotentialSourceDirection",
+    "ExactWilsonDensityDirectionResult",
     "ExactWilsonDensityResult",
     "ExactWilsonOneElectronSample",
     "ExactWilsonTimeConnection",
@@ -196,6 +202,7 @@ __all__ = [
     "StaticMagneticFirstOrderModelSet",
     "StaticMagneticFirstOrderModels",
     "StaticMagneticModelSet",
+    "StraightLineVectorPotentialDirection",
     "UniformElectricE1Tensor",
     "ZeroFieldOneElectronResult",
     "ZeroFieldOverlapKineticResult",
@@ -206,6 +213,7 @@ __all__ = [
     "bind_local_potential",
     "build_e1_operators",
     "compare_generalized_spectra",
+    "contract_wilson_density_block",
     "create_reference_workspace",
     "diagonal_scaled_element_change",
     "estimate_ao_block_bytes",
@@ -219,6 +227,8 @@ __all__ = [
     "evaluate_exact_uniform_electric_internal_connections",
     "evaluate_exact_uniform_magnetic_time_connection",
     "evaluate_exact_uniform_magnetic_wilson_density",
+    "evaluate_exact_uniform_magnetic_wilson_density_matter_direction",
+    "evaluate_exact_uniform_magnetic_wilson_density_source_direction",
     "evaluate_exact_weak_vector_potential_source_direction",
     "evaluate_exact_wilson_one_electron_sample",
     "evaluate_local_potential_magnetic_matrices",

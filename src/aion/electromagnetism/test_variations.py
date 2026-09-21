@@ -11,6 +11,70 @@ from aion.backends import ArrayBackend
 from aion.config.units import Vector3, finite_float, vector3
 from aion.errors import ConfigurationError
 
+from .magnetic import AffineMagneticGauge
+
+
+@dataclass(frozen=True, slots=True)
+class AffineGaugeDifferenceVariation:
+    r"""Pure-gauge direction ``alpha=A_target-A_reference``.
+
+    Both affine representatives must have the same physical magnetic field,
+    so this direction has zero curl. It is useful for fixed-coefficient
+    source derivatives and is not an electromagnetic gauge transformation of
+    the matter coefficients.
+    """
+
+    target: AffineMagneticGauge
+    reference: AffineMagneticGauge
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.target, AffineMagneticGauge) or not isinstance(
+            self.reference, AffineMagneticGauge
+        ):
+            raise ConfigurationError("gauge-difference endpoints must be affine gauges")
+        if self.target.field != self.reference.field:
+            raise ConfigurationError("gauge-difference endpoints must have the same field")
+
+    def vector_potential(self, points_au: object, backend: ArrayBackend) -> Any:
+        """Evaluate the curl-free affine vector-potential difference."""
+
+        return self.target.vector_potential(points_au, backend) - self.reference.vector_potential(
+            points_au,
+            backend,
+        )
+
+    def straight_line_integrals(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Return the exact straight-path line-integral difference."""
+
+        return self.target.straight_line_integrals(
+            starts_au,
+            ends_au,
+            backend,
+        ) - self.reference.straight_line_integrals(starts_au, ends_au, backend)
+
+    def straight_line_integral_gradients(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Return the endpoint gradient of the line-integral difference."""
+
+        return self.target.straight_line_integral_gradients(
+            starts_au,
+            ends_au,
+            backend,
+        ) - self.reference.straight_line_integral_gradients(
+            starts_au,
+            ends_au,
+            backend,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class GaussianVectorPotentialVariation:

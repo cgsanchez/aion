@@ -46,11 +46,15 @@ from aion.electromagnetism.sources import (
     UniformPotentialSource,
     ZeroUniformSource,
 )
-from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
+from aion.electromagnetism.test_variations import (
+    AffineGaugeDifferenceVariation,
+    GaussianVectorPotentialVariation,
+)
 
 __all__ = [
     "TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD",
     "AdditiveUniformSource",
+    "AffineGaugeDifferenceVariation",
     "AffineMagneticGauge",
     "CenterLoopHolonomy",
     "CompiledUniformSource",
