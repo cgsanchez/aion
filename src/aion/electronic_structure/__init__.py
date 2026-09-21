@@ -111,6 +111,7 @@ from aion.electronic_structure.pyscf_rks import (
 )
 from aion.electronic_structure.reference_io import load_reference_data, save_reference
 from aion.electronic_structure.ri_wilson_hartree import (
+    PreparedRIWilsonHartreeAction,
     RIAuxiliaryProvenance,
     RIMetricRankPolicy,
     RIWilsonHartreeEvaluator,
@@ -152,6 +153,17 @@ from aion.electronic_structure.wilson_lda import (
     WilsonLDAResult,
     prepare_wilson_lda,
 )
+from aion.electronic_structure.wilson_stationary import (
+    ExactWilsonActionEvaluation,
+    ExactWilsonStationaryFactory,
+    ExactWilsonStationaryModel,
+    ExactWilsonStationaryState,
+    StationarySCFIteration,
+    StationarySCFPolicy,
+    WilsonStationaryBranch,
+    prepare_exact_wilson_stationary_factory,
+    prepare_exact_wilson_stationary_model,
+)
 
 __all__ = [
     "AOBasisMetadata",
@@ -182,9 +194,13 @@ __all__ = [
     "ExactStaticScalarMagneticMatrix",
     "ExactTemporalSourceDirection",
     "ExactWeakVectorPotentialSourceDirection",
+    "ExactWilsonActionEvaluation",
     "ExactWilsonDensityDirectionResult",
     "ExactWilsonDensityResult",
     "ExactWilsonOneElectronSample",
+    "ExactWilsonStationaryFactory",
+    "ExactWilsonStationaryModel",
+    "ExactWilsonStationaryState",
     "ExactWilsonTimeConnection",
     "GIAOOneElectronDerivatives",
     "GeneralizedSpectralComparison",
@@ -205,6 +221,7 @@ __all__ = [
     "NuclearData",
     "OneElectronAOReference",
     "OneElectronLowerMatrices",
+    "PreparedRIWilsonHartreeAction",
     "PreparedReference",
     "QuadratureGrid",
     "RIAuxiliaryProvenance",
@@ -219,11 +236,14 @@ __all__ = [
     "StaticMagneticFirstOrderModelSet",
     "StaticMagneticFirstOrderModels",
     "StaticMagneticModelSet",
+    "StationarySCFIteration",
+    "StationarySCFPolicy",
     "StraightLineVectorPotentialDirection",
     "UniformElectricE1Tensor",
     "WilsonLDAEvaluator",
     "WilsonLDAProvenance",
     "WilsonLDAResult",
+    "WilsonStationaryBranch",
     "ZeroFieldOneElectronResult",
     "ZeroFieldOverlapKineticResult",
     "analytic_uniform_magnetic_overlap",
@@ -265,6 +285,8 @@ __all__ = [
     "metric_spectrum",
     "momentum_grid_residual",
     "prepare_ao_quadrature",
+    "prepare_exact_wilson_stationary_factory",
+    "prepare_exact_wilson_stationary_model",
     "prepare_one_electron_ao_reference",
     "prepare_pyscf_reference",
     "prepare_ri_wilson_hartree",

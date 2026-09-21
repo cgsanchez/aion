@@ -109,6 +109,35 @@ class RIWilsonHartreeResult:
     self_interaction_included: bool = True
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedRIWilsonHartreeAction:
+    """Source-fixed RI--Wilson tensor reused across nonlinear evaluations.
+
+    The three-index tensor and its optional source direction depend on the
+    electromagnetic source and quadrature, but not on the coefficient
+    density.  Preparing them once is therefore an exact reuse of the same
+    discrete action, not a frozen-density approximation.
+    """
+
+    evaluator: RIWilsonHartreeEvaluator
+    three_index: Any
+    three_index_source_direction: Any | None
+    charge: float
+    hbar: float
+
+    def evaluate(self, coefficient_density: object) -> RIWilsonHartreeResult:
+        """Contract the prepared action with one contravariant density."""
+
+        density = self.evaluator._validated_density(coefficient_density)
+        return self.evaluator._contract_action(
+            density,
+            self.three_index,
+            self.three_index_source_direction,
+            self.charge,
+            self.hbar,
+        )
+
+
 @dataclass(slots=True)
 class RIWilsonHartreeEvaluator:
     r"""Prepared Coulomb-metric RI evaluator for a fixed AO quadrature.
@@ -268,6 +297,24 @@ class RIWilsonHartreeEvaluator:
     ) -> RIWilsonHartreeResult:
         """Evaluate one action package and optional fixed-history direction."""
 
+        action = self.prepare_action(
+            vector_potential,
+            source_direction=source_direction,
+            charge=charge,
+            hbar=hbar,
+        )
+        return action.evaluate(coefficient_density)
+
+    def prepare_action(
+        self,
+        vector_potential: StraightLineVectorPotentialDirection,
+        *,
+        source_direction: StraightLineVectorPotentialDirection | None = None,
+        charge: float = -1.0,
+        hbar: float = 1.0,
+    ) -> PreparedRIWilsonHartreeAction:
+        """Prepare density-independent RI--Wilson tensors for one source."""
+
         line_method = getattr(vector_potential, "straight_line_integrals", None)
         if not callable(line_method):
             raise TypeError("vector_potential must provide straight_line_integrals")
@@ -277,19 +324,18 @@ class RIWilsonHartreeEvaluator:
             raise TypeError("source_direction must provide straight_line_integrals")
         checked_charge = _finite_scalar(charge, "charge")
         checked_hbar = _positive_scalar(hbar, "hbar")
-        density = self._validated_density(coefficient_density)
         three_index, three_index_direction = self._build_three_index(
             vector_potential,
             source_direction,
             checked_charge,
             checked_hbar,
         )
-        return self._contract_action(
-            density,
-            three_index,
-            three_index_direction,
-            checked_charge,
-            checked_hbar,
+        return PreparedRIWilsonHartreeAction(
+            evaluator=self,
+            three_index=three_index,
+            three_index_source_direction=three_index_direction,
+            charge=checked_charge,
+            hbar=checked_hbar,
         )
 
     def _build_potential_cache(self) -> np.ndarray:

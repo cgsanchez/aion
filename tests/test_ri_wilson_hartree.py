@@ -269,3 +269,23 @@ def test_ri_metric_rank_and_cache_policies_are_explicit() -> None:
             "weigend",
             potential_cache_memory_budget_bytes=8,
         )
+
+
+def test_source_fixed_prepared_action_reuses_the_same_three_index_tensor() -> None:
+    reference, _, evaluator = _prepared(level=2)
+    density = reference.ground_state.density.astype(np.complex128)
+    gauge = _symmetric_gauge()
+    prepared = evaluator.prepare_action(gauge)
+    first = prepared.evaluate(density)
+    second = prepared.evaluate(0.97 * density)
+
+    assert first.three_index is prepared.three_index
+    assert second.three_index is prepared.three_index
+    direct = evaluator.evaluate(density, gauge)
+    np.testing.assert_allclose(first.energy, direct.energy, atol=2.0e-12, rtol=2.0e-12)
+    np.testing.assert_allclose(
+        first.lower_coulomb_matrix,
+        direct.lower_coulomb_matrix,
+        atol=2.0e-12,
+        rtol=2.0e-12,
+    )
