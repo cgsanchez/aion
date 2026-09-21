@@ -302,6 +302,7 @@ def _freeze_source_sample(
     return FormulationSourceSample(
         time_au=sample.time_au,
         gauge=sample.gauge,
+        velocity_fraction=sample.velocity_fraction,
         electric_field=xp.array(sample.electric_field, copy=True),
         electric_field_dot=xp.array(sample.electric_field_dot, copy=True),
         vector_potential_reduced=xp.array(sample.vector_potential_reduced, copy=True),

@@ -62,8 +62,8 @@ A resolved simulation document contains:
 
 - an authenticated reference SHA-256 digest plus its relocatable path;
 - one of `bare_length_gauge`, `bare_velocity_gauge`, `p0`, or `p0_e1`, with an
-  explicit length/velocity representation (fixed by the bare kind and selectable
-  for P0/P0+E1);
+  explicit representation (fixed by the bare kind, and selectable from the
+  continuous length--velocity gauge family for P0/P0+E1);
 - a discriminated physical source definition;
 - zero or more uniquely identified exact kick events on integer boundaries;
 - an endpoint-inclusive `FixedTimeGrid`;
@@ -78,6 +78,25 @@ Bare formulations require `fixed_metric_scem`; P0 and P0+E1 require
 `connection_aware_scem`. The default frozen-exponential approximation is
 Padé `[2/2]`; Cayley `[1/1]` is explicit. The fixed time grid treats integer
 step as authoritative: `N` intervals always produce `N+1` endpoints.
+
+For P0/P0+E1, `formulation.velocity_fraction` is a constant real number
+`lambda` in `[0,1]`. The endpoints are normalized to the existing
+representations: `lambda=0` is `gauge="length"`, and `lambda=1` is
+`gauge="velocity"`. A strict interior value is represented as
+`gauge="mixed"`; for example:
+
+```toml
+[formulation]
+kind = "p0_e1"
+gauge = "mixed"
+velocity_fraction = 0.5
+```
+
+In Python, `FormulationConfig(FormulationKind.P0_E1,
+velocity_fraction=0.5)` infers the mixed representation. Bare formulations
+reject an interior fraction. The fraction is part of the simulation's
+scientific identity and comparison-manifest provenance. It is constant for a
+simulation; a time-dependent gauge-mixing parameter is not implemented.
 
 Sources are potential-first contracts. Zero, compactly supported sin²
 vector-potential pulse, authenticated compiled-source, and reproducible

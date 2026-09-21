@@ -176,8 +176,57 @@ def test_backend_rejects_unused_device_for_cpu() -> None:
 def test_formulation_gauge_is_explicit_and_bare_mismatches_fail() -> None:
     covariant = FormulationConfig(FormulationKind.P0_E1, GaugeRepresentation.VELOCITY)
     assert covariant.as_mapping() == {"kind": "p0_e1", "gauge": "velocity"}
+    assert covariant.resolved_velocity_fraction == 1.0
+    mixed = FormulationConfig(FormulationKind.P0_E1, velocity_fraction=0.375)
+    assert mixed.gauge is GaugeRepresentation.MIXED
+    assert mixed.resolved_velocity_fraction == 0.375
+    assert mixed.as_mapping() == {
+        "kind": "p0_e1",
+        "gauge": "mixed",
+        "velocity_fraction": 0.375,
+    }
+    assert FormulationConfig(FormulationKind.P0, velocity_fraction=0.0).as_mapping() == {
+        "kind": "p0",
+        "gauge": "length",
+    }
+    assert FormulationConfig(FormulationKind.P0, velocity_fraction=1.0).as_mapping() == {
+        "kind": "p0",
+        "gauge": "velocity",
+    }
     with pytest.raises(UnsupportedConfigurationError, match="requires the length"):
         FormulationConfig(FormulationKind.BARE_LENGTH_GAUGE, GaugeRepresentation.VELOCITY)
+    with pytest.raises(UnsupportedConfigurationError, match="requires the length"):
+        FormulationConfig(FormulationKind.BARE_LENGTH_GAUGE, velocity_fraction=0.5)
+    with pytest.raises(ConfigurationError, match="strictly between"):
+        FormulationConfig(FormulationKind.P0_E1, GaugeRepresentation.MIXED)
+    with pytest.raises(ConfigurationError, match="strictly between"):
+        FormulationConfig(FormulationKind.P0_E1, GaugeRepresentation.MIXED, 1.0)
+    with pytest.raises(ConfigurationError, match=r"closed interval \[0, 1\]"):
+        FormulationConfig(FormulationKind.P0_E1, velocity_fraction=1.1)
+
+
+def test_mixed_gauge_configuration_round_trip_and_identity() -> None:
+    baseline = simulation_config()
+    mixed = replace(
+        baseline,
+        formulation=FormulationConfig(FormulationKind.P0_E1, velocity_fraction=0.375),
+        propagation=replace(
+            baseline.propagation,
+            integrator=IntegratorKind.CONNECTION_AWARE_SCEM,
+        ),
+    )
+    resolved = loads_config(dumps_config(mixed))
+    assert resolved.config == mixed
+    assert resolved.scientific_id == mixed.scientific_id
+    assert 'gauge = "mixed"' in resolved.normalized_toml
+    assert "velocity_fraction = 0.375" in resolved.normalized_toml
+    inferred = loads_config(resolved.normalized_toml.replace('gauge = "mixed"\n', ""))
+    assert inferred.config == mixed
+    other = replace(
+        mixed,
+        formulation=FormulationConfig(FormulationKind.P0_E1, velocity_fraction=0.625),
+    )
+    assert other.scientific_id != mixed.scientific_id
 
 
 def test_programmatic_boundary_rejects_untyped_nested_values() -> None:

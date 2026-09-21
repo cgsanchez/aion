@@ -30,7 +30,7 @@ def build_formulation(
         return BareVelocityGauge(context)
     assert config.gauge is not None
     if config.kind is FormulationKind.P0:
-        return P0(context, config.gauge)
+        return P0(context, config.gauge, config.resolved_velocity_fraction)
     if config.kind is FormulationKind.P0_E1:
-        return P0E1(context, config.gauge)
+        return P0E1(context, config.gauge, config.resolved_velocity_fraction)
     raise FormulationError(f"unsupported formulation kind {config.kind!r}")

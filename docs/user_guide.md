@@ -54,9 +54,26 @@ events on state boundaries and have formulation-owned maps.
 
 Bare LG and bare VG use the shared fixed-metric SCEM integrator. P0 and P0+E1
 use the connection-aware SCEM integrator, including the analytic projected
-connection and cross-metric correction. P0+E1 is available in length and
-velocity representations; those are two representations of the same
-covariant model and should agree to numerical tolerance.
+connection and cross-metric correction. P0 and P0+E1 expose a continuous
+uniform-field gauge family through `velocity_fraction`: zero is length gauge,
+one is velocity gauge, and a value strictly between them is a mixed
+representation. These are representations of the same covariant model and
+should agree to numerical tolerance. For example:
+
+```python
+from aion.config import FormulationConfig, FormulationKind
+
+formulation = FormulationConfig(
+    FormulationKind.P0_E1,
+    velocity_fraction=0.5,
+)
+```
+
+The parameter is constant throughout a simulation. Aion mixes the primitive
+scalar and vector potentials (and their projected node/link data), then builds
+the Wilson metric, connection, Hamiltonian, events, and observables from that
+single representation. It does not interpolate completed length- and
+velocity-gauge Hamiltonians.
 
 Dipoles, currents, energies, and diagnostics are qualified by formulation.
 The primary/source current is the current variationally conjugate to the

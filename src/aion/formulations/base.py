@@ -83,12 +83,19 @@ class FormulationContext:
             )
         return density.matrix
 
-    def validate_source(self, source: FormulationSourceSample, gauge: GaugeRepresentation) -> None:
+    def validate_source(
+        self,
+        source: FormulationSourceSample,
+        gauge: GaugeRepresentation,
+        velocity_fraction: float,
+    ) -> None:
         source.assert_resident(self.backend)
         if source.gauge is not gauge:
             raise FormulationError(
                 f"source is in {source.gauge.value} gauge; formulation requires {gauge.value}"
             )
+        if source.velocity_fraction != velocity_fraction:
+            raise FormulationError("source gauge velocity fraction does not match the formulation")
         if source.node_scalar_potential.shape != (self.natom,):
             raise FormulationError("source node-scalar-potential shape is inconsistent")
         if source.pair_link.shape != (len(self.pairs),):

@@ -977,13 +977,25 @@ Milestone M6: reusable linear-response and real-time spectroscopy.
 
 Dependencies: WP0–WP6.
 
+Status: in progress on 2026-09-10.
+
 Work:
 
 - establish pre-replacement preparation, steady-step, and memory baselines;
 - run synthetic, H2, and LiH validation matrices;
-- run the agreed NH3 aug-cc-pVTZ release-validation fixture: five driven
-  cycles plus five field-free cycles, four formulations, accepted time step,
-  with a shorter half-step interval;
+- retain and authenticate the useful evidence from the stopped NH3/PBE/
+  aug-cc-pVTZ campaign rather than repeating its unnecessarily expensive full
+  CPU matrix;
+- close the remaining large-basis backend gap with 128-step, one-cycle P0+E1
+  LG/VG CPU and GPU prefixes using the existing aug-cc-pVTZ reference and
+  basis-specific resonant pulse;
+- run a bounded NH3/PBE/6-31G integrated fixture after recalculating its lowest
+  axial bright Casida root: 128 source-aligned pulse steps on CPU/GPU for all
+  four formulations, one driven cycle plus one field-free cycle at the
+  accepted step on GPU, pulse-only half-step controls on GPU, and pulse-only
+  quarter-step controls for one fixed-metric and one connection-aware GPU
+  representative; rely on the existing independent H2/LiH CPU tests for
+  second-order integrator behavior rather than duplicating every long control;
 - validate gauge relations, continuity, current-dipole identities,
   work-energy Ward identities, timestep convergence, restart parity, and
   CPU/GPU parity;
@@ -997,14 +1009,17 @@ Testing policy:
 - molecular CPU suite: serial tests with up to eight BLAS threads;
 - GPU suite: serial on the physical GPU;
 - long production campaigns remain outside Aion;
+- run a 20-measured-step benchmark for every formulation/backend before the
+  bounded campaign; reject the CPU launch if its 1.5-safety-factor estimate,
+  including the large-basis prefixes, exceeds one hour;
 - flag an unexplained steady-step regression near 10 percent or larger, while
   never trading correctness for the threshold.
 
 Acceptance:
 
 - all release invariants and CPU/GPU tests pass;
-- the NH3 fixture supports validation only and makes no premature production
-  claim;
+- the retained and bounded NH3 fixtures support validation only and make no
+  premature production claim;
 - accepted limitations and non-goals are prominent;
 - docs, HDF5 schema, CLI, and public API agree;
 - no campaign-only code or large result artifact remains in Aion;
@@ -1034,7 +1049,8 @@ the relevant physics comparison.
 | Synthetic matrices | Signs, Hermiticity, metric compatibility, graph orientation, exact transport algebra | Required | Required where backend code exists |
 | H2 | Zero field, symmetry, kicks, bare gauges, compact timestep convergence | Required | Required |
 | LiH | Nonzero E1, covariant current, origin/gauge transforms, Ward identities, connection transport | Required | Required |
-| NH3 aug-cc-pVTZ | Integrated release validation, four formulations, pulse plus free evolution | Required | Required |
+| NH3 aug-cc-pVTZ retained/prefix | Retained long-run evidence plus bounded large-basis P0+E1 backend check | Existing completed/partial evidence plus 128-step prefix | Existing completed evidence plus 128-step prefix |
+| NH3 6-31G | Four-formulation integration, gauge covariance, bounded backend parity, and representative accepted/half/quarter timestep evidence | 128-step source-aligned backend prefix | Backend prefix and full accepted/half matrix; quarter step for fixed-metric and connection-aware representatives |
 | CO and other campaigns | External scientific studies | CALCULATIONS | CALCULATIONS |
 
 Full-array golden trajectories are not the primary oracle. Use small selected
@@ -1090,10 +1106,11 @@ reason.
 | 2026-09-09 | Completed WP4 shared SCEM, direct fixed-metric propagation, and analytic-connection transport | Establish one geometry-correct nonlinear engine for all formulations; compact H2/LiH tests confirm second-order convergence, gauge covariance, metric preservation, and physical-GPU residency |
 | 2026-09-09 | Completed WP5 runners, exact events, scheduled observation, power/work accumulation, transactional trajectories, checkpoint/restart, CLI, monitoring, export, and comparison manifests | Establish robust reusable execution and persistence with accepted-boundary failure semantics and physical-GPU restart parity before adding spectroscopy |
 | 2026-09-09 | Completed WP6 structured Casida response, polarized resonance selection, kick transforms, immutable spectral artifacts, current-domain checks, and external legacy conversion | Establish auditable formulation-neutral spectroscopy with explicit transform conventions, parent checksums, H2/LiH Casida/kick agreement, and physical-GPU parity |
+| 2026-09-10 | Replaced the all-aug-cc-pVTZ WP7 release matrix with retained evidence, 128-step one-cycle large-basis P0+E1 prefixes, and a bounded NH3/6-31G campaign guarded by measured runtime | The completed GPU matrix, completed bare CPU runs, and 2,752-step CPU P0+E1-LG prefix already establish large-basis behavior; completing every 6,190-step CPU trajectory would consume many hours without proportionate validation value |
 
 ## 16. Present authorization
 
-Creation of this plan, the companion LaTeX note/PDF, and execution of WP0
-through WP6 were authorized and are complete. WP7 remains a proposed future
-action. This document does not itself authorize further numerical
-implementation, new calculation campaigns, or release.
+Creation of this plan, the companion LaTeX note/PDF, execution of WP0 through
+WP6, and the bounded WP7 validation work were authorized. WP0 through WP6 are
+complete and WP7 is in progress. A 0.2.0 release or tag remains a separate
+decision after all WP7 gates and documentation are complete.

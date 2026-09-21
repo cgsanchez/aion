@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 from aion.backends import ArrayBackend, Workspace
 from aion.config import FormulationKind, GaugeRepresentation, RationalApproximation
-from aion.errors import MetricConstraintError, PropagationError
+from aion.errors import MetricConstraintError
 from aion.formulations import (
     Formulation,
     FormulationSourceSample,
@@ -50,24 +50,28 @@ class StepSourceSamples:
         workspace: Workspace,
         *,
         gauge: GaugeRepresentation,
+        velocity_fraction: float,
         step_index: int,
     ) -> StepSourceSamples:
         return cls(
             start=FormulationSourceSample.from_workspace(
                 workspace,
                 gauge=gauge,
+                velocity_fraction=velocity_fraction,
                 location=SourceSampling.ENDPOINT,
                 index=step_index,
             ),
             midpoint=FormulationSourceSample.from_workspace(
                 workspace,
                 gauge=gauge,
+                velocity_fraction=velocity_fraction,
                 location=SourceSampling.MIDPOINT,
                 index=step_index,
             ),
             endpoint=FormulationSourceSample.from_workspace(
                 workspace,
                 gauge=gauge,
+                velocity_fraction=velocity_fraction,
                 location=SourceSampling.ENDPOINT,
                 index=step_index + 1,
             ),
@@ -250,13 +254,12 @@ def _site_transport(
 
     context = formulation.context
     xp = context.namespace
-    if formulation.gauge is GaugeRepresentation.VELOCITY:
+    velocity_fraction = formulation.gauge_velocity_fraction
+    if velocity_fraction == 1.0:
         return xp.ones(
             (context.workspace.require("operators.overlap").shape[0],),
             dtype=xp.complex128,
         )
-    if formulation.gauge is not GaugeRepresentation.LENGTH:
-        raise PropagationError(f"unsupported site-transport gauge {formulation.gauge!r}")
     coordinates = context.workspace.require("nuclei.coordinates_au")
     ao_to_atom = context.workspace.require("anchors.ao_to_atom")
     origin = xp.asarray(
@@ -264,7 +267,7 @@ def _site_transport(
         dtype=xp.float64,
     )
     relative = coordinates - origin[None, :]
-    phase_integral = relative @ (target_vector - start_vector)
+    phase_integral = (1.0 - velocity_fraction) * (relative @ (target_vector - start_vector))
     atom_transport = xp.exp((-1j * context.charge / context.hbar) * phase_integral)
     return atom_transport[ao_to_atom]
 

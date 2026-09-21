@@ -32,6 +32,7 @@ class BareLengthGauge:
     context: FormulationContext
     kind: FormulationKind = field(default=FormulationKind.BARE_LENGTH_GAUGE, init=False)
     gauge: GaugeRepresentation = field(default=GaugeRepresentation.LENGTH, init=False)
+    gauge_velocity_fraction: float = field(default=0.0, init=False)
 
     @property
     def observable_dependencies(self) -> frozenset[str]:
@@ -40,7 +41,7 @@ class BareLengthGauge:
     def evaluate(
         self, density: AODensity, source: FormulationSourceSample
     ) -> InstantaneousEvaluation:
-        self.context.validate_source(source, self.gauge)
+        self.context.validate_source(source, self.gauge, self.gauge_velocity_fraction)
         rho = self.context.require_density(density)
         xp = self.context.namespace
         dft = self.context.electronic_model.build(rho)
@@ -78,7 +79,7 @@ class BareLengthGauge:
     def currents(
         self, evaluation: InstantaneousEvaluation, source: FormulationSourceSample
     ) -> CurrentLedger:
-        self.context.validate_source(source, self.gauge)
+        self.context.validate_source(source, self.gauge, self.gauge_velocity_fraction)
         xp = self.context.namespace
         rho = evaluation.density.matrix
         electronic = self.context.bare_electronic_dipole(rho)
@@ -195,6 +196,7 @@ class BareLengthGauge:
         return apply_electric_kick(
             kind=self.kind,
             gauge=self.gauge,
+            gauge_velocity_fraction=self.gauge_velocity_fraction,
             context=self.context,
             coefficients=coefficients,
             impulse_au=impulse_au,
@@ -209,6 +211,7 @@ class BareVelocityGauge:
     context: FormulationContext
     kind: FormulationKind = field(default=FormulationKind.BARE_VELOCITY_GAUGE, init=False)
     gauge: GaugeRepresentation = field(default=GaugeRepresentation.VELOCITY, init=False)
+    gauge_velocity_fraction: float = field(default=1.0, init=False)
 
     @property
     def observable_dependencies(self) -> frozenset[str]:
@@ -217,7 +220,7 @@ class BareVelocityGauge:
     def evaluate(
         self, density: AODensity, source: FormulationSourceSample
     ) -> InstantaneousEvaluation:
-        self.context.validate_source(source, self.gauge)
+        self.context.validate_source(source, self.gauge, self.gauge_velocity_fraction)
         rho = self.context.require_density(density)
         xp = self.context.namespace
         dft = self.context.electronic_model.build(rho)
@@ -263,7 +266,7 @@ class BareVelocityGauge:
     def currents(
         self, evaluation: InstantaneousEvaluation, source: FormulationSourceSample
     ) -> CurrentLedger:
-        self.context.validate_source(source, self.gauge)
+        self.context.validate_source(source, self.gauge, self.gauge_velocity_fraction)
         xp = self.context.namespace
         rho = evaluation.density.matrix
         electronic = self.context.bare_electronic_dipole(rho)
@@ -399,6 +402,7 @@ class BareVelocityGauge:
         return apply_electric_kick(
             kind=self.kind,
             gauge=self.gauge,
+            gauge_velocity_fraction=self.gauge_velocity_fraction,
             context=self.context,
             coefficients=coefficients,
             impulse_au=impulse_au,

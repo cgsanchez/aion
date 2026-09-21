@@ -64,6 +64,7 @@ def _config(
     *,
     backend: BackendConfig | None = None,
     kick_step: int = 2,
+    velocity_fraction: float | None = None,
 ) -> SimulationConfig:
     integrator = (
         IntegratorKind.FIXED_METRIC_SCEM
@@ -82,7 +83,7 @@ def _config(
             reference.fingerprint_sha256,
             reference.config.output.artifact_path,
         ),
-        formulation=FormulationConfig(kind, gauge),
+        formulation=FormulationConfig(kind, gauge, velocity_fraction),
         source=ZeroSourceConfig(),
         propagation=PropagationConfig(
             FixedTimeGrid(0.0, 0.05, 4),
@@ -267,27 +268,48 @@ def test_covariant_runs_publish_an_independent_comparison_manifest(
 ) -> None:
     reference = runner_references["lih"]
     trajectories = {}
-    for gauge in (GaugeRepresentation.LENGTH, GaugeRepresentation.VELOCITY):
+    specifications = (
+        ("length", GaugeRepresentation.LENGTH, None),
+        ("mixed", GaugeRepresentation.MIXED, 0.5),
+        ("velocity", GaugeRepresentation.VELOCITY, None),
+    )
+    simulations = {}
+    for label, gauge, fraction in specifications:
         simulation = build_simulation(
-            _config(reference, tmp_path / gauge.value, FormulationKind.P0_E1, gauge),
+            _config(
+                reference,
+                tmp_path / label,
+                FormulationKind.P0_E1,
+                gauge,
+                velocity_fraction=fraction,
+            ),
             reference,
         )
-        trajectories[gauge.value] = run(simulation)
+        simulations[label] = simulation
+        trajectories[label] = run(simulation)
     manifest = create_comparison_manifest(trajectories, tmp_path / "comparison.json")
     assert len(manifest.comparison_id) == 64
-    assert {member.gauge for member in manifest.members} == {"length", "velocity"}
-    assert (tmp_path / "comparison.json").is_file()
-    dipole_ids = {
-        gauge: next(
-            definition_id
-            for definition_id in trajectory.observable_ids
-            if definition_id.startswith("dipole.electronic.")
-        )
-        for gauge, trajectory in trajectories.items()
+    assert {member.gauge for member in manifest.members} == {"length", "mixed", "velocity"}
+    assert {member.label: member.velocity_fraction for member in manifest.members} == {
+        "length": 0.0,
+        "mixed": 0.5,
+        "velocity": 1.0,
     }
-    dipole_length = trajectories["length"].read_observable(dipole_ids["length"])
-    dipole_velocity = trajectories["velocity"].read_observable(dipole_ids["velocity"])
-    assert np.allclose(dipole_length.values, dipole_velocity.values, atol=2.0e-10)
+    assert (tmp_path / "comparison.json").is_file()
+    for field, tolerance in (
+        ("electronic_dipole", 2.0e-10),
+        ("primary_current", 2.0e-9),
+        ("energy_matter_total", 2.0e-10),
+    ):
+        baseline = trajectories["length"].read_observable(
+            simulations["length"].calculators.definitions[field].definition_id
+        )
+        for label in ("mixed", "velocity"):
+            series = trajectories[label].read_observable(
+                simulations[label].calculators.definitions[field].definition_id
+            )
+            assert np.array_equal(baseline.steps, series.steps)
+            assert np.allclose(baseline.values, series.values, atol=tolerance)
     with pytest.raises(TrajectoryError, match="overwrite"):
         create_comparison_manifest(trajectories, tmp_path / "comparison.json")
 

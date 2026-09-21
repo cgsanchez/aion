@@ -20,6 +20,7 @@ class ComparisonMember:
     trajectory: Trajectory
     formulation: str
     gauge: str
+    velocity_fraction: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +125,7 @@ def create_comparison_manifest(
                 trajectory=trajectory,
                 formulation=config.formulation.kind.value,
                 gauge=gauge.value,
+                velocity_fraction=config.formulation.resolved_velocity_fraction,
             )
         )
     members = tuple(members_list)
@@ -145,6 +147,7 @@ def create_comparison_manifest(
                 "label": member.label,
                 "formulation": member.formulation,
                 "gauge": member.gauge,
+                "velocity_fraction": member.velocity_fraction,
                 "run_id": member.trajectory.run_id,
                 "simulation_id": member.trajectory.simulation_id,
                 "trajectory_path": str(member.trajectory.path.resolve()),

@@ -89,34 +89,41 @@ def test_all_formulations_use_one_scem_engine_and_preserve_their_metric(
     ("name", "kind"),
     (("h2", FormulationKind.P0), ("lih", FormulationKind.P0_E1)),
 )
-def test_connection_aware_trajectories_are_covariant_between_length_and_velocity(
+def test_connection_aware_trajectories_are_covariant_across_uniform_gauge_family(
     propagation_references: dict[str, object],
     name: str,
     kind: FormulationKind,
 ) -> None:
     reference = propagation_references[name]
+    fractions = (0.0, 0.25, 0.5, 0.75, 1.0)
     simulations = {
-        gauge: build_simulation(_simulation_config(reference, kind, gauge=gauge), reference)
-        for gauge in (GaugeRepresentation.LENGTH, GaugeRepresentation.VELOCITY)
+        fraction: build_simulation(
+            _simulation_config(reference, kind, velocity_fraction=fraction),
+            reference,
+        )
+        for fraction in fractions
     }
     for _ in range(4):
-        results = {gauge: simulation.step() for gauge, simulation in simulations.items()}
-        left = results[GaugeRepresentation.LENGTH]
-        right = results[GaugeRepresentation.VELOCITY]
-        eval_l, current_l, energy_l = _endpoint(simulations[GaugeRepresentation.LENGTH], left.state)
-        eval_v, current_v, energy_v = _endpoint(
-            simulations[GaugeRepresentation.VELOCITY], right.state
-        )
-        assert np.linalg.norm(eval_l.field_free_density - eval_v.field_free_density) < 8.0e-12
-        assert np.linalg.norm(current_l.electronic_dipole - current_v.electronic_dipole) < 8.0e-11
-        assert np.linalg.norm(current_l.source_current - current_v.source_current) < 8.0e-10
-        assert float(energy_l.energy_matter_total) == pytest.approx(
-            float(energy_v.energy_matter_total), abs=8.0e-11
-        )
-        assert left.diagnostics.iterations == right.diagnostics.iterations
-        assert left.diagnostics.density_residual == pytest.approx(
-            right.diagnostics.density_residual, rel=1.0e-5, abs=2.0e-14
-        )
+        results = {fraction: simulation.step() for fraction, simulation in simulations.items()}
+        baseline_result = results[0.0]
+        baseline = _endpoint(simulations[0.0], baseline_result.state)
+        evaluation_l, current_l, energy_l = baseline
+        for fraction in fractions[1:]:
+            result = results[fraction]
+            evaluation, current, energy = _endpoint(simulations[fraction], result.state)
+            assert (
+                np.linalg.norm(evaluation_l.field_free_density - evaluation.field_free_density)
+                < 8.0e-12
+            )
+            assert np.linalg.norm(current_l.electronic_dipole - current.electronic_dipole) < 8.0e-11
+            assert np.linalg.norm(current_l.source_current - current.source_current) < 8.0e-10
+            assert float(energy_l.energy_matter_total) == pytest.approx(
+                float(energy.energy_matter_total), abs=8.0e-11
+            )
+            assert baseline_result.diagnostics.iterations == result.diagnostics.iterations
+            assert baseline_result.diagnostics.density_residual == pytest.approx(
+                result.diagnostics.density_residual, rel=1.0e-5, abs=2.0e-14
+            )
 
 
 def test_nonconverged_midpoint_is_a_hard_failure_with_structured_diagnostics(

@@ -260,21 +260,27 @@ def _parse_simulation(root: Mapping[str, object]) -> SimulationConfig:
         path=Path(_string(reference_data.get("path", "reference.h5"), "reference.path")),
     )
     formulation_data = _table(root["formulation"], "formulation")
-    _fields(formulation_data, "formulation", {"kind", "gauge"}, {"kind"})
+    _fields(
+        formulation_data,
+        "formulation",
+        {"kind", "gauge", "velocity_fraction"},
+        {"kind"},
+    )
     formulation_kind = _enum(FormulationKind, formulation_data["kind"], "formulation.kind")
     formulation = FormulationConfig(
         formulation_kind,
-        _enum(
-            GaugeRepresentation,
-            formulation_data.get(
-                "gauge",
-                (
-                    GaugeRepresentation.VELOCITY.value
-                    if formulation_kind is FormulationKind.BARE_VELOCITY_GAUGE
-                    else GaugeRepresentation.LENGTH.value
-                ),
-            ),
-            "formulation.gauge",
+        (
+            _enum(GaugeRepresentation, formulation_data["gauge"], "formulation.gauge")
+            if "gauge" in formulation_data
+            else None
+        ),
+        (
+            _number(
+                formulation_data["velocity_fraction"],
+                "formulation.velocity_fraction",
+            )
+            if "velocity_fraction" in formulation_data
+            else None
         ),
     )
     source = _parse_source(root["source"])

@@ -68,6 +68,7 @@ from aion.formulations.types import (
     InstantaneousEvaluation,
     PowerLedger,
     SourceSampling,
+    resolve_velocity_fraction,
 )
 
 __all__ = [
@@ -128,6 +129,7 @@ __all__ = [
     "p0_pair_currents",
     "p0_source_power",
     "prepare_exact_one_electron_model_context",
+    "resolve_velocity_fraction",
     "restricted_one_electron_action_directional_derivative",
     "restricted_one_electron_action_full_directional_derivative",
     "restricted_one_electron_action_history_directional_derivative",
