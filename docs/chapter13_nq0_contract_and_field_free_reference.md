@@ -1,11 +1,12 @@
 # Chapter 13 NQ0 contract and field-free reference
 
 Date: 2026-09-21  
-Gate state: **executed, awaiting user review; not accepted**  
+Gate state: **accepted by user on 2026-09-21**  
 Controlling plan: `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`  
 Agent brief: `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_agent_prompt.md`
 
-This is the review entry point for NQ0. It records the reconciled baseline,
+This is the review entry point for NQ0. The acceptance decision is recorded in
+`docs/reviews/chapter13_nq0_review_20260921.json`. This document records the reconciled baseline,
 the tensor and action contracts, the concrete numerical realization, the
 field-free reference execution, and the bounded implementation started for
 NQ1. A software test or an executed campaign does not accept a gate; only the
@@ -242,10 +243,10 @@ can be presented for acceptance.
 
 ## 7. Review boundary
 
-This package supports the following proposed decision:
+The user accepted the following decision on 2026-09-21:
 
-> NQ0 is complete as an implemented and executed contract with a reproducible
-> field-free reference. It remains unaccepted until explicit user review.
+> NQ0 is complete and accepted as an implemented and executed contract with a
+> reproducible field-free reference.
 
 The exact finite-field Hartree action, LDA action and lower matrix, nonlinear
 formulation evaluation, nonlinear stationary solve, nonlinear source

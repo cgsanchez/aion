@@ -1,0 +1,55 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ0",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-21T18:20:26Z",
+  "scope": {
+    "implemented_contract": "fixed-centre Chapter 13 Wilson Hartree/adiabatic-KS tensor and action boundary",
+    "field_free_fixture": "H2/STO-3G restricted closed shell with lda,vwn and PySCF density fitting in the weigend auxiliary basis",
+    "included": [
+      "reconciled accepted exact one-electron and nominal Aion baselines",
+      "coefficient-density, mixed-density, lower-matrix, and stored-array index conventions",
+      "equation-to-code-to-test-to-evidence traceability",
+      "declared electromagnetic, Hartree, XC, grid, auxiliary, and rank realization",
+      "reproducible field-free PySCF matrix and energy reference",
+      "explicit exclusion of scalar-potential coupling from the mechanical energy"
+    ]
+  },
+  "effect": "NQ0 accepted and NQ1 exact Wilson density qualification authorized",
+  "limitations": [
+    "the exact finite-field RI-Wilson Hartree action is not implemented or accepted",
+    "the exact finite-field Wilson LDA energy and lower matrix are not implemented or accepted",
+    "nonlinear stationary states, nonlinear source derivatives, and nonlinear propagation are not implemented or accepted",
+    "the Wilson-density evaluator included in the implementation commit is only an early NQ1 checkpoint and is not accepted by this decision",
+    "acceptance does not extend beyond the declared H2 field-free realization and inherited accepted one-electron scope"
+  ],
+  "implementation_commit": "383aa8375947d0b642c8701a12ec8416678b0728",
+  "executed_tests": {
+    "baseline_reconciliation": "22 passed, 4 deselected",
+    "cpu_fast_suite": "89 passed, 140 deselected",
+    "cpu_reference_and_density_integration": "9 passed",
+    "physical_gpu_density": "1 passed, 1 warning (CuPy contraction engine)",
+    "ruff": "all checks passed",
+    "mypy": "no issues in 4 focused source files"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq0_contract_and_field_free_reference.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq0_field_free_h2_lda_vwn_20260921T180851Z_79208d6",
+    "field_free_result_sha256": "365b5dbef51fe686d8b2206c55aa1461ea8383c4c0d099f001003fc0f1258acd",
+    "reference_hdf5_sha256": "a243f109b78fdbb3d3c783771a7a6776ce0bb669323d60e2c9f463ce76498ae6",
+    "reference_toml_sha256": "3ef3b2f2e3611d89737d30ee47b518f3fd6ad581fc1c71ca7f166dc4c5f96b21"
+  },
+  "accepted_measurements": {
+    "electron_count": 1.9999999999999996,
+    "energy_total_au": -1.1212693750656282,
+    "energy_component_sum_au": -1.1212693750656286,
+    "electron_count_residual": 0.0,
+    "energy_total_residual_au": 4.440892098500626e-16,
+    "energy_component_sum_residual_au": 0.0,
+    "hamiltonian_relative_frobenius_residual": 7.850462293418876e-17,
+    "rebuilt_density_relative_frobenius_residual": 0.0
+  },
+  "raw_artifact_policy": "Raw campaign artifacts remain immutable; this separate review record carries the acceptance decision."
+}
