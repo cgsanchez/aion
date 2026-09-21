@@ -110,6 +110,13 @@ from aion.electronic_structure.pyscf_rks import (
     validate_reference_runtime,
 )
 from aion.electronic_structure.reference_io import load_reference_data, save_reference
+from aion.electronic_structure.ri_wilson_hartree import (
+    RIAuxiliaryProvenance,
+    RIMetricRankPolicy,
+    RIWilsonHartreeEvaluator,
+    RIWilsonHartreeResult,
+    prepare_ri_wilson_hartree,
+)
 from aion.electronic_structure.spatial_connection import (
     MagneticSpatialConnectionResult,
     SpatialConnectionDirectOracle,
@@ -194,6 +201,10 @@ __all__ = [
     "OneElectronLowerMatrices",
     "PreparedReference",
     "QuadratureGrid",
+    "RIAuxiliaryProvenance",
+    "RIMetricRankPolicy",
+    "RIWilsonHartreeEvaluator",
+    "RIWilsonHartreeResult",
     "ScalarMagneticHierarchy",
     "ScaledLocalPotentialProvider",
     "SpatialConnectionDirectOracle",
@@ -247,6 +258,7 @@ __all__ = [
     "prepare_ao_quadrature",
     "prepare_one_electron_ao_reference",
     "prepare_pyscf_reference",
+    "prepare_ri_wilson_hartree",
     "pyscf_giao_one_electron_derivatives",
     "reconstruct_mean_field",
     "reconstruct_one_electron_molecule",

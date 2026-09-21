@@ -333,6 +333,17 @@ class AOQuadrature:
     _molecule: Any = field(init=False, repr=False)
     _numint: Any = field(init=False, repr=False)
 
+    @property
+    def pyscf_molecule(self) -> Any:
+        """Live read-only PySCF molecule for analytic integral services.
+
+        Consumers may request integrals from this object but must not mutate
+        its atoms, basis, units, or AO ordering, which are authenticated by
+        the prepared reference.
+        """
+
+        return self._molecule
+
     def __post_init__(self) -> None:
         if not isinstance(self.reference, PreparedReference | OneElectronAOReference):
             raise TypeError("reference must be PreparedReference or OneElectronAOReference")
