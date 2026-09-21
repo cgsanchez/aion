@@ -1,8 +1,11 @@
 # Chapter 13 NQ0 contract and field-free reference
 
-Date: 2026-09-21  
-Gate state: **accepted by user on 2026-09-21**  
-Controlling plan: `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`  
+Date: 2026-09-21
+
+Gate state: **accepted by user on 2026-09-21**
+
+Controlling plan: `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`
+
 Agent brief: `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_agent_prompt.md`
 
 This is the review entry point for NQ0. The acceptance decision is recorded in
