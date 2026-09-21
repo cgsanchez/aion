@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Gate state: **implemented and executed; awaiting user review**
+Gate state: **accepted**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq0_review_20260921.json`
 
@@ -262,9 +262,10 @@ Status separation at this boundary is:
 - reusable density and direction kernels: **implemented**;
 - CPU refinement, derivative, invariance, and physical-GPU checks:
   **executed**;
-- NQ1 scientific decision: **awaiting user review**.
+- NQ1 scientific decision: **accepted by the user on 2026-09-21**.
 
-The evidence supports accepting NQ1 for the declared H2/LiH, STO-3G,
-uniform-magnetic, complex128 realization. If accepted, the next gate is NQ2:
-one variational RI--Wilson Hartree energy, its unrestricted lower-matrix
-derivative, and its fixed-history source derivative.
+The acceptance record is
+`docs/reviews/chapter13_nq1_review_20260921.json`. Acceptance is bounded to
+the declared H2/LiH, STO-3G, uniform-magnetic, complex128 realization. It
+authorizes NQ2: one variational RI--Wilson Hartree energy, its unrestricted
+lower-matrix derivative, and its fixed-history source derivative.

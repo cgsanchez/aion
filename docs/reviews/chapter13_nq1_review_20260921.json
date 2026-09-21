@@ -1,0 +1,61 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ1",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-21T19:32:37Z",
+  "scope": {
+    "implemented_contract": "exact finite-field Wilson density and its unrestricted matter and fixed-history electromagnetic directions",
+    "fixtures": "H2 and LiH in STO-3G with lda,vwn, the weigend auxiliary-basis declaration, and unpruned molecular grids",
+    "included": [
+      "direct and endpoint/triangle-factorized Wilson-density contractions",
+      "stable overlap and particle-number normalization against the accepted exact one-electron matrix oracle",
+      "general complex nonunitary coefficient-frame covariance",
+      "unrestricted real and imaginary coefficient directions",
+      "physical magnetic and pure-gauge fixed-history source directions",
+      "symmetric-versus-Landau gauge invariance",
+      "CPU and physical-GPU parity"
+    ]
+  },
+  "effect": "NQ1 accepted and NQ2 variational RI-Wilson Hartree qualification authorized",
+  "limitations": [
+    "the RI-Wilson Hartree energy, lower matrix, and source derivative are not implemented or accepted by this decision",
+    "Wilson LDA/GGA exchange-correlation closure is not implemented or accepted",
+    "nonlinear stationary states, nonlinear source derivatives, and nonlinear propagation are not implemented or accepted",
+    "acceptance is bounded to the declared fixed-centre uniform-magnetic complex128 realization"
+  ],
+  "implementation_commit": "6c629fa8d89aa13b3337f8fa91e907da648707b6",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 81 source files",
+    "cpu_fast_suite": "89 passed, 144 deselected",
+    "cpu_relevant_integration": "26 passed, 1 deselected",
+    "physical_gpu_density_and_directions": "1 passed, 1 warning (CuPy contraction engine)",
+    "authenticated_analysis": "all proposed thresholds passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq1_wilson_density_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq1_wilson_density_20260921T184528Z_28b20b8",
+    "result_sha256": "415b1b1a8f4f6c139a227581a5f0289c5e7bfffbaf845e9fae511af94f2c950d",
+    "provenance_sha256": "6e1c99ebfcb536b9d67c9c7c4430402bea2eafeede2be9be0ccc71282f0da761",
+    "completed_sha256": "e0d594ac7dc5166e10a94c8fc28bb0ebb2390c1d586942416300646b43c0fe0f",
+    "analysis_summary_sha256": "51576f6cbc651c2c0d66954bea2f3c7286c534f8b9e3a8d07690787e113cf832"
+  },
+  "accepted_measurements": {
+    "density_direct_factorized_relative_max": 2.5416937714180263e-16,
+    "density_imaginary_max": 5.204170427930421e-18,
+    "minimum_real_density": 4.059001985108029e-51,
+    "stable_overlap_oracle_relative_max": 5.119091798041075e-16,
+    "finest_grid_normalization_residual_max": 2.3179902441938793e-11,
+    "gauge_density_relative_max": 2.867339249027612e-16,
+    "coefficient_frame_relative_max": 3.7002989871197576e-16,
+    "matter_best_central_relative_worst": 1.683253068122434e-12,
+    "source_best_central_relative_worst": 1.5280604175665463e-09,
+    "source_best_absolute_worst": 4.9204149758788246e-11,
+    "minimum_source_observed_order": 1.9585326548932356,
+    "direction_imaginary_max": 3.3306690738754696e-16,
+    "source_particle_stable_residual_max": 1.069335050195297e-15
+  },
+  "raw_artifact_policy": "Raw campaign artifacts remain immutable; this separate review record carries the acceptance decision."
+}
