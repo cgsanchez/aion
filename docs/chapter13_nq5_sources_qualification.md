@@ -2,9 +2,11 @@
 
 Date: 2026-09-22
 
-Gate state: **analyzed, awaiting user review**
+Gate state: **accepted by the user**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq4_review_20260921.json`
+
+Acceptance record: `docs/reviews/chapter13_nq5_review_20260922.json`
 
 Controlling plan:
 `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`
@@ -13,7 +15,8 @@ This document is the review entry point for NQ5.  It describes the reusable
 source-observable implementation, its relation to the Chapter 13 action, the
 authenticated H3+ campaign, the numerical error separations, and the limits of
 the evidence.  It records an implemented and executed gate; it does not record
-acceptance, which remains a user decision.
+acceptance.  The separate review record carries the user's decision and
+authorizes NQ6.
 
 ## 1. Mathematical contract
 
@@ -419,7 +422,7 @@ hash, source hashes, command, and artifact hashes.
 | stationary minimal plus normal current | executed and analyzed |
 | weak finite-region and global continuity | executed and analyzed |
 | physical-GPU parity and residency | executed and passed through the declared launcher |
-| NQ5 scientific acceptance | awaiting user review |
+| NQ5 scientific acceptance | accepted by the user |
 
 The bounded evidence covers one static uniform magnetic field, one H3+
 geometry, cc-pVDZ, one affine gauge representative, RI--Wilson Hartree, one
@@ -429,7 +432,7 @@ power balance, GGA, basis transfer, nonuniform physical fields, moving
 nuclei, current-density functionals, interacting transverse currents,
 reduced P0/E1/C1 models, periodic systems, or Maxwell backreaction.
 
-If accepted, the next bounded checkpoint is NQ6: nonlinear time evolution,
+The next bounded checkpoint is NQ6: nonlinear time evolution,
 invariants, trajectory Ward/continuity diagnostics, and mechanical
 energy/source-power balance.  No NQ6 implementation or campaign has been
 started here.

@@ -1,0 +1,69 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ5",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-22T01:54:35Z",
+  "scope": {
+    "implemented_contract": "exact-Wilson nonlinear charge, complete fixed-history weak vector-source pairing, off-shell Ward identity, and coefficient-shell weak continuity for the accepted Hartree and restricted pure-LDA Kohn-Sham actions",
+    "fixture": "equilateral H3+ with two electrons in cc-pVDZ at Bz=0.03 au, exact affine straight-Wilson phases, RI-Wilson Hartree with the weigend auxiliary basis, and the lda,vwn functional on unpruned PySCF grids",
+    "included": [
+      "exact signed Wilson charge and independent grid and metric totals",
+      "one-electron and closure source derivatives from the same declared action",
+      "complete off-shell current pairing with residual-dependent embedding response",
+      "Gauss decomposition into tangential, ambient-minimal, and normal-subspace pairings",
+      "accepted-stationary minimal plus normal on-shell current",
+      "complete-action fixed-history source finite differences",
+      "deliberately off-shell pure-gauge Ward tests with nonzero matter residuals",
+      "instantaneous weak finite-region continuity and global signed-charge conservation",
+      "independent grid, path-quadrature, auxiliary-rank-policy, and finite-difference refinements",
+      "CPU and physical-GPU regression coverage without GPU fallback"
+    ]
+  },
+  "effect": "NQ5 accepted and NQ6 nonlinear dynamics, energy, and power qualification authorized",
+  "limitations": [
+    "the Kohn-Sham current is the source current of the auxiliary adiabatic-KS action and is not accepted as an exact interacting transverse current",
+    "the complete subspace-response current is qualified as a weak pairing; no pointwise representative is claimed",
+    "the evidence is bounded to one H3+ geometry, one AO and auxiliary basis pair, one static uniform magnetic field, one affine gauge representative, one physical vector-source test, and one pure LDA functional",
+    "graph, P0, E1, strict C1, and density-resummed C1 currents are not part of NQ5",
+    "time-discrete propagation, trajectory invariants, energy, power, and integrated source work remain NQ6 obligations",
+    "the first full-GPU invocation used the wrong launcher environment and failed two explicit launch-contract assertions; the corrected complete run through tools/gpu-python passed all 25 GPU tests"
+  ],
+  "implementation_commit": "3adcb4dfb963b62e97d876e0681c3b37cc60eda7",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 85 source files",
+    "cpu_fast_suite": "89 passed, 175 deselected",
+    "cpu_complete_integration": "150 passed, 114 deselected",
+    "physical_gpu_complete": "25 passed, 239 deselected, 1 expected warning",
+    "authenticated_analysis": "all proposed thresholds passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq5_sources_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq5_sources_20260922T001500Z_23549ab7740a",
+    "accepted_analysis": "analysis_final/summary.json",
+    "result_sha256": "3f9bec5dee959d0b8d9fd85826cbd56f349107649960eb3426503e22529f5b78",
+    "provenance_sha256": "14010553a68741b87ce62ec8edbd3c082a0b4633b1324861c0d30bcb3abc341d",
+    "completed_sha256": "f72cf23b42db3a56a637d9090edf78c31e012968ae2387d225257c8c68f03ebe",
+    "analysis_summary_sha256": "8ec67b01611625c64b7445c88e886d632e07f66417172cffb9f56747e8fb0eb5"
+  },
+  "accepted_measurements": {
+    "metric_particle_number_residual_max": 5.809797087863444e-12,
+    "level5_grid_metric_charge_residual_max": 1.092625323551033e-09,
+    "complete_action_source_best_error_max": 3.6414175841326113e-10,
+    "complete_action_source_coarse_order_min": 1.9912523590256221,
+    "closure_action_identity_residual_max": 8.470329472543003e-22,
+    "complete_action_composition_residual_max": 5.414234598849488e-18,
+    "stationary_tangential_pairing_max_abs": 1.527098759945833e-16,
+    "stationary_normal_subspace_pairing_min_abs": 6.589253850832987e-07,
+    "ward_residual_max": 0.0,
+    "off_shell_matter_residual_relative_norm_min": 1.5144849167633743,
+    "finite_region_continuity_residual_max": 8.847089727481716e-16,
+    "global_charge_residual_max": 1.2559397966072083e-15,
+    "level4_to_level5_current_difference_max": 5.376565026526947e-10,
+    "path_order24_to40_current_difference_max": 4.163336342344337e-17,
+    "ri_threshold_1e6_to1e9_current_difference_max": 0.0
+  },
+  "raw_artifact_policy": "Raw campaign artifacts and the identical preliminary and final analysis passes remain immutable; this separate review record carries the acceptance decision."
+}
