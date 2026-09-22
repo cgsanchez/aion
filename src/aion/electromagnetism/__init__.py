@@ -48,7 +48,9 @@ from aion.electromagnetism.sources import (
 )
 from aion.electromagnetism.test_variations import (
     AffineGaugeDifferenceVariation,
+    GaussianScalarGaugeVariation,
     GaussianVectorPotentialVariation,
+    PerturbedVectorPotential,
 )
 
 __all__ = [
@@ -61,9 +63,11 @@ __all__ = [
     "DiscreteKickEvent",
     "EventSchedule",
     "GatedUniformSource",
+    "GaussianScalarGaugeVariation",
     "GaussianVectorPotentialVariation",
     "MagneticGaugeKind",
     "MagneticPairGeometry",
+    "PerturbedVectorPotential",
     "PhysicalSourceSeries",
     "ProjectedGaugeSeries",
     "RuntimeSourceController",

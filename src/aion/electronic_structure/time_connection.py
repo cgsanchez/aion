@@ -14,7 +14,6 @@ from aion.electromagnetism.magnetic import (
     endpoint_line_integrals,
     triangle_phases,
 )
-from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
 from aion.electronic_structure.ao_quadrature import AOQuadrature
 from aion.electronic_structure.local_potentials import (
     NuclearAttractionProvider,
@@ -142,11 +141,41 @@ class ExactMagneticFieldSourceDirection:
 class ExactWeakVectorPotentialSourceDirection:
     """Exact matrix response paired with one smooth static test variation."""
 
-    variation: GaussianVectorPotentialVariation
+    variation: Any
+    frame_overlap: Any
     metric: Any
+    kinetic_embedding: Any
+    kinetic_explicit: Any
     kinetic: Any
     nuclear_attraction: Any
     connection: Any
+
+    @property
+    def mechanical(self) -> Any:
+        return self.kinetic + self.nuclear_attraction
+
+
+@dataclass(frozen=True, slots=True)
+class ExactStaticWilsonGridOneElectronAction:
+    """Static exact-Wilson one-electron action on one declared AO grid.
+
+    This evaluator accepts a general nonuniform vector potential with
+    straight-path Wilson integrals.  It is the finite-difference parent of
+    :class:`ExactWeakVectorPotentialSourceDirection`; unlike the uniform-
+    magnetic production matrices, every term here uses the same molecular
+    quadrature and no analytic zero-field correction is inserted.
+    """
+
+    overlap: Any
+    kinetic: Any
+    nuclear_attraction: Any
+    reference_fingerprint_sha256: str
+    grid_fingerprint_sha256: str
+    backend: str
+    device_index: int | None
+    charge: float
+    mass: float
+    hbar: float
 
     @property
     def mechanical(self) -> Any:
@@ -586,10 +615,116 @@ def evaluate_exact_magnetic_field_source_direction(
     )
 
 
+def evaluate_exact_static_wilson_grid_one_electron_action(
+    quadrature: AOQuadrature,
+    vector_potential: Any,
+    *,
+    charge: float = -1.0,
+    mass: float = 1.0,
+    hbar: float = 1.0,
+) -> ExactStaticWilsonGridOneElectronAction:
+    r"""Evaluate the static exact-Wilson one-electron grid action.
+
+    For each dressed AO ``chi_i=exp(i q a_i/hbar) phi_i``, the covariant
+    momentum is evaluated as
+
+    ``pi_A chi_i = exp(i q a_i/hbar)
+       [-i hbar grad(phi_i) + q(grad(a_i)-A) phi_i]``.
+
+    The same blocked quadrature is used for overlap, kinetic, and local
+    electron--nuclear terms.  This makes source finite differences an
+    independent rebuild of the action rather than a finite difference of an
+    already differentiated matrix.
+    """
+
+    if not isinstance(quadrature, AOQuadrature):
+        raise TypeError("quadrature must be an AOQuadrature")
+    _validate_static_vector_potential(vector_potential)
+    checked_charge = _finite_parameter(charge, "charge")
+    checked_mass = _positive_parameter(mass, "mass")
+    checked_hbar = _positive_parameter(hbar, "hbar")
+    backend = quadrature.backend
+    xp = backend.namespace
+    reference = quadrature.reference
+    geometry = build_magnetic_pair_geometry(
+        reference.core_operators.nuclei.coordinates_au,
+        reference.anchor_topology.ao_to_atom,
+        backend,
+    )
+    anchors = geometry.ao_anchor_coordinates_au
+    nuclear_provider = bind_local_potential(
+        NuclearAttractionProvider(),
+        reference,
+        backend,
+    )
+    nao = reference.core_operators.nao
+    overlap = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic = backend.zeros((nao, nao), dtype=xp.complex128)
+    nuclear = backend.zeros((nao, nao), dtype=xp.complex128)
+    prefactor = 1j * checked_charge / checked_hbar
+
+    for block in quadrature.blocks():
+        values = block.values
+        gradients = xp.moveaxis(block.gradients, 0, -1)
+        bare_momentum = -1j * checked_hbar * gradients
+        line = vector_potential.straight_line_integrals(
+            anchors[None, :, :],
+            block.coordinates_au[:, None, :],
+            backend,
+        )
+        line_gradient = vector_potential.straight_line_integral_gradients(
+            anchors[None, :, :],
+            block.coordinates_au[:, None, :],
+            backend,
+        )
+        potential = vector_potential.vector_potential(block.coordinates_au, backend)
+        residual = line_gradient - potential[:, None, :]
+        wilson = xp.exp(prefactor * line)
+        dressed_values = wilson * values
+        dressed_momentum = wilson[:, :, None] * (
+            bare_momentum + checked_charge * residual * values[:, :, None]
+        )
+        overlap += _ordinary_pair(
+            dressed_values,
+            dressed_values,
+            block.weights_au,
+            xp,
+        )
+        kinetic += (1.0 / (2.0 * checked_mass)) * _ordinary_vector_pair(
+            dressed_momentum,
+            dressed_momentum,
+            block.weights_au,
+            xp,
+        )
+        nuclear_weights = block.weights_au * nuclear_provider.values_au(
+            block.coordinates_au
+        )
+        nuclear += _ordinary_pair(
+            dressed_values,
+            dressed_values,
+            nuclear_weights,
+            xp,
+        )
+
+    backend.synchronize()
+    return ExactStaticWilsonGridOneElectronAction(
+        overlap=overlap,
+        kinetic=kinetic,
+        nuclear_attraction=nuclear,
+        reference_fingerprint_sha256=reference.fingerprint_sha256,
+        grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
+        backend=quadrature.backend_config.kind.value,
+        device_index=quadrature.backend_config.device_index,
+        charge=checked_charge,
+        mass=checked_mass,
+        hbar=checked_hbar,
+    )
+
+
 def evaluate_exact_weak_vector_potential_source_direction(
     quadrature: AOQuadrature,
     sample: ExactWilsonOneElectronSample,
-    variation: GaussianVectorPotentialVariation,
+    variation: Any,
 ) -> ExactWeakVectorPotentialSourceDirection:
     r"""Differentiate exact dressed-AO data along a smooth static ``alpha(r)``.
 
@@ -604,8 +739,7 @@ def evaluate_exact_weak_vector_potential_source_direction(
         raise TypeError("quadrature must be an AOQuadrature")
     if not isinstance(sample, ExactWilsonOneElectronSample):
         raise TypeError("sample must be an ExactWilsonOneElectronSample")
-    if not isinstance(variation, GaussianVectorPotentialVariation):
-        raise TypeError("variation must be a GaussianVectorPotentialVariation")
+    _validate_static_vector_potential(variation)
     if sample.static_result.reference_fingerprint_sha256 != (
         quadrature.reference.fingerprint_sha256
     ):
@@ -634,8 +768,10 @@ def evaluate_exact_weak_vector_potential_source_direction(
         backend,
     )
     nao = reference.core_operators.nao
+    frame_overlap = backend.zeros((nao, nao), dtype=xp.complex128)
     metric = backend.zeros((nao, nao), dtype=xp.complex128)
-    kinetic = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic_embedding = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic_explicit = backend.zeros((nao, nao), dtype=xp.complex128)
     nuclear = backend.zeros((nao, nao), dtype=xp.complex128)
     kinetic_scale = 1.0 / (2.0 * sample.static_result.mass)
 
@@ -673,13 +809,25 @@ def evaluate_exact_weak_vector_potential_source_direction(
             backend,
         )
         direction_vector = variation.vector_potential(block.coordinates_au, backend)
-        direction_residual = direction_line_gradient - direction_vector[:, None, :]
         dressed_values_direction = prefactor * direction_line * dressed_values
-        dressed_momentum_direction = wilson[:, :, None] * (
+        dressed_momentum_embedding = wilson[:, :, None] * (
             prefactor * direction_line[:, :, None] * reduced_momentum
-            + sample.static_result.charge * direction_residual * values[:, :, None]
+            + sample.static_result.charge
+            * direction_line_gradient
+            * values[:, :, None]
+        )
+        dressed_momentum_explicit = wilson[:, :, None] * (
+            -sample.static_result.charge
+            * direction_vector[:, None, :]
+            * values[:, :, None]
         )
 
+        frame_overlap += _ordinary_pair(
+            dressed_values,
+            dressed_values_direction,
+            block.weights_au,
+            xp,
+        )
         metric += _ordinary_pair(
             dressed_values_direction,
             dressed_values,
@@ -691,16 +839,30 @@ def evaluate_exact_weak_vector_potential_source_direction(
             block.weights_au,
             xp,
         )
-        kinetic += kinetic_scale * (
+        kinetic_embedding += kinetic_scale * (
             _ordinary_vector_pair(
-                dressed_momentum_direction,
+                dressed_momentum_embedding,
                 dressed_momentum,
                 block.weights_au,
                 xp,
             )
             + _ordinary_vector_pair(
                 dressed_momentum,
-                dressed_momentum_direction,
+                dressed_momentum_embedding,
+                block.weights_au,
+                xp,
+            )
+        )
+        kinetic_explicit += kinetic_scale * (
+            _ordinary_vector_pair(
+                dressed_momentum_explicit,
+                dressed_momentum,
+                block.weights_au,
+                xp,
+            )
+            + _ordinary_vector_pair(
+                dressed_momentum,
+                dressed_momentum_explicit,
                 block.weights_au,
                 xp,
             )
@@ -719,14 +881,28 @@ def evaluate_exact_weak_vector_potential_source_direction(
         )
 
     connection = backend.zeros((nao, nao), dtype=xp.complex128)
+    kinetic = kinetic_embedding + kinetic_explicit
     backend.synchronize()
     return ExactWeakVectorPotentialSourceDirection(
         variation=variation,
+        frame_overlap=frame_overlap,
         metric=metric,
+        kinetic_embedding=kinetic_embedding,
+        kinetic_explicit=kinetic_explicit,
         kinetic=kinetic,
         nuclear_attraction=nuclear,
         connection=connection,
     )
+
+
+def _validate_static_vector_potential(value: Any) -> None:
+    for method in (
+        "vector_potential",
+        "straight_line_integrals",
+        "straight_line_integral_gradients",
+    ):
+        if not callable(getattr(value, method, None)):
+            raise TypeError(f"vector potential must provide {method}")
 
 
 def _pair_with_factor(values: Any, weights: Any, factor: Any, xp: Any) -> Any:

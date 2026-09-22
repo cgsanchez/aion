@@ -184,6 +184,129 @@ class GaussianVectorPotentialVariation:
         return result
 
 
+@dataclass(frozen=True, slots=True)
+class GaussianScalarGaugeVariation:
+    r"""Gradient test ``alpha=grad lambda`` from a localized scalar.
+
+    ``lambda(r)=amplitude*exp(-beta*|r-center|^2)``.  Its straight-line
+    integral is evaluated exactly from the endpoint values.  The object is
+    both a smooth vector-potential test and the spatial weight used by the
+    weak finite-region continuity audit.
+    """
+
+    amplitude: float = 1.0
+    center_au: Vector3 = (0.0, 0.0, 0.0)
+    exponent_au_inverse2: float = 1.0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "amplitude", finite_float(self.amplitude, "amplitude"))
+        object.__setattr__(self, "center_au", vector3(self.center_au, "center_au"))
+        exponent = finite_float(self.exponent_au_inverse2, "exponent_au_inverse2")
+        if exponent <= 0.0:
+            raise ConfigurationError("exponent_au_inverse2 must be positive")
+        object.__setattr__(self, "exponent_au_inverse2", exponent)
+
+    def scalar_field(self, points_au: object, backend: ArrayBackend) -> Any:
+        """Evaluate the real scalar gauge test ``lambda``."""
+
+        points = _cartesian_array(points_au, backend, "points_au")
+        xp = backend.namespace
+        center = backend.asarray(self.center_au, dtype=xp.float64)
+        relative = points - center
+        return self.amplitude * xp.exp(
+            -self.exponent_au_inverse2
+            * xp.einsum("...x,...x->...", relative, relative, optimize=True)
+        )
+
+    def vector_potential(self, points_au: object, backend: ArrayBackend) -> Any:
+        """Evaluate ``grad lambda`` at Cartesian points."""
+
+        points = _cartesian_array(points_au, backend, "points_au")
+        xp = backend.namespace
+        center = backend.asarray(self.center_au, dtype=xp.float64)
+        return (
+            -2.0
+            * self.exponent_au_inverse2
+            * (points - center)
+            * self.scalar_field(points, backend)[..., None]
+        )
+
+    def straight_line_integrals(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Return ``lambda(end)-lambda(start)`` exactly."""
+
+        starts, ends = _broadcast_paths(starts_au, ends_au, backend)
+        return self.scalar_field(ends, backend) - self.scalar_field(starts, backend)
+
+    def straight_line_integral_gradients(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Return the endpoint gradient of the exact path integral."""
+
+        _, ends = _broadcast_paths(starts_au, ends_au, backend)
+        return self.vector_potential(ends, backend)
+
+
+@dataclass(frozen=True, slots=True)
+class PerturbedVectorPotential:
+    """Linear source curve ``A_epsilon=A_0+epsilon*alpha``.
+
+    Both operands are required to provide vector-potential values,
+    straight-line integrals, and endpoint gradients.  This class is used to
+    finite-difference the same grid action whose analytic weak derivative is
+    evaluated at ``epsilon=0``.
+    """
+
+    base: Any
+    direction: Any
+    amplitude: float
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "amplitude", finite_float(self.amplitude, "amplitude"))
+        for label, value in (("base", self.base), ("direction", self.direction)):
+            for method in (
+                "vector_potential",
+                "straight_line_integrals",
+                "straight_line_integral_gradients",
+            ):
+                if not callable(getattr(value, method, None)):
+                    raise ConfigurationError(f"{label} must provide {method}")
+
+    def vector_potential(self, points_au: object, backend: ArrayBackend) -> Any:
+        return self.base.vector_potential(points_au, backend) + self.amplitude * (
+            self.direction.vector_potential(points_au, backend)
+        )
+
+    def straight_line_integrals(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        return self.base.straight_line_integrals(starts_au, ends_au, backend) + (
+            self.amplitude
+            * self.direction.straight_line_integrals(starts_au, ends_au, backend)
+        )
+
+    def straight_line_integral_gradients(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        return self.base.straight_line_integral_gradients(
+            starts_au, ends_au, backend
+        ) + self.amplitude * self.direction.straight_line_integral_gradients(
+            starts_au, ends_au, backend
+        )
+
 def _cartesian_array(value: object, backend: ArrayBackend, name: str) -> Any:
     xp = backend.namespace
     result = backend.asarray(value, dtype=xp.float64)

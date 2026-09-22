@@ -7,7 +7,6 @@ from typing import Any
 
 from aion.backends import ArrayBackend
 from aion.electromagnetism import build_magnetic_pair_geometry
-from aion.electromagnetism.test_variations import GaussianVectorPotentialVariation
 from aion.electronic_structure.ao_quadrature import AOQuadrature
 from aion.electronic_structure.electric_matrices import evaluate_uniform_electric_e1_tensor
 from aion.electronic_structure.magnetic_matrices import (
@@ -729,7 +728,7 @@ def evaluate_exact_weak_current_pairing(
     sample: ExactWilsonOneElectronSample,
     density: Any,
     velocity_density: Any,
-    variation: GaussianVectorPotentialVariation,
+    variation: Any,
 ) -> ExactWeakCurrentPairing:
     """Pair the exact variational source current with one smooth test field."""
 
