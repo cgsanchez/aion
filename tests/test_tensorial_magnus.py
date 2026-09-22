@@ -3,14 +3,20 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
+from scipy.integrate import solve_ivp
 
 from aion.backends import NumPyBackend
+from aion.errors import PropagationError
 from aion.formulations import EOMTriple
 from aion.propagation import (
     ExperimentalGaussMagnusHistory,
+    NonlinearGaussMagnusPolicy,
     contravariant_to_mixed_density,
     mixed_to_contravariant_density,
     propagate_experimental_mixed_density,
+    propagate_nonlinear_contravariant_density,
+    propagate_nonlinear_mixed_density,
 )
 
 _S0 = np.asarray(((1.31, 0.17 - 0.08j), (0.17 + 0.08j, 0.94)))
@@ -158,3 +164,142 @@ def test_mixed_gauss_magnus_frame_discrepancy_converges_at_fourth_order() -> Non
         )
 
     assert min(discrepancies[index] / discrepancies[index + 1] for index in range(3)) > 13.0
+
+
+def _nonlinear_triple(density: np.ndarray) -> EOMTriple:
+    metric = np.eye(2, dtype=np.complex128)
+    base = np.asarray(((0.17, 0.23 - 0.08j), (0.23 + 0.08j, -0.31)))
+    probe = np.asarray(((0.41, -0.13j), (0.13j, -0.27)))
+    response = np.asarray(((-0.19, 0.11 + 0.07j), (0.11 - 0.07j, 0.29)))
+    amplitude = np.real(np.trace(probe @ density))
+    return EOMTriple(metric, base + 0.7 * amplitude * response, np.zeros_like(metric))
+
+
+def _nonlinear_reference(
+    final_time: float,
+    initial_density: np.ndarray = _D0,
+) -> np.ndarray:
+    def equation(_time: float, flat: np.ndarray) -> np.ndarray:
+        density = flat.reshape(2, 2)
+        generator = -1j * _nonlinear_triple(density).hamiltonian_eom
+        return (generator @ density - density @ generator).reshape(-1)
+
+    result = solve_ivp(
+        equation,
+        (0.0, final_time),
+        initial_density.reshape(-1),
+        method="DOP853",
+        rtol=2.0e-13,
+        atol=2.0e-15,
+    )
+    assert result.success
+    return result.y[:, -1].reshape(2, 2)
+
+
+def test_nonlinear_mixed_gauss_magnus_has_fourth_order_global_convergence() -> None:
+    backend = NumPyBackend()
+    final_time = 0.8
+    exact = _nonlinear_reference(final_time)
+    errors = []
+    for intervals in (4, 8, 16, 32):
+        trajectory = propagate_nonlinear_mixed_density(
+            backend.asarray(_D0),
+            initial_time_au=0.0,
+            interval_au=final_time / intervals,
+            intervals=intervals,
+            metric_provider=lambda _time: backend.asarray(np.eye(2)),
+            eom_provider=lambda _time, density: _nonlinear_triple(density),
+            backend=backend,
+            policy=NonlinearGaussMagnusPolicy(
+                tolerance=2.0e-13,
+                maximum_iterations=80,
+            ),
+        )
+        errors.append(_relative(trajectory.mixed_densities[-1] - exact, exact))
+        assert trajectory.metric_correction_applied is False
+        assert max(item.nonlinear_residual for item in trajectory.diagnostics) < 2.0e-13
+        assert max(item.trace_drift for item in trajectory.diagnostics) < 8.0e-16
+        assert trajectory.diagnostics[-1].occupation_spectrum_drift < 3.0e-15
+
+    assert min(errors[index] / errors[index + 1] for index in range(3)) > 10.0
+
+
+def test_nonlinear_mixed_gauss_magnus_exposes_failed_node_solve() -> None:
+    backend = NumPyBackend()
+    with pytest.raises(PropagationError, match="nonlinear Gauss-node solve failed"):
+        propagate_nonlinear_mixed_density(
+            backend.asarray(_D0),
+            initial_time_au=0.0,
+            interval_au=0.7,
+            intervals=1,
+            metric_provider=lambda _time: backend.asarray(np.eye(2)),
+            eom_provider=lambda _time, density: _nonlinear_triple(density),
+            backend=backend,
+            policy=NonlinearGaussMagnusPolicy(
+                tolerance=1.0e-16,
+                maximum_iterations=1,
+            ),
+        )
+
+
+def test_nonlinear_congruence_preserves_density_domain_and_fourth_order() -> None:
+    backend = NumPyBackend()
+    final_time = 1.7
+    final_link, _ = _transport(final_time)
+    exact = final_link @ _P0 @ final_link.conj().T
+    errors = []
+    occupation_drifts = []
+    for intervals in (4, 8, 16, 32):
+        trajectory = propagate_nonlinear_contravariant_density(
+            backend.asarray(_P0),
+            initial_time_au=0.0,
+            interval_au=final_time / intervals,
+            intervals=intervals,
+            metric_provider=lambda time: _metric_generator(time, transformed=False)[0],
+            eom_provider=lambda time, _density: _triple(time, transformed=False),
+            backend=backend,
+            policy=NonlinearGaussMagnusPolicy(tolerance=2.0e-13),
+        )
+        errors.append(
+            _relative(trajectory.contravariant_densities[-1] - exact, exact)
+        )
+        occupation_drifts.append(
+            trajectory.diagnostics[-1].occupation_spectrum_drift
+        )
+        assert trajectory.density_update == "coefficient_congruence"
+        assert trajectory.metric_correction_applied is False
+        assert max(
+            item.contravariant_hermiticity_residual
+            for item in trajectory.diagnostics
+        ) < 2.0e-15
+
+    assert min(errors[index] / errors[index + 1] for index in range(3)) > 13.0
+    assert min(
+        occupation_drifts[index] / occupation_drifts[index + 1]
+        for index in range(3)
+    ) > 13.0
+
+
+def test_nonlinear_congruence_self_consistent_fixed_metric_converges() -> None:
+    backend = NumPyBackend()
+    exact = _nonlinear_reference(0.8, _P0)
+    errors = []
+    for intervals in (4, 8, 16, 32):
+        trajectory = propagate_nonlinear_contravariant_density(
+            backend.asarray(_P0),
+            initial_time_au=0.0,
+            interval_au=0.8 / intervals,
+            intervals=intervals,
+            metric_provider=lambda _time: backend.asarray(np.eye(2)),
+            eom_provider=lambda _time, density: _nonlinear_triple(density),
+            backend=backend,
+            policy=NonlinearGaussMagnusPolicy(
+                tolerance=2.0e-13,
+                maximum_iterations=80,
+            ),
+        )
+        errors.append(
+            _relative(trajectory.contravariant_densities[-1] - exact, exact)
+        )
+        assert max(item.nonlinear_residual for item in trajectory.diagnostics) < 2.0e-13
+    assert min(errors[index] / errors[index + 1] for index in range(3)) > 10.0

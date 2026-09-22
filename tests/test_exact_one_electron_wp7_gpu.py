@@ -22,6 +22,7 @@ from aion.electronic_structure import (
     AOGridPolicy,
     evaluate_exact_magnetic_field_source_direction,
     evaluate_exact_temporal_source_direction,
+    evaluate_exact_weak_vector_potential_source_direction,
     evaluate_exact_wilson_one_electron_sample,
     prepare_ao_quadrature,
     prepare_one_electron_ao_reference,
@@ -84,6 +85,41 @@ def test_wp7_exact_temporal_source_action_derivative_cpu_gpu_parity() -> None:
     )
     cpu_sample = evaluate_exact_wilson_one_electron_sample(cpu_quadrature, source)
     gpu_sample = evaluate_exact_wilson_one_electron_sample(gpu_quadrature, source)
+    dynamic_variation = GaussianVectorPotentialVariation(
+        amplitude_au=(0.19, -0.13, 0.07),
+        center_au=(0.23, -0.17, 0.11),
+        exponent_au_inverse2=0.41,
+        path_quadrature_order=24,
+    )
+    cpu_dynamic_weak = evaluate_exact_weak_vector_potential_source_direction(
+        cpu_quadrature,
+        cpu_sample,
+        dynamic_variation,
+    )
+    gpu_dynamic_weak = evaluate_exact_weak_vector_potential_source_direction(
+        gpu_quadrature,
+        gpu_sample,
+        dynamic_variation,
+    )
+    assert np.linalg.norm(cpu_dynamic_weak.connection) > 1.0e-8
+    for cpu_value, gpu_value in (
+        (cpu_dynamic_weak.frame_overlap, gpu_dynamic_weak.frame_overlap),
+        (cpu_dynamic_weak.frame_overlap_rate, gpu_dynamic_weak.frame_overlap_rate),
+        (cpu_dynamic_weak.metric, gpu_dynamic_weak.metric),
+        (cpu_dynamic_weak.kinetic, gpu_dynamic_weak.kinetic),
+        (cpu_dynamic_weak.nuclear_attraction, gpu_dynamic_weak.nuclear_attraction),
+        (cpu_dynamic_weak.connection, gpu_dynamic_weak.connection),
+    ):
+        gpu_quadrature.backend.assert_resident(
+            gpu_value,
+            name="WP7 dynamic-background weak response",
+        )
+        np.testing.assert_allclose(
+            gpu_quadrature.backend.to_host(gpu_value),
+            cpu_value,
+            atol=2.0e-10,
+            rtol=2.0e-10,
+        )
     kwargs = {
         "electric_origin_direction_au": (0.17, -0.11, 0.07),
         "magnetic_field_rate_direction_au": (-0.09, 0.05, 0.13),

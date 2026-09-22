@@ -23,6 +23,7 @@ from aion.electronic_structure.time_connection import (
 from aion.electronic_structure.wilson_density import (
     ExactWilsonDensityResult,
     evaluate_exact_uniform_magnetic_wilson_density,
+    evaluate_exact_uniform_magnetic_wilson_density_source_direction,
 )
 from aion.electronic_structure.wilson_lda import WilsonLDAResult
 from aion.electronic_structure.wilson_stationary import ExactWilsonStationaryModel
@@ -94,6 +95,7 @@ class NonlinearWeakCurrentPairing:
     on_shell_pairing: Any
     on_shell_decomposition_residual: Any
     frame_connection: Any
+    frame_connection_rate: Any
     coefficient_density_direction: Any
     velocity_density_direction: Any
 
@@ -111,6 +113,23 @@ class NonlinearPureGaugeWardResult:
     closure_matter_pairing: Any
     lower_coefficient_residual: Any
     lower_coefficient_residual_relative_norm: float
+    coefficient_density: Any
+    velocity_density: Any
+
+
+@dataclass(frozen=True, slots=True)
+class NonlinearDensityPureGaugeWardResult:
+    """Pure-gauge Ward identity expressed entirely in density variables."""
+
+    source_pairing: Any
+    matter_pairing: Any
+    total_ward_residual: Any
+    one_electron_source_pairing: Any
+    one_electron_matter_pairing: Any
+    closure_source_pairing: Any
+    closure_matter_pairing: Any
+    lower_density_shell_residual: Any
+    lower_density_shell_residual_relative_norm: float
     coefficient_density: Any
     velocity_density: Any
 
@@ -293,13 +312,20 @@ def evaluate_nonlinear_weak_current_pairing(
     )
     try:
         frame_connection = xp.linalg.solve(base.metric, one.response.frame_overlap)
+        frame_connection_rate = xp.linalg.solve(
+            base.metric,
+            one.response.frame_overlap_rate
+            - sample.connection.metric_dot @ frame_connection,
+        )
     except Exception as exc:
-        raise FormulationError("weak frame-connection solve failed") from exc
+        raise FormulationError("weak frame-connection or rate solve failed") from exc
     density_direction = (
         frame_connection @ density + density @ frame_connection.conj().T
     )
     velocity_direction = (
-        frame_connection @ velocity + velocity @ frame_connection.conj().T
+        frame_connection_rate @ density
+        + frame_connection @ velocity
+        + velocity @ frame_connection.conj().T
     )
     tangential_one = restricted_one_electron_action_history_directional_derivative(
         OneElectronActionHistoryDirection(
@@ -332,6 +358,7 @@ def evaluate_nonlinear_weak_current_pairing(
         on_shell_pairing=on_shell,
         on_shell_decomposition_residual=total - tangential - on_shell,
         frame_connection=frame_connection,
+        frame_connection_rate=frame_connection_rate,
         coefficient_density_direction=density_direction,
         velocity_density_direction=velocity_direction,
     )
@@ -451,6 +478,107 @@ def evaluate_nonlinear_pure_gauge_ward(
     )
 
 
+def evaluate_nonlinear_density_pure_gauge_ward(
+    model: ExactWilsonStationaryModel,
+    sample: ExactWilsonOneElectronSample,
+    coefficient_density: object,
+    velocity_density: object,
+    gauge_parameter: GaussianScalarGaugeVariation,
+    *,
+    gauge_parameter_rate: GaussianScalarGaugeVariation | None = None,
+) -> NonlinearDensityPureGaugeWardResult:
+    """Evaluate the pure-gauge Ward identity without reconstructing orbitals.
+
+    The matter-shell diagnostic is the density form of the coefficient
+    equation, ``i*hbar*S*R-(K_beta-i*hbar*omega)*P``.  This is the natural
+    audit for a mixed-index density trajectory and is not a projection of
+    that trajectory onto an orbital representation.
+    """
+
+    _validate_model_sample(model, sample)
+    if not isinstance(gauge_parameter, GaussianScalarGaugeVariation):
+        raise TypeError("gauge_parameter must be a GaussianScalarGaugeVariation")
+    if gauge_parameter_rate is not None and not isinstance(
+        gauge_parameter_rate, GaussianScalarGaugeVariation
+    ):
+        raise TypeError("gauge_parameter_rate must be a GaussianScalarGaugeVariation")
+    backend = model.backend
+    xp = model.namespace
+    density = model.hartree_evaluator._validated_density(coefficient_density)
+    velocity = backend.asarray(velocity_density, dtype=xp.complex128)
+    backend.assert_resident(velocity, name="velocity density")
+    if velocity.shape != density.shape:
+        raise ConfigurationError("velocity_density has an incompatible shape")
+
+    topology = model.quadrature.reference.anchor_topology
+    site_coordinates = model.quadrature.reference.core_operators.nuclei.coordinates_au
+    site_values = gauge_parameter.scalar_field(site_coordinates, backend)
+    site_rates = (
+        backend.zeros(site_values.shape, dtype=xp.float64)
+        if gauge_parameter_rate is None
+        else gauge_parameter_rate.scalar_field(site_coordinates, backend)
+    )
+    pure = exact_pure_gauge_action_direction(
+        sample,
+        density,
+        velocity,
+        site_values,
+        site_rates,
+        topology.ao_to_atom,
+        backend,
+    )
+    one_full = restricted_one_electron_action_full_directional_derivative(
+        density,
+        velocity,
+        exact_wilson_one_electron_triple(sample),
+        pure.matrix,
+        pure.history,
+        backend,
+        hbar=model.hartree_action.hbar,
+    )
+    hartree, xc = _closure_source_evaluations(model, density, gauge_parameter)
+    assert hartree.source_energy_direction is not None
+    closure_source = -hartree.source_energy_direction
+    closure_lower = hartree.lower_coulomb_matrix
+    if xc is not None:
+        assert xc.source_energy_direction is not None
+        closure_source = closure_source - xc.source_energy_direction
+        closure_lower = closure_lower + xc.lower_xc_matrix
+    closure_matter = -expectation(pure.history.density, closure_lower, xp)
+    source = one_full.source.total + closure_source
+    matter = one_full.history.total + closure_matter
+
+    full_action = model.evaluate(density)
+    shell_residual = (
+        1j * model.hartree_action.hbar * sample.metric @ velocity
+        - (
+            full_action.lower_mechanical_matrix
+            - 1j * model.hartree_action.hbar * sample.connection.connection
+        )
+        @ density
+    )
+    residual_scale = xp.maximum(
+        xp.asarray(1.0),
+        xp.linalg.norm(full_action.lower_mechanical_matrix @ density),
+    )
+    relative_residual = backend.scalar_to_float(
+        xp.linalg.norm(shell_residual) / residual_scale
+    )
+    return NonlinearDensityPureGaugeWardResult(
+        source_pairing=source,
+        matter_pairing=matter,
+        total_ward_residual=source + matter,
+        one_electron_source_pairing=one_full.source.total,
+        one_electron_matter_pairing=one_full.history.total,
+        closure_source_pairing=closure_source,
+        closure_matter_pairing=closure_matter,
+        lower_density_shell_residual=shell_residual,
+        lower_density_shell_residual_relative_norm=relative_residual,
+        coefficient_density=density,
+        velocity_density=velocity,
+    )
+
+
 def evaluate_nonlinear_weak_continuity(
     model: ExactWilsonStationaryModel,
     sample: ExactWilsonOneElectronSample,
@@ -504,6 +632,16 @@ def evaluate_nonlinear_weak_continuity(
         charge=model.hartree_action.charge,
         hbar=model.hartree_action.hbar,
     )
+    density_source_dot_grid = (
+        evaluate_exact_uniform_magnetic_wilson_density_source_direction(
+            model.quadrature,
+            density,
+            model.gauge,
+            sample.source.gauge_rate,
+            charge=model.hartree_action.charge,
+            hbar=model.hartree_action.hbar,
+        )
+    )
     weights = backend.asarray(model.quadrature.grid.weights_au, dtype=xp.float64)
     coordinates = backend.asarray(
         model.quadrature.grid.coordinates_au,
@@ -522,7 +660,8 @@ def evaluate_nonlinear_weak_continuity(
             "p,p,p->",
             weights,
             test_values,
-            density_dot_grid.density_direct,
+            density_dot_grid.density_direct
+            + density_source_dot_grid.density_direction,
             optimize=True,
         )
     )

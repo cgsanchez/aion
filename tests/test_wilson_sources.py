@@ -21,6 +21,7 @@ from aion.electronic_structure import (
     evaluate_exact_static_wilson_grid_one_electron_action,
     evaluate_exact_wilson_charge,
     evaluate_exact_wilson_one_electron_sample,
+    evaluate_nonlinear_density_pure_gauge_ward,
     evaluate_nonlinear_pure_gauge_ward,
     evaluate_nonlinear_weak_continuity,
     evaluate_nonlinear_weak_current_pairing,
@@ -30,6 +31,7 @@ from aion.electronic_structure import (
     prepare_pyscf_reference,
 )
 from aion.formulations import EOMTriple
+from aion.formulations.exact_one_electron import exact_pure_gauge_action_direction
 from test_reference_integration import molecular_config
 
 pytestmark = pytest.mark.integration
@@ -247,6 +249,89 @@ def test_exact_charge_off_shell_ward_and_on_shell_weak_continuity(
     assert ward.lower_coefficient_residual_relative_norm > 1.0e-3
     assert abs(float(ward.source_pairing)) > 1.0e-5
     np.testing.assert_allclose(ward.total_ward_residual, 0.0, atol=3.0e-12, rtol=0.0)
+    orbital_density = 2.0 * coefficient @ coefficient.conj().T
+    velocity_density = 2.0 * coefficient_velocity @ coefficient.conj().T
+    density_ward = evaluate_nonlinear_density_pure_gauge_ward(
+        model,
+        sample,
+        orbital_density,
+        velocity_density,
+        gauge_test,
+        gauge_parameter_rate=gauge_rate,
+    )
+    np.testing.assert_allclose(
+        density_ward.source_pairing,
+        ward.source_pairing,
+        atol=3.0e-13,
+        rtol=3.0e-13,
+    )
+    np.testing.assert_allclose(
+        density_ward.matter_pairing,
+        ward.matter_pairing,
+        atol=3.0e-13,
+        rtol=3.0e-13,
+    )
+    np.testing.assert_allclose(
+        density_ward.total_ward_residual,
+        0.0,
+        atol=3.0e-12,
+        rtol=0.0,
+    )
+
+    dynamic_source = UniformMagneticSourceSample(
+        0.5,
+        model.gauge.field,
+        magnetic_field_dot_au=(0.0, 0.0, 0.007),
+        origin_au=model.gauge.origin_au,
+    )
+    dynamic_sample = evaluate_exact_wilson_one_electron_sample(
+        quadrature,
+        dynamic_source,
+    )
+    dynamic_current = evaluate_nonlinear_weak_current_pairing(
+        model,
+        dynamic_sample,
+        orbital_density,
+        velocity_density,
+        gauge_test,
+    )
+    site_values = gauge_test.scalar_field(
+        quadrature.reference.core_operators.nuclei.coordinates_au,
+        model.backend,
+    )
+    pure_direction = exact_pure_gauge_action_direction(
+        dynamic_sample,
+        orbital_density,
+        velocity_density,
+        site_values,
+        np.zeros_like(site_values),
+        quadrature.reference.anchor_topology.ao_to_atom,
+        model.backend,
+    )
+    np.testing.assert_allclose(
+        dynamic_current.response.connection,
+        pure_direction.matrix.connection,
+        atol=3.0e-14,
+        rtol=3.0e-14,
+    )
+    dynamic_continuity = evaluate_nonlinear_weak_continuity(
+        model,
+        dynamic_sample,
+        orbital_density,
+        gauge_test,
+    )
+    np.testing.assert_allclose(
+        dynamic_continuity.finite_region_residual,
+        0.0,
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+    np.testing.assert_allclose(
+        dynamic_continuity.global_charge_residual,
+        0.0,
+        atol=3.0e-12,
+        rtol=0.0,
+    )
 
     continuity = evaluate_nonlinear_weak_continuity(
         model,

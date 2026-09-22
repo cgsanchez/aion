@@ -48,6 +48,7 @@ from aion.electromagnetism.sources import (
 )
 from aion.electromagnetism.test_variations import (
     AffineGaugeDifferenceVariation,
+    AffineVectorFieldVariation,
     GaussianScalarGaugeVariation,
     GaussianVectorPotentialVariation,
     PerturbedVectorPotential,
@@ -58,6 +59,7 @@ __all__ = [
     "AdditiveUniformSource",
     "AffineGaugeDifferenceVariation",
     "AffineMagneticGauge",
+    "AffineVectorFieldVariation",
     "CenterLoopHolonomy",
     "CompiledUniformSource",
     "DiscreteKickEvent",

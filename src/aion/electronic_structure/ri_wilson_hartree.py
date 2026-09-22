@@ -556,7 +556,10 @@ class RIWilsonHartreeEvaluator:
         scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(density))
         residual = self.backend.scalar_to_float(xp.linalg.norm(density - density.conj().T) / scale)
         if residual > 1.0e-11:
-            raise ConfigurationError("coefficient_density must be Hermitian")
+            raise ConfigurationError(
+                "coefficient_density Hermiticity residual "
+                f"{residual:.3e} exceeds 1.000e-11"
+            )
         return density
 
 

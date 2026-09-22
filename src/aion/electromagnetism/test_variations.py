@@ -307,6 +307,104 @@ class PerturbedVectorPotential:
             starts_au, ends_au, backend
         )
 
+
+@dataclass(frozen=True, slots=True)
+class AffineVectorFieldVariation:
+    r"""General affine vector test ``alpha(r)=offset+M(r-origin)``.
+
+    The class supplies exact straight-segment integrals and endpoint
+    gradients.  It is useful for pairing a variational current with the
+    uniform-plus-induction electric field of a time-dependent uniform
+    magnetic source; the name deliberately does not assign a physical gauge
+    role to the test field.
+    """
+
+    offset_au: Vector3 = (0.0, 0.0, 0.0)
+    matrix_au: tuple[Vector3, Vector3, Vector3] = (
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+    )
+    origin_au: Vector3 = (0.0, 0.0, 0.0)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "offset_au", vector3(self.offset_au, "offset_au"))
+        object.__setattr__(self, "origin_au", vector3(self.origin_au, "origin_au"))
+        rows = tuple(
+            vector3(row, f"matrix_au[{index}]")
+            for index, row in enumerate(self.matrix_au)
+        )
+        if len(rows) != 3:
+            raise ConfigurationError("matrix_au must contain three Cartesian rows")
+        object.__setattr__(self, "matrix_au", rows)
+
+    def vector_potential(self, points_au: object, backend: ArrayBackend) -> Any:
+        """Evaluate the affine vector test at Cartesian points."""
+
+        points = _cartesian_array(points_au, backend, "points_au")
+        xp = backend.namespace
+        origin = backend.asarray(self.origin_au, dtype=xp.float64)
+        offset = backend.asarray(self.offset_au, dtype=xp.float64)
+        matrix = backend.asarray(self.matrix_au, dtype=xp.float64)
+        return offset + (points - origin) @ matrix.T
+
+    def straight_line_integrals(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Integrate the affine field exactly along each straight segment."""
+
+        starts, ends = _broadcast_paths(starts_au, ends_au, backend)
+        displacement = ends - starts
+        midpoint = 0.5 * (starts + ends)
+        return backend.namespace.einsum(
+            "...x,...x->...",
+            self.vector_potential(midpoint, backend),
+            displacement,
+            optimize=True,
+        )
+
+    def straight_line_integral_gradients(
+        self,
+        starts_au: object,
+        ends_au: object,
+        backend: ArrayBackend,
+    ) -> Any:
+        """Differentiate the exact segment integral with respect to its end."""
+
+        starts, ends = _broadcast_paths(starts_au, ends_au, backend)
+        xp = backend.namespace
+        matrix = backend.asarray(self.matrix_au, dtype=xp.float64)
+        return self.vector_potential(starts, backend) + 0.5 * (
+            (ends - starts) @ (matrix + matrix.T).T
+        )
+
+    @classmethod
+    def from_uniform_magnetic_electric_field(
+        cls,
+        *,
+        electric_field_origin_au: object,
+        magnetic_field_dot_au: object,
+        origin_au: object,
+    ) -> AffineVectorFieldVariation:
+        r"""Build ``E(r)=E_o+1/2 (r-o) cross Bdot`` exactly."""
+
+        electric = vector3(electric_field_origin_au, "electric_field_origin_au")
+        magnetic_dot = vector3(magnetic_field_dot_au, "magnetic_field_dot_au")
+        bx, by, bz = magnetic_dot
+        matrix = (
+            (0.0, 0.5 * bz, -0.5 * by),
+            (-0.5 * bz, 0.0, 0.5 * bx),
+            (0.5 * by, -0.5 * bx, 0.0),
+        )
+        return cls(
+            offset_au=electric,
+            matrix_au=matrix,
+            origin_au=vector3(origin_au, "origin_au"),
+        )
+
 def _cartesian_array(value: object, backend: ArrayBackend, name: str) -> Any:
     xp = backend.namespace
     result = backend.asarray(value, dtype=xp.float64)

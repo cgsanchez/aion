@@ -14,6 +14,7 @@ from aion.electromagnetism.magnetic import (
     endpoint_line_integrals,
     triangle_phases,
 )
+from aion.electromagnetism.test_variations import GaussianScalarGaugeVariation
 from aion.electronic_structure.ao_quadrature import AOQuadrature
 from aion.electronic_structure.local_potentials import (
     NuclearAttractionProvider,
@@ -139,10 +140,18 @@ class ExactMagneticFieldSourceDirection:
 
 @dataclass(frozen=True, slots=True)
 class ExactWeakVectorPotentialSourceDirection:
-    """Exact matrix response paired with one smooth static test variation."""
+    """Exact matrix response paired with one smooth static test variation.
+
+    ``frame_overlap`` is ``F_alpha=<chi|delta_alpha chi>`` and
+    ``frame_overlap_rate`` is its physical time derivative.  The latter is
+    distinct from ``connection=delta_alpha omega_t`` on a dynamic source and
+    is required by the tangential history variation
+    ``delta Cdot=Gamma_dot C+Gamma Cdot``.
+    """
 
     variation: Any
     frame_overlap: Any
+    frame_overlap_rate: Any
     metric: Any
     kinetic_embedding: Any
     kinetic_explicit: Any
@@ -730,9 +739,11 @@ def evaluate_exact_weak_vector_potential_source_direction(
 
     This is a weak continuum-current probe: it returns the response paired
     with the supplied spatial test variation and does not claim to reconstruct
-    a pointwise current density.  The variation has zero time derivative and
-    this first implementation requires a temporally static source
-    (``E_origin=Bdot=0``), so ``delta omega_t=0``.
+    a pointwise current density.  The variation has zero time derivative.
+    For a dynamic background, ``delta omega_t`` is nevertheless nonzero
+    because both sides of the temporal matrix inherit the varied Wilson
+    frame.  That embedding response is evaluated below from the same dressed
+    AO grid action; it vanishes identically for a temporally static source.
     """
 
     if not isinstance(quadrature, AOQuadrature):
@@ -746,11 +757,6 @@ def evaluate_exact_weak_vector_potential_source_direction(
         raise ConfigurationError("sample belongs to a different AO reference")
     if sample.static_result.grid_fingerprint_sha256 != quadrature.grid.fingerprint_sha256:
         raise ConfigurationError("sample belongs to a different AO quadrature grid")
-    if any(component != 0.0 for component in sample.source.electric_field_origin_au):
-        raise ConfigurationError("weak static vector variation requires zero electric field")
-    if any(component != 0.0 for component in sample.source.magnetic_field_dot_au):
-        raise ConfigurationError("weak static vector variation requires zero Bdot")
-
     backend = quadrature.backend
     xp = backend.namespace
     reference = quadrature.reference
@@ -769,10 +775,12 @@ def evaluate_exact_weak_vector_potential_source_direction(
     )
     nao = reference.core_operators.nao
     frame_overlap = backend.zeros((nao, nao), dtype=xp.complex128)
+    frame_overlap_rate = backend.zeros((nao, nao), dtype=xp.complex128)
     metric = backend.zeros((nao, nao), dtype=xp.complex128)
     kinetic_embedding = backend.zeros((nao, nao), dtype=xp.complex128)
     kinetic_explicit = backend.zeros((nao, nao), dtype=xp.complex128)
     nuclear = backend.zeros((nao, nao), dtype=xp.complex128)
+    connection = backend.zeros((nao, nao), dtype=xp.complex128)
     kinetic_scale = 1.0 / (2.0 * sample.static_result.mass)
 
     for block in quadrature.blocks():
@@ -821,10 +829,30 @@ def evaluate_exact_weak_vector_potential_source_direction(
             * direction_vector[:, None, :]
             * values[:, :, None]
         )
+        base_line_rate = sample.source.gauge_rate.anchor_to_point_line_integrals(
+            anchors,
+            block.coordinates_au,
+            backend,
+        )
+        scalar = sample.source.scalar_potential(block.coordinates_au, backend)
+        temporal_factor = prefactor * (base_line_rate + scalar[:, None])
+        dressed_temporal_values = temporal_factor * dressed_values
+        dressed_temporal_values_direction = temporal_factor * dressed_values_direction
 
         frame_overlap += _ordinary_pair(
             dressed_values,
             dressed_values_direction,
+            block.weights_au,
+            xp,
+        )
+        frame_overlap_rate += _ordinary_pair(
+            dressed_temporal_values,
+            dressed_values_direction,
+            block.weights_au,
+            xp,
+        ) + _ordinary_pair(
+            dressed_values,
+            dressed_temporal_values_direction,
             block.weights_au,
             xp,
         )
@@ -879,13 +907,36 @@ def evaluate_exact_weak_vector_potential_source_direction(
             nuclear_weights,
             xp,
         )
+        connection += _ordinary_pair(
+            dressed_values_direction,
+            dressed_temporal_values,
+            block.weights_au,
+            xp,
+        ) + _ordinary_pair(
+            dressed_values,
+            dressed_temporal_values_direction,
+            block.weights_au,
+            xp,
+        )
 
-    connection = backend.zeros((nao, nao), dtype=xp.complex128)
     kinetic = kinetic_embedding + kinetic_explicit
+    if isinstance(variation, GaussianScalarGaugeVariation):
+        # A time-independent pure-gauge direction transforms the exact
+        # temporal matrix homogeneously in the anchor frame.  Use the stable
+        # production connection here rather than commuting the variation
+        # with its less accurate all-grid oracle; this is an analytic source
+        # specialization, not a state or metric correction.
+        gauge_values = variation.scalar_field(anchors, backend)
+        eta = prefactor * gauge_values
+        connection = (
+            eta[:, None] * sample.connection.connection
+            - sample.connection.connection * eta[None, :]
+        )
     backend.synchronize()
     return ExactWeakVectorPotentialSourceDirection(
         variation=variation,
         frame_overlap=frame_overlap,
+        frame_overlap_rate=frame_overlap_rate,
         metric=metric,
         kinetic_embedding=kinetic_embedding,
         kinetic_explicit=kinetic_explicit,
