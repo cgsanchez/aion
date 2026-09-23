@@ -1020,6 +1020,22 @@ class ReducedWilsonModel:
         factory = self.spatial.factory
         one = self.spatial.one_electron
         xp = self.namespace
+        if all(value == 0.0 for value in self.source.magnetic_field_dot_au):
+            zero_matrix = self.backend.zeros(one.mechanical.shape, dtype=xp.complex128)
+            zero_density = self.backend.zeros(
+                (self.quadrature.grid.npoints,),
+                dtype=xp.float64,
+            )
+            zero = self.backend.asarray(0.0, dtype=xp.float64)
+            return ReducedWilsonSourceResponse(
+                one_electron_matrix_rate=zero_matrix,
+                density_zero_rate=zero_density,
+                density_first_rate=zero_density.copy(),
+                hartree_energy_rate_au=zero,
+                exchange_correlation_energy_rate_au=zero,
+                closure_energy_rate_au=zero,
+                mechanical_energy_rate_au=zero,
+            )
         field_rate = self.backend.asarray(
             self.source.magnetic_field_dot_au,
             dtype=xp.float64,
