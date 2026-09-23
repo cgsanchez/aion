@@ -189,6 +189,24 @@ def test_strict_and_density_resummed_c1_separate_at_second_order(
     assert differences[1] / differences[0] == pytest.approx(4.0, rel=2.0e-2)
 
 
+def test_reduced_factory_reuses_common_spatial_data(
+    quadrature: AOQuadrature,
+) -> None:
+    _, reduced_factory = _factories(quadrature)
+    gauge = AffineMagneticGauge(UniformMagneticField((0.004, -0.003, 0.002)))
+    p0 = reduced_factory.spatial_action(gauge, ReducedWilsonLevel.P0)
+    e1 = reduced_factory.spatial_action(gauge, ReducedWilsonLevel.E1)
+    strict = reduced_factory.spatial_action(gauge, ReducedWilsonLevel.STRICT_C1)
+    resummed = reduced_factory.spatial_action(
+        gauge,
+        ReducedWilsonLevel.DENSITY_RESUMMED_C1,
+    )
+
+    assert p0.one_electron is e1.one_electron
+    assert strict.one_electron is resummed.one_electron
+    assert p0.closure is e1.closure is strict.closure is resummed.closure
+
+
 def test_c1_connection_is_metric_compatible_for_time_dependent_b(
     quadrature: AOQuadrature,
 ) -> None:

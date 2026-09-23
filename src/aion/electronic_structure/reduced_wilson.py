@@ -17,7 +17,7 @@ the same first-order one-electron geometry.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -710,6 +710,16 @@ class PreparedReducedWilsonFactory:
     exact_factory: ExactWilsonStationaryFactory
     magnetic_first_derivatives: MagneticOneElectronFirstDerivatives
     electric_e1: UniformElectricE1Tensor
+    _one_electron_cache: dict[
+        tuple[AffineMagneticGauge, bool],
+        ReducedWilsonOneElectronData,
+    ] = field(default_factory=dict, init=False, repr=False, compare=False)
+    _closure_cache: dict[AffineMagneticGauge, PreparedReducedWilsonClosure] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def spatial_action(
         self,
@@ -753,6 +763,10 @@ class PreparedReducedWilsonFactory:
         gauge: AffineMagneticGauge,
         level: ReducedWilsonLevel,
     ) -> ReducedWilsonOneElectronData:
+        key = (gauge, level.retains_first_magnetic_order)
+        cached = self._one_electron_cache.get(key)
+        if cached is not None:
+            return cached
         quadrature = self.exact_factory.quadrature
         backend = quadrature.backend
         xp = backend.namespace
@@ -805,7 +819,7 @@ class PreparedReducedWilsonFactory:
         eigenvalues = np.linalg.eigvalsh(backend.to_host(metric))
         positive = bool(eigenvalues[0] > 0.0)
         condition = float(eigenvalues[-1] / eigenvalues[0]) if positive else math.inf
-        return ReducedWilsonOneElectronData(
+        result = ReducedWilsonOneElectronData(
             metric=metric,
             kinetic=kinetic,
             nuclear_attraction=nuclear,
@@ -818,8 +832,13 @@ class PreparedReducedWilsonFactory:
             metric_condition_number=condition,
             metric_positive=positive,
         )
+        self._one_electron_cache[key] = result
+        return result
 
     def _closure(self, gauge: AffineMagneticGauge) -> PreparedReducedWilsonClosure:
+        cached = self._closure_cache.get(gauge)
+        if cached is not None:
+            return cached
         quadrature = self.exact_factory.quadrature
         evaluator = self.exact_factory.hartree_evaluator
         backend = quadrature.backend
@@ -868,13 +887,15 @@ class PreparedReducedWilsonFactory:
                 pair1,
                 optimize=True,
             )
-        return PreparedReducedWilsonClosure(
+        result = PreparedReducedWilsonClosure(
             factory=self,
             gauge=gauge,
             endpoint_link=endpoint,
             three_index_zero=b0,
             three_index_first=b1,
         )
+        self._closure_cache[gauge] = result
+        return result
 
 
 @dataclass(frozen=True, slots=True)
