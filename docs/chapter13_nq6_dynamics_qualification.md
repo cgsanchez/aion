@@ -2,9 +2,11 @@
 
 Date: 2026-09-23
 
-Gate state: **executed and analyzed; awaiting user review**
+Gate state: **accepted by the user**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq5_review_20260922.json`
+
+Acceptance record: `docs/reviews/chapter13_nq6_review_20260923.json`
 
 Implementation commit: `a197fbc55b62f709830e06faa163b8df252e38c7`
 
@@ -13,8 +15,9 @@ Controlling plan:
 
 This document is the review entry point for NQ6. It separates the Chapter 13
 mathematical identities, the implemented nonlinear propagator and observable
-APIs, the completed numerical tests, and the user's still-pending scientific
-decision. Nothing in this document records acceptance or authorizes NQ7.
+APIs, and the completed numerical tests. The separate review record carries
+the user's acceptance, including the disclosed final continuity and power
+criteria, and authorizes NQ7.
 
 ## 1. Mathematical and physical contract
 
@@ -447,7 +450,7 @@ artifact hashes.
 | trajectory Ward, weak continuity, and global charge checks | executed and independently analyzed |
 | instantaneous mechanical-rate/source-power identity | executed and independently analyzed |
 | complete energy-change/integrated-work equality | executed and independently analyzed |
-| NQ6 scientific acceptance | **pending user review** |
+| NQ6 scientific acceptance | **accepted by the user** |
 
 The evidence supports the bounded conclusion that the uncorrected
 connection-aware fourth-order congruence algorithm converges for the tested
@@ -458,7 +461,5 @@ long-time behavior, nonuniform magnetic sources, GGA, moving nuclei,
 periodicity, interacting transverse currents, or reduced P0/E1/C1 accuracy.
 Those claims remain outside NQ6.
 
-If the user accepts this evidence and the disclosed final review criteria,
-the next gate is NQ7: matched exact-Wilson comparison against P0, E1, strict
-C1, and density-resummed C1 action descendants. Until that decision is
-recorded separately, NQ7 is not authorized.
+The next gate is NQ7: matched exact-Wilson comparison against P0, E1, strict
+C1, and density-resummed C1 action descendants.

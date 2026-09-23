@@ -1,0 +1,80 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ6",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-23T12:46:49Z",
+  "scope": {
+    "implemented_contract": "uncorrected connection-aware fourth-order nonlinear exact-Wilson propagation, trajectory invariants, Ward and weak-continuity diagnostics, and complete mechanical-energy/action-source-power balance for the accepted Hartree and restricted pure-LDA Kohn-Sham actions",
+    "fixture": "equilateral H3+ with two electrons in cc-pVDZ, the weigend auxiliary basis, lda,vwn on the unpruned PySCF level-4 grid, electric driving at zero and static magnetic field, and Maxwell-consistent time-dependent uniform magnetic induction",
+    "included": [
+      "self-consistent two-node fourth-order Gauss-Magnus propagation with [2/2] Pade coefficient links",
+      "contravariant-density congruence without Lowdin orthogonalization, endpoint metric correction, clipping, or post-step projection",
+      "independent timestep and nonlinear-tolerance refinement for Hartree and LDA branches",
+      "stationary, field-free electric, static-magnetic electric, and magnetic-induction trajectories",
+      "metric orthonormality, occupation spectrum, trace, particle number, density normalization, Hermiticity, and density reconstruction diagnostics",
+      "trajectory Ward, weak finite-region continuity, and global signed-charge checks",
+      "independent matrix mechanical-energy rate and action-derived source-power evaluation",
+      "integrated source work against complete endpoint mechanical energy including Hartree and exchange-correlation functional energies",
+      "CPU and physical-GPU regression coverage of the reusable propagation and dynamic-source paths",
+      "authenticated preservation of the host-power-failure attempt as non-qualification evidence"
+    ]
+  },
+  "effect": "NQ6 accepted and NQ7 reduced electromagnetic descendant qualification authorized",
+  "accepted_review_criteria": {
+    "continuity_residual_upper_bound": 3e-12,
+    "instantaneous_power_residual_upper_bound_au": 5e-13,
+    "disclosure": "The preliminary 2e-12 continuity and 2e-13 power limits were revised after they proved tighter than the independently contracted dynamic identities; the failed preliminary analysis, raw campaign, rationale, and unchanged final measurements remain visible."
+  },
+  "limitations": [
+    "the Kohn-Sham current and power are those of the declared auxiliary adiabatic-LDA action and are not accepted as an exact interacting transverse current",
+    "the evidence is bounded to one H3+ geometry, cc-pVDZ/weigend, one affine gauge representative, one pulse amplitude, one static magnetic field, one time interval, and one pure LDA functional",
+    "the real-space particle-number residual includes the independently identified level-4 spatial-quadrature floor",
+    "stronger fields, longer trajectories, basis convergence, nonuniform magnetic sources, moving nuclei, periodicity, GGA, and Maxwell backreaction are not qualified",
+    "P0, E1, strict C1, and density-resummed C1 actions are not part of NQ6 and remain NQ7 obligations",
+    "the 56-trajectory scientific campaign was executed on CPU; physical-GPU evidence covers reusable propagation and exact dynamic source-response paths rather than this complete campaign"
+  ],
+  "implementation_commit": "a197fbc55b62f709830e06faa163b8df252e38c7",
+  "evidence_commit": "4e4cc913816b5df71d4528d8068eee9417677f78",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 86 source files",
+    "cpu_fast_suite": "95 passed",
+    "cpu_complete_integration": "151 passed",
+    "physical_gpu_focused": "4 passed through tools/gpu-python",
+    "authenticated_analysis": "56 expected trajectories, 920 trajectory rows, 280 arrays, all final proposed checks passed",
+    "deterministic_analysis_repetition": "final and verification summary hashes identical"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq6_dynamics_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq6_dynamics_20260922T205959Z_a197fbc55b62",
+    "accepted_analysis": "analysis_final/summary.json",
+    "result_sha256": "951b7a88e3c5311f3a0da5f4448a59e44458b2c8d95633cab4216cc224a08afb",
+    "provenance_sha256": "ae526ed53eb9e11d8c45d5b0ab4d10ff49ddbe1ce6f4357ded344ac3d7a9df19",
+    "completed_sha256": "b141be162d2fbee6bfe7c435c5d19be2074840a5a69f713f35c0816f2a3810f4",
+    "analysis_summary_sha256": "d6da6702165ada1e38f151327d786a4fc5ddc3170ac485d1ae9b7d171b97daac",
+    "interrupted_record_sha256": "219f49f49cd78ac58597cb446be8107c245f0702bb00f5f75ca30b3c18c148a7",
+    "interrupted_log_sha256": "a92a3631e409a8705846c79ca45665f81fee86451b926807b889644f4f21062b"
+  },
+  "accepted_measurements": {
+    "dynamic_final_density_order_min": 3.7909009545132393,
+    "finest_final_density_successive_difference_max": 6.965879649170856e-08,
+    "nonlinear_tolerance_final_density_sensitivity_max": 7.46217142722773e-14,
+    "nonlinear_tolerance_energy_sensitivity_max_au": 4.942712905631197e-13,
+    "stationary_finest_energy_drift_max_au": 2.9753977059954195e-14,
+    "finest_source_work_endpoint_energy_residual_max_au": 4.8710921879196664e-11,
+    "finest_instantaneous_power_residual_max_au": 3.2546434284067526e-13,
+    "finest_cross_metric_residual_max": 5.324291410377927e-10,
+    "finest_metric_orthonormality_residual_max": 1.329780729986614e-11,
+    "finest_occupation_spectrum_drift_max": 1.3297030143753888e-11,
+    "finest_trace_drift_max": 2.4824586830773286e-12,
+    "finest_particle_number_metric_residual_max": 2.659650277792025e-11,
+    "finest_particle_number_grid_residual_max": 9.496887720672476e-09,
+    "finest_ward_residual_max": 6.505213034913027e-19,
+    "finest_continuity_residual_max": 2.624958844038572e-12,
+    "finest_global_charge_residual_max": 2.072316927434481e-16,
+    "metric_correction_count": 0
+  },
+  "raw_artifact_policy": "The completed raw campaign, interrupted power-failure attempt, failed preliminary analysis, accepted final analysis, and identical verification analysis remain immutable; this separate review record carries the user's acceptance decision."
+}
