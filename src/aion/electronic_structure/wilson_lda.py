@@ -381,6 +381,50 @@ class WilsonLDAEvaluator:
             hbar=checked_hbar,
         )
 
+    def evaluate_pointwise_with_kernel(
+        self,
+        density: object,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        r"""Return ``epsilon_xc``, ``v_xc``, and ``d v_xc / d n`` for pure LDA.
+
+        This is the pointwise datum needed by the strict-C1 closure.  The
+        third value is the local representation of the second density
+        differential of the declared LDA energy.  It is deliberately exposed
+        by the prepared evaluator so reduced Wilson actions do not reach into
+        PySCF/libxc through a parallel implementation.
+        """
+
+        values = np.asarray(density, dtype=np.float64)
+        if values.ndim != 1 or not np.all(np.isfinite(values)):
+            raise ConfigurationError("density must be a finite one-dimensional array")
+        try:
+            result = self._numint.eval_xc_eff(
+                self.functional,
+                values,
+                deriv=2,
+                xctype="LDA",
+                spin=0,
+            )
+        except Exception as error:
+            raise FormulationError(
+                f"PySCF/libxc failed for pure-LDA functional {self.functional!r}"
+            ) from error
+        energy_per_particle = np.asarray(result[0], dtype=np.float64)
+        first = np.asarray(result[1], dtype=np.float64)
+        second = np.asarray(result[2], dtype=np.float64)
+        potential = first[0] if first.ndim == 2 else first
+        kernel = second[0, 0] if second.ndim == 3 else second
+        if (
+            energy_per_particle.shape != values.shape
+            or potential.shape != values.shape
+            or kernel.shape != values.shape
+            or not np.all(np.isfinite(energy_per_particle))
+            or not np.all(np.isfinite(potential))
+            or not np.all(np.isfinite(kernel))
+        ):
+            raise FormulationError("PySCF/libxc returned invalid pure-LDA kernel data")
+        return energy_per_particle, potential, kernel
+
     def _evaluate_pointwise(self, density: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         try:
             values = self._numint.eval_xc_eff(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 from scipy.linalg import eigh
@@ -122,8 +122,33 @@ class StationarySCFIteration:
     used_diis: bool
 
 
+class WilsonStationaryActionProtocol(Protocol):
+    """Action fields required by the common SCF solver and diagnostics."""
+
+    @property
+    def overlap(self) -> Any: ...
+
+    @property
+    def lower_mechanical_matrix(self) -> Any: ...
+
+    @property
+    def energy_hartree_au(self) -> Any: ...
+
+    @property
+    def energy_exchange_correlation_au(self) -> Any: ...
+
+    @property
+    def energy_nuclear_repulsion_au(self) -> Any: ...
+
+    @property
+    def energy_molecular_total_au(self) -> Any: ...
+
+    @property
+    def xc_potential_contraction_au(self) -> Any: ...
+
+
 @dataclass(frozen=True, slots=True)
-class ExactWilsonStationaryState:
+class ExactWilsonStationaryState[ActionT: WilsonStationaryActionProtocol]:
     """One converged nonlinear stationary generalized-eigenproblem."""
 
     coefficients: Any
@@ -133,7 +158,7 @@ class ExactWilsonStationaryState:
     orbital_frequency_matrix: Any
     active_orbital_energies_au: Any
     complete_orbital_spectrum_au: Any
-    action: ExactWilsonActionEvaluation
+    action: ActionT
     iterations: tuple[StationarySCFIteration, ...]
     orbital_residual: float
     density_fixed_point_residual: float
@@ -280,7 +305,7 @@ class ExactWilsonStationaryModel:
         *,
         policy: StationarySCFPolicy | None = None,
         initial_coefficients: object | None = None,
-    ) -> ExactWilsonStationaryState:
+    ) -> ExactWilsonStationaryState[ExactWilsonActionEvaluation]:
         """Solve the static nonlinear generalized eigenproblem on the CPU.
 
         The generalized eigensystem is solved directly with ``scipy.linalg``;
@@ -288,141 +313,183 @@ class ExactWilsonStationaryModel:
         Pulay extrapolation acts only on lower mechanical matrices.
         """
 
-        if self.quadrature.backend_config.kind is not BackendKind.CPU:
-            raise UnsupportedConfigurationError(
-                "the NQ4 stationary reference solver is CPU-only; GPU action evaluation "
-                "is available separately"
-            )
-        selected_policy = StationarySCFPolicy() if policy is None else policy
-        if not isinstance(selected_policy, StationarySCFPolicy):
-            raise TypeError("policy must be a StationarySCFPolicy")
-        reference = self.quadrature.reference
-        if not isinstance(reference, PreparedReference):
-            raise UnsupportedConfigurationError(
-                "stationary SCF requires a prepared many-electron reference"
-            )
-        stored_occupations = np.asarray(reference.ground_state.occupations, dtype=np.float64)
-        occupied = np.flatnonzero(stored_occupations > 0.0)
-        if occupied.size == 0 or not np.array_equal(occupied, np.arange(occupied.size)):
-            raise UnsupportedConfigurationError(
-                "stationary solver requires contiguous positive occupations first"
-            )
-        occupations = stored_occupations[occupied]
-        if not np.allclose(occupations, 2.0, atol=1.0e-13, rtol=0.0):
-            raise UnsupportedConfigurationError(
-                "NQ4 stationary solver currently requires fully doubly occupied orbitals"
-            )
-        overlap = np.asarray(self.overlap, dtype=np.complex128)
-        _validate_positive_metric(overlap)
-        if initial_coefficients is None:
-            coefficients = np.asarray(
-                reference.ground_state.coefficients[:, occupied],
-                dtype=np.complex128,
-            )
-        else:
-            coefficients = np.asarray(initial_coefficients, dtype=np.complex128)
-        expected = (overlap.shape[0], occupied.size)
-        if coefficients.shape != expected or not np.all(np.isfinite(coefficients)):
-            raise ConfigurationError(
-                f"initial_coefficients must be finite with shape {expected}"
-            )
-        coefficients = _metric_orthonormalize(coefficients, overlap)
-        density = _coefficient_density(coefficients, occupations)
-        diis = _PulayHistory(selected_policy.diis_space)
-        records: list[StationarySCFIteration] = []
-        previous_energy: float | None = None
-
-        for iteration in range(1, selected_policy.maximum_iterations + 1):
-            action = self.evaluate(density)
-            lower = np.asarray(action.lower_mechanical_matrix, dtype=np.complex128)
-            _, complete_coefficients = _generalized_eigensystem(lower, overlap)
-            physical_coefficients = complete_coefficients[:, : occupied.size]
-            physical_density = _coefficient_density(physical_coefficients, occupations)
-            density_residual = _mixed_density_residual(
-                physical_density,
-                density,
-                overlap,
-            )
-            commutator = _commutator_residual(lower, density, overlap)
-            energy = float(action.energy_molecular_total_au)
-            energy_change = None if previous_energy is None else abs(energy - previous_energy)
-            error_matrix = lower @ density @ overlap - overlap @ density @ lower
-            diis.add(lower, error_matrix)
-            use_diis = iteration >= selected_policy.diis_start_iteration and diis.size >= 2
-            records.append(
-                StationarySCFIteration(
-                    iteration=iteration,
-                    energy_molecular_total_au=energy,
-                    energy_change_au=energy_change,
-                    density_fixed_point_residual=density_residual,
-                    commutator_residual=commutator,
-                    diis_dimension=diis.size,
-                    used_diis=use_diis,
-                )
-            )
-
-            candidate = physical_density
-            candidate_action = self.evaluate(candidate)
-            candidate_lower = np.asarray(
-                candidate_action.lower_mechanical_matrix,
-                dtype=np.complex128,
-            )
-            candidate_orbital_residual, frequency = _orbital_residual(
-                candidate_lower,
-                overlap,
-                physical_coefficients,
-            )
-            check_values, check_coefficients = _generalized_eigensystem(
-                candidate_lower,
-                overlap,
-            )
-            check_density = _coefficient_density(
-                check_coefficients[:, : occupied.size],
-                occupations,
-            )
-            candidate_density_residual = _mixed_density_residual(
-                check_density,
-                candidate,
-                overlap,
-            )
-            candidate_energy_change = abs(
-                float(candidate_action.energy_molecular_total_au) - energy
-            )
-            if (
-                candidate_density_residual <= selected_policy.density_tolerance
-                and candidate_orbital_residual <= selected_policy.orbital_tolerance
-                and candidate_energy_change <= selected_policy.energy_tolerance_au
-            ):
-                return _build_stationary_state(
-                    self,
-                    candidate_action,
-                    physical_coefficients,
-                    occupations,
-                    frequency,
-                    check_values,
-                    candidate_density_residual,
-                    candidate_orbital_residual,
-                    tuple(records),
-                )
-
-            step_lower = diis.extrapolate() if use_diis else lower
-            _, step_coefficients = _generalized_eigensystem(step_lower, overlap)
-            step_density = _coefficient_density(
-                step_coefficients[:, : occupied.size],
-                occupations,
-            )
-            mixing = 1.0 if use_diis else selected_policy.damping
-            density = hermitian_part(
-                (1.0 - mixing) * density + mixing * step_density
-            )
-            previous_energy = energy
-
-        raise FormulationError(
-            "exact-Wilson stationary SCF did not converge in "
-            f"{selected_policy.maximum_iterations} iterations; final density residual "
-            f"{records[-1].density_fixed_point_residual:.3e}, commutator residual "
-            f"{records[-1].commutator_residual:.3e}"
+        return solve_wilson_stationary_model(
+            self,
+            policy=policy,
+            initial_coefficients=initial_coefficients,
         )
+
+
+class WilsonStationaryModelProtocol[ActionT: WilsonStationaryActionProtocol](Protocol):
+    """Structural action interface consumed by the common stationary solver."""
+
+    @property
+    def quadrature(self) -> AOQuadrature: ...
+
+    @property
+    def backend(self) -> Any: ...
+
+    @property
+    def namespace(self) -> Any: ...
+
+    @property
+    def overlap(self) -> Any: ...
+
+    def evaluate(self, coefficient_density: object) -> ActionT: ...
+
+
+def solve_wilson_stationary_model[ActionT: WilsonStationaryActionProtocol](
+    model: WilsonStationaryModelProtocol[ActionT],
+    *,
+    policy: StationarySCFPolicy | None = None,
+    initial_coefficients: object | None = None,
+) -> ExactWilsonStationaryState[ActionT]:
+    """Solve any action-compatible Wilson generalized eigenproblem on CPU.
+
+    The generalized eigensystem is solved directly with ``scipy.linalg``;
+    no full-AO Lowdin or Cholesky propagation transform is introduced. Pulay
+    extrapolation acts only on lower mechanical matrices. Exact and reduced
+    Wilson actions therefore share one nonlinear numerical algorithm.
+    """
+
+    if model.quadrature.backend_config.kind is not BackendKind.CPU:
+        raise UnsupportedConfigurationError(
+            "the stationary reference solver is CPU-only; GPU action evaluation "
+            "is available separately"
+        )
+    selected_policy = StationarySCFPolicy() if policy is None else policy
+    if not isinstance(selected_policy, StationarySCFPolicy):
+        raise TypeError("policy must be a StationarySCFPolicy")
+    reference = model.quadrature.reference
+    if not isinstance(reference, PreparedReference):
+        raise UnsupportedConfigurationError(
+            "stationary SCF requires a prepared many-electron reference"
+        )
+    stored_occupations = np.asarray(
+        reference.ground_state.occupations,
+        dtype=np.float64,
+    )
+    occupied = np.flatnonzero(stored_occupations > 0.0)
+    if occupied.size == 0 or not np.array_equal(occupied, np.arange(occupied.size)):
+        raise UnsupportedConfigurationError(
+            "stationary solver requires contiguous positive occupations first"
+        )
+    occupations = stored_occupations[occupied]
+    if not np.allclose(occupations, 2.0, atol=1.0e-13, rtol=0.0):
+        raise UnsupportedConfigurationError(
+            "stationary solver currently requires fully doubly occupied orbitals"
+        )
+    overlap = np.asarray(model.overlap, dtype=np.complex128)
+    _validate_positive_metric(overlap)
+    if initial_coefficients is None:
+        coefficients = np.asarray(
+            reference.ground_state.coefficients[:, occupied],
+            dtype=np.complex128,
+        )
+    else:
+        coefficients = np.asarray(initial_coefficients, dtype=np.complex128)
+    expected = (overlap.shape[0], occupied.size)
+    if coefficients.shape != expected or not np.all(np.isfinite(coefficients)):
+        raise ConfigurationError(
+            f"initial_coefficients must be finite with shape {expected}"
+        )
+    coefficients = _metric_orthonormalize(coefficients, overlap)
+    density = _coefficient_density(coefficients, occupations)
+    diis = _PulayHistory(selected_policy.diis_space)
+    records: list[StationarySCFIteration] = []
+    previous_energy: float | None = None
+
+    for iteration in range(1, selected_policy.maximum_iterations + 1):
+        action = model.evaluate(density)
+        lower = np.asarray(action.lower_mechanical_matrix, dtype=np.complex128)
+        _, complete_coefficients = _generalized_eigensystem(lower, overlap)
+        physical_coefficients = complete_coefficients[:, : occupied.size]
+        physical_density = _coefficient_density(physical_coefficients, occupations)
+        density_residual = _mixed_density_residual(
+            physical_density,
+            density,
+            overlap,
+        )
+        commutator = _commutator_residual(lower, density, overlap)
+        energy = float(action.energy_molecular_total_au)
+        energy_change = None if previous_energy is None else abs(energy - previous_energy)
+        error_matrix = lower @ density @ overlap - overlap @ density @ lower
+        diis.add(lower, error_matrix)
+        use_diis = iteration >= selected_policy.diis_start_iteration and diis.size >= 2
+        records.append(
+            StationarySCFIteration(
+                iteration=iteration,
+                energy_molecular_total_au=energy,
+                energy_change_au=energy_change,
+                density_fixed_point_residual=density_residual,
+                commutator_residual=commutator,
+                diis_dimension=diis.size,
+                used_diis=use_diis,
+            )
+        )
+
+        candidate = physical_density
+        candidate_action = model.evaluate(candidate)
+        candidate_lower = np.asarray(
+            candidate_action.lower_mechanical_matrix,
+            dtype=np.complex128,
+        )
+        candidate_orbital_residual, frequency = _orbital_residual(
+            candidate_lower,
+            overlap,
+            physical_coefficients,
+        )
+        check_values, check_coefficients = _generalized_eigensystem(
+            candidate_lower,
+            overlap,
+        )
+        check_density = _coefficient_density(
+            check_coefficients[:, : occupied.size],
+            occupations,
+        )
+        candidate_density_residual = _mixed_density_residual(
+            check_density,
+            candidate,
+            overlap,
+        )
+        candidate_energy_change = abs(
+            float(candidate_action.energy_molecular_total_au) - energy
+        )
+        if (
+            candidate_density_residual <= selected_policy.density_tolerance
+            and candidate_orbital_residual <= selected_policy.orbital_tolerance
+            and candidate_energy_change <= selected_policy.energy_tolerance_au
+        ):
+            return _build_stationary_state(
+                model,
+                candidate_action,
+                physical_coefficients,
+                occupations,
+                frequency,
+                check_values,
+                candidate_density_residual,
+                candidate_orbital_residual,
+                tuple(records),
+            )
+
+        step_lower = diis.extrapolate() if use_diis else lower
+        _, step_coefficients = _generalized_eigensystem(step_lower, overlap)
+        step_density = _coefficient_density(
+            step_coefficients[:, : occupied.size],
+            occupations,
+        )
+        mixing = 1.0 if use_diis else selected_policy.damping
+        density = hermitian_part(
+            (1.0 - mixing) * density + mixing * step_density
+        )
+        previous_energy = energy
+
+    raise FormulationError(
+        "Wilson stationary SCF did not converge in "
+        f"{selected_policy.maximum_iterations} iterations; final density residual "
+        f"{records[-1].density_fixed_point_residual:.3e}, commutator residual "
+        f"{records[-1].commutator_residual:.3e}"
+    )
 
 
 @dataclass(slots=True)
@@ -595,9 +662,9 @@ class _PulayHistory:
         return np.asarray(hermitian_part(result), dtype=np.complex128)
 
 
-def _build_stationary_state(
-    model: ExactWilsonStationaryModel,
-    action: ExactWilsonActionEvaluation,
+def _build_stationary_state[ActionT: WilsonStationaryActionProtocol](
+    model: WilsonStationaryModelProtocol[ActionT],
+    action: ActionT,
     coefficients: np.ndarray,
     occupations: np.ndarray,
     frequency: np.ndarray,
@@ -605,7 +672,7 @@ def _build_stationary_state(
     density_residual: float,
     orbital_residual: float,
     records: tuple[StationarySCFIteration, ...],
-) -> ExactWilsonStationaryState:
+) -> ExactWilsonStationaryState[ActionT]:
     xp = model.namespace
     overlap = np.asarray(action.overlap, dtype=np.complex128)
     lower = np.asarray(action.lower_mechanical_matrix, dtype=np.complex128)
