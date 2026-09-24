@@ -90,7 +90,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "status": "verified_unreviewed",
+                "status": f"verified_{manifest['status']}",
                 "manifest": str(manifest_path),
                 "manifest_sha256": _sha256(manifest_path),
                 "verified_file_count": len(set(checked)),

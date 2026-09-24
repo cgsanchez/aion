@@ -1,0 +1,71 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ9",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-24T23:19:19Z",
+  "scope": {
+    "implemented_contract": "authenticated archival synthesis of the accepted NQ0--NQ8 exact-Wilson Hartree, restricted pure-LDA and pure-PBE adiabatic Kohn--Sham, source, continuity, power, nonlinear-dynamics, and reduced-action evidence",
+    "included": [
+      "independent authentication of every accepted NQ0--NQ8 review and 41 primary evidence artifacts",
+      "a 131-measurement numerical-limit ledger",
+      "a 13-row equation-to-code-to-test-to-evidence map",
+      "49 retained limitations and eight explicit negative-result records",
+      "nine selected figures copied byte-for-byte from accepted analyses",
+      "a bounded supported-domain statement",
+      "strict C1 as the bounded near-term reduced-action recommendation while exact Wilson remains the reference",
+      "a detailed Chapter 14 writing outline derived from accepted evidence",
+      "a compiled 14-page LaTeX report and a single-command 35-file verifier"
+    ]
+  },
+  "effect": "The Chapter 13 numerical qualification plan is complete and archivally closed; the accepted evidence is available as the bounded input for a future Chapter 14 writing task, but this decision does not itself authorize edits to the mathematical book.",
+  "limitations": [
+    "the accepted domain remains fixed-centre finite molecules with prescribed uniform electric and magnetic sources, including Maxwell-consistent uniform magnetic induction",
+    "the RI Hartree realization retains its explicit grid, auxiliary-basis, retained-rank, and solve errors and is not relabelled as exact four-centre Coulomb",
+    "the accepted Kohn--Sham currents are source currents of the declared auxiliary adiabatic actions and are not exact interacting transverse currents",
+    "strict C1 is recommended only inside the sampled pure-LDA H3+ domain; diffuse-basis reduced-metric failures forbid a molecule-independent validity cutoff",
+    "moving nuclei, spatially nonuniform propagated fields, Maxwell backreaction, periodicity, pseudopotentials, spin polarization, hybrids, meta-GGAs, nonlocal correlation, reduced GGA actions, long-time stability, spectroscopy, systematic basis convergence, and broad production chemistry remain excluded",
+    "the Chapter 14 outline is a proposal derived from accepted evidence, not a completed or accepted book chapter"
+  ],
+  "synthesis_commit": "74a493241667",
+  "evidence_report_commit": "b150add",
+  "executed_tests": {
+    "synthesis_authentication": "NQ0--NQ8, 41 primary artifacts, 131 measurements, 49 limitations, 13 traceability claims, eight negative results, and nine figures authenticated",
+    "report_verifier": "35 files verified",
+    "latex_compilation": "14 pages; zero fatal errors, undefined references, missing files, warnings requiring rerun, or overfull boxes",
+    "ruff_all": "all checks passed",
+    "mypy_all_source": "no issues in 88 source files",
+    "cpu_fast_suite": "95 passed, 213 deselected",
+    "physical_gpu_complete_at_final_physics_state": "31 passed, 277 deselected, 1 expected CuPy contraction-engine warning"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq9_synthesis.md",
+    "report": "docs/chapter13_nq9_synthesis_report.pdf",
+    "report_source": "docs/chapter13_nq9_synthesis_report.tex",
+    "chapter14_outline": "docs/chapter13_nq9_chapter14_outline.md",
+    "report_manifest": "docs/chapter13_nq9_report_manifest.json",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq9_synthesis_20260924T220919Z_74a493241667",
+    "result_sha256": "4eca05f7fbf774a0a47a6d44146929d35941f7fb013acfa6ace973c5080c6671",
+    "provenance_sha256": "f17444d63cdbe1974353b596d43827291270c663112dbff92f9baba975e66a83",
+    "completed_sha256": "a6359b8a28e298774ea992d33d111a3ac80009af5ed6a20cf3e48714c447c636",
+    "unreviewed_report_manifest_sha256": "40aefd69549cea70beed2d290c33046b152898098c04aeafb1832ef552299e59",
+    "accepted_report_manifest_sha256": "11f956abdf6f4bdabc2324cb6e95fe3ba940d54ee0a5b072deb981aa6445ae84"
+  },
+  "accepted_measurements": {
+    "accepted_prerequisite_gate_count": 9,
+    "authenticated_primary_artifact_count": 41,
+    "accepted_measurement_count": 131,
+    "equation_code_evidence_count": 13,
+    "limitation_count": 49,
+    "explicit_negative_result_count": 8,
+    "selected_figure_count": 9,
+    "verified_report_file_count": 35
+  },
+  "accepted_recommendation": {
+    "exact_reference": "exact straight-Wilson finite molecular action",
+    "reduced_working_action": "strict C1 within the sampled pure-LDA H3+ domain",
+    "chapter14_handoff": "use the accepted NQ9 report and outline as bounded evidence; do not infer excluded physics"
+  },
+  "raw_artifact_policy": "All accepted NQ0--NQ8 roots and the NQ9 synthesis remain immutable. This separate review record carries the final user acceptance and archival-closure decision."
+}

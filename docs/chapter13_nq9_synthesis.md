@@ -2,11 +2,13 @@
 
 Date: 2026-09-24
 
-Gate state: **executed and authenticated; awaiting user review**
+Gate state: **accepted by the user on 2026-09-24**
 
 Accepted prerequisites:
 `docs/reviews/chapter13_nq0_review_20260921.json` through
 `docs/reviews/chapter13_nq8_review_20260924.json`.
+
+Acceptance record: `docs/reviews/chapter13_nq9_review_20260924.json`.
 
 This is the review entry point for NQ9. The full human-readable report is
 `docs/chapter13_nq9_synthesis_report.tex`; the proposed writing structure is
@@ -147,5 +149,6 @@ The synthesis root contains:
 - the nine authenticated selected figures.
 
 The full report indexes each accepted gate, module, test family, raw root, and
-interpretive boundary. NQ9 remains unaccepted until the user reviews this
-package and a separate decision record is committed.
+interpretive boundary. The user accepted the bounded synthesis on 2026-09-24.
+The separate review record carries that decision and closes the Chapter 13
+qualification plan without altering the immutable execution artifacts.
