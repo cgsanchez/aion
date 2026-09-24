@@ -132,9 +132,14 @@ class PreparedExactWilsonDynamicSpatialAction:
             hartree_evaluator=self.factory.hartree_evaluator,
             hartree_action=self.hartree_action,
             lda_evaluator=(
-                None
-                if selected is WilsonStationaryBranch.HARTREE
-                else self.factory.lda_evaluator
+                self.factory.lda_evaluator
+                if selected is WilsonStationaryBranch.KOHN_SHAM_LDA
+                else None
+            ),
+            gga_evaluator=(
+                self.factory.gga_evaluator
+                if selected is WilsonStationaryBranch.KOHN_SHAM_GGA
+                else None
             ),
             nuclear_repulsion_au=self.factory.nuclear_repulsion_au,
         )
@@ -275,8 +280,9 @@ def evaluate_exact_wilson_power(
     if hartree_direction is None:
         raise FormulationError("Hartree fixed-density time direction was not evaluated")
     xc_direction = backend.asarray(0.0, dtype=xp.float64)
-    if model.lda_evaluator is not None:
-        xc_value = model.lda_evaluator.evaluate(
+    xc_evaluator = model.xc_evaluator
+    if xc_evaluator is not None:
+        xc_value = xc_evaluator.evaluate(
             density,
             model.gauge,
             source_direction=sample.source.gauge_rate,

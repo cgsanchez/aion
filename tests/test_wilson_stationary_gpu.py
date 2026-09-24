@@ -18,7 +18,17 @@ from test_reference_integration import molecular_config
 pytestmark = pytest.mark.gpu
 
 
-def test_complete_stationary_action_cpu_gpu_parity_and_residency() -> None:
+@pytest.mark.parametrize(
+    ("branch", "functional"),
+    (
+        (WilsonStationaryBranch.KOHN_SHAM_LDA, "lda,vwn"),
+        (WilsonStationaryBranch.KOHN_SHAM_GGA, "pbe"),
+    ),
+)
+def test_complete_stationary_action_cpu_gpu_parity_and_residency(
+    branch: WilsonStationaryBranch,
+    functional: str,
+) -> None:
     reference = prepare_pyscf_reference(molecular_config("h2"))
     policy = AOGridPolicy.qualification(1)
     cpu_quadrature = prepare_ao_quadrature(
@@ -40,14 +50,16 @@ def test_complete_stationary_action_cpu_gpu_parity_and_residency() -> None:
     cpu = prepare_exact_wilson_stationary_model(
         cpu_quadrature,
         gauge,
-        WilsonStationaryBranch.KOHN_SHAM_LDA,
+        branch,
         auxiliary_basis="weigend",
+        functional=functional,
     )
     gpu = prepare_exact_wilson_stationary_model(
         gpu_quadrature,
         gauge,
-        WilsonStationaryBranch.KOHN_SHAM_LDA,
+        branch,
         auxiliary_basis="weigend",
+        functional=functional,
     )
     density = reference.ground_state.density.astype(np.complex128)
     cpu_result = cpu.evaluate(density)

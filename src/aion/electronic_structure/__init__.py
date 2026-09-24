@@ -176,6 +176,12 @@ from aion.electronic_structure.wilson_dynamics import (
     prepare_exact_wilson_dynamic_sample,
     prepare_exact_wilson_dynamic_spatial_action,
 )
+from aion.electronic_structure.wilson_gga import (
+    WilsonGGAEvaluator,
+    WilsonGGAProvenance,
+    WilsonGGAResult,
+    prepare_wilson_gga,
+)
 from aion.electronic_structure.wilson_lda import (
     WilsonLDAEvaluator,
     WilsonLDAProvenance,
@@ -311,6 +317,9 @@ __all__ = [
     "StationarySCFPolicy",
     "StraightLineVectorPotentialDirection",
     "UniformElectricE1Tensor",
+    "WilsonGGAEvaluator",
+    "WilsonGGAProvenance",
+    "WilsonGGAResult",
     "WilsonLDAEvaluator",
     "WilsonLDAProvenance",
     "WilsonLDAResult",
@@ -373,6 +382,7 @@ __all__ = [
     "prepare_pyscf_reference",
     "prepare_reduced_wilson_factory",
     "prepare_ri_wilson_hartree",
+    "prepare_wilson_gga",
     "prepare_wilson_lda",
     "pyscf_giao_one_electron_derivatives",
     "reconstruct_mean_field",

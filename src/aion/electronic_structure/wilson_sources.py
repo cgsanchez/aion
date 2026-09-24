@@ -25,6 +25,7 @@ from aion.electronic_structure.wilson_density import (
     evaluate_exact_uniform_magnetic_wilson_density,
     evaluate_exact_uniform_magnetic_wilson_density_source_direction,
 )
+from aion.electronic_structure.wilson_gga import WilsonGGAResult
 from aion.electronic_structure.wilson_lda import WilsonLDAResult
 from aion.electronic_structure.wilson_stationary import ExactWilsonStationaryModel
 from aion.errors import ConfigurationError, FormulationError
@@ -65,7 +66,7 @@ class StaticNonlinearWilsonGridAction:
     one_electron_matrices: ExactStaticWilsonGridOneElectronAction
     one_electron_action: OneElectronActionContraction
     hartree: RIWilsonHartreeResult
-    exchange_correlation: WilsonLDAResult | None
+    exchange_correlation: WilsonLDAResult | WilsonGGAResult | None
     closure_energy: Any
     electronic_action_value: Any
     triple: EOMTriple
@@ -84,7 +85,7 @@ class NonlinearWeakCurrentPairing:
     response: ExactWeakVectorPotentialSourceDirection
     one_electron_action: OneElectronActionContraction
     hartree: RIWilsonHartreeResult
-    exchange_correlation: WilsonLDAResult | None
+    exchange_correlation: WilsonLDAResult | WilsonGGAResult | None
     closure_pairing: Any
     total_pairing: Any
     ambient_minimal_pairing: Any
@@ -222,10 +223,11 @@ def evaluate_static_nonlinear_wilson_grid_action(
         charge=model.hartree_action.charge,
         hbar=model.hartree_action.hbar,
     )
+    evaluator = model.xc_evaluator
     xc = (
         None
-        if model.lda_evaluator is None
-        else model.lda_evaluator.evaluate(
+        if evaluator is None
+        else evaluator.evaluate(
             density,
             vector_potential,
             charge=model.hartree_action.charge,
@@ -687,7 +689,7 @@ def _closure_source_evaluations(
     model: ExactWilsonStationaryModel,
     density: Any,
     variation: Any,
-) -> tuple[RIWilsonHartreeResult, WilsonLDAResult | None]:
+) -> tuple[RIWilsonHartreeResult, WilsonLDAResult | WilsonGGAResult | None]:
     hartree = model.hartree_evaluator.evaluate(
         density,
         model.gauge,
@@ -697,10 +699,11 @@ def _closure_source_evaluations(
     )
     if hartree.source_energy_direction is None:
         raise FormulationError("RI Hartree source direction was not evaluated")
+    evaluator = model.xc_evaluator
     xc = (
         None
-        if model.lda_evaluator is None
-        else model.lda_evaluator.evaluate(
+        if evaluator is None
+        else evaluator.evaluate(
             density,
             model.gauge,
             source_direction=variation,
@@ -709,7 +712,7 @@ def _closure_source_evaluations(
         )
     )
     if xc is not None and xc.source_energy_direction is None:
-        raise FormulationError("Wilson LDA source direction was not evaluated")
+        raise FormulationError("Wilson XC source direction was not evaluated")
     return hartree, xc
 
 

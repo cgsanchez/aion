@@ -47,7 +47,11 @@ from aion.electronic_structure.wilson_stationary import (
     WilsonStationaryBranch,
     solve_wilson_stationary_model,
 )
-from aion.errors import ConfigurationError, FormulationError
+from aion.errors import (
+    ConfigurationError,
+    FormulationError,
+    UnsupportedConfigurationError,
+)
 from aion.formulations import EOMTriple, one_electron_velocity_density
 
 
@@ -513,6 +517,14 @@ class PreparedReducedWilsonClosure:
         backend = self.backend
         xp = self.namespace
         lda_evaluator = self.factory.exact_factory.lda_evaluator
+        if branch is WilsonStationaryBranch.KOHN_SHAM_GGA:
+            raise UnsupportedConfigurationError(
+                "reduced Wilson GGA requires a separately qualified gradient expansion"
+            )
+        if branch is WilsonStationaryBranch.KOHN_SHAM_LDA and lda_evaluator is None:
+            raise UnsupportedConfigurationError(
+                "the reduced Wilson LDA branch requires an LDA exact factory"
+            )
         point_count = quadrature.grid.npoints
         nao = quadrature.reference.core_operators.nao
         n0_values = backend.zeros((point_count,), dtype=xp.float64)
@@ -568,6 +580,7 @@ class PreparedReducedWilsonClosure:
             n1_integral += xp.einsum("p,p->", block.weights_au, real1, optimize=True)
 
             if branch is WilsonStationaryBranch.KOHN_SHAM_LDA:
+                assert lda_evaluator is not None
                 _validate_density_domain(real0, lda_evaluator, backend, "n0")
                 if level is ReducedWilsonLevel.DENSITY_RESUMMED_C1:
                     _validate_density_domain(

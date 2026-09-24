@@ -26,6 +26,11 @@ from aion.electronic_structure.ri_wilson_hartree import (
     RIWilsonHartreeResult,
     prepare_ri_wilson_hartree,
 )
+from aion.electronic_structure.wilson_gga import (
+    WilsonGGAEvaluator,
+    WilsonGGAResult,
+    prepare_wilson_gga,
+)
 from aion.electronic_structure.wilson_lda import (
     WilsonLDAEvaluator,
     WilsonLDAResult,
@@ -39,6 +44,7 @@ class WilsonStationaryBranch(StrEnum):
 
     HARTREE = "hartree"
     KOHN_SHAM_LDA = "kohn_sham_lda"
+    KOHN_SHAM_GGA = "kohn_sham_gga"
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +98,7 @@ class ExactWilsonActionEvaluation:
     one_electron_matrix: Any
     lower_mechanical_matrix: Any
     hartree: RIWilsonHartreeResult
-    exchange_correlation: WilsonLDAResult | None
+    exchange_correlation: WilsonLDAResult | WilsonGGAResult | None
     energy_kinetic_au: Any
     energy_electron_nuclear_au: Any
     energy_one_electron_au: Any
@@ -191,7 +197,16 @@ class ExactWilsonStationaryModel:
     hartree_evaluator: RIWilsonHartreeEvaluator
     hartree_action: PreparedRIWilsonHartreeAction
     lda_evaluator: WilsonLDAEvaluator | None
+    gga_evaluator: WilsonGGAEvaluator | None
     nuclear_repulsion_au: float
+
+    @property
+    def xc_evaluator(self) -> WilsonLDAEvaluator | WilsonGGAEvaluator | None:
+        """Return the unique XC evaluator selected by this model branch."""
+
+        if self.lda_evaluator is not None and self.gga_evaluator is not None:
+            raise FormulationError("a stationary model cannot bind both LDA and GGA")
+        return self.lda_evaluator if self.lda_evaluator is not None else self.gga_evaluator
 
     @property
     def backend(self) -> Any:
@@ -221,7 +236,8 @@ class ExactWilsonStationaryModel:
             selected = WilsonStationaryBranch(branch)
         except (TypeError, ValueError) as exc:
             raise ConfigurationError(f"unsupported stationary branch {branch!r}") from exc
-        lda = None
+        lda: WilsonLDAEvaluator | None = None
+        gga: WilsonGGAEvaluator | None = None
         if selected is WilsonStationaryBranch.KOHN_SHAM_LDA:
             if (
                 self.lda_evaluator is not None
@@ -230,6 +246,14 @@ class ExactWilsonStationaryModel:
                 lda = self.lda_evaluator
             else:
                 lda = prepare_wilson_lda(self.quadrature, functional)
+        elif selected is WilsonStationaryBranch.KOHN_SHAM_GGA:
+            if (
+                self.gga_evaluator is not None
+                and self.gga_evaluator.provenance.functional == functional
+            ):
+                gga = self.gga_evaluator
+            else:
+                gga = prepare_wilson_gga(self.quadrature, functional)
         return ExactWilsonStationaryModel(
             quadrature=self.quadrature,
             gauge=self.gauge,
@@ -238,6 +262,7 @@ class ExactWilsonStationaryModel:
             hartree_evaluator=self.hartree_evaluator,
             hartree_action=self.hartree_action,
             lda_evaluator=lda,
+            gga_evaluator=gga,
             nuclear_repulsion_au=self.nuclear_repulsion_au,
         )
 
@@ -247,11 +272,8 @@ class ExactWilsonStationaryModel:
         xp = self.namespace
         density = self.hartree_evaluator._validated_density(coefficient_density)
         hartree = self.hartree_action.evaluate(density)
-        xc = (
-            None
-            if self.lda_evaluator is None
-            else self.lda_evaluator.evaluate(density, self.gauge)
-        )
+        evaluator = self.xc_evaluator
+        xc = None if evaluator is None else evaluator.evaluate(density, self.gauge)
         one_electron = self.one_electron.lower_exact
         kinetic = one_electron.kinetic
         nuclear = one_electron.nuclear_attraction
@@ -494,11 +516,12 @@ def solve_wilson_stationary_model[ActionT: WilsonStationaryActionProtocol](
 
 @dataclass(slots=True)
 class ExactWilsonStationaryFactory:
-    """Reusable quadrature, RI, and LDA data for a family of static sources."""
+    """Reusable quadrature, RI, and pure-XC data for static sources."""
 
     quadrature: AOQuadrature
     hartree_evaluator: RIWilsonHartreeEvaluator
-    lda_evaluator: WilsonLDAEvaluator
+    lda_evaluator: WilsonLDAEvaluator | None
+    gga_evaluator: WilsonGGAEvaluator | None
     nuclear_repulsion_au: float
     charge: float
     mass: float
@@ -531,6 +554,20 @@ class ExactWilsonStationaryFactory:
             charge=self.charge,
             hbar=self.hbar,
         )
+        if (
+            selected_branch is WilsonStationaryBranch.KOHN_SHAM_LDA
+            and self.lda_evaluator is None
+        ):
+            raise UnsupportedConfigurationError(
+                "the factory functional is not a pure LDA"
+            )
+        if (
+            selected_branch is WilsonStationaryBranch.KOHN_SHAM_GGA
+            and self.gga_evaluator is None
+        ):
+            raise UnsupportedConfigurationError(
+                "the factory functional is not a pure GGA"
+            )
         return ExactWilsonStationaryModel(
             quadrature=self.quadrature,
             gauge=gauge,
@@ -539,9 +576,14 @@ class ExactWilsonStationaryFactory:
             hartree_evaluator=self.hartree_evaluator,
             hartree_action=hartree_action,
             lda_evaluator=(
-                None
-                if selected_branch is WilsonStationaryBranch.HARTREE
-                else self.lda_evaluator
+                self.lda_evaluator
+                if selected_branch is WilsonStationaryBranch.KOHN_SHAM_LDA
+                else None
+            ),
+            gga_evaluator=(
+                self.gga_evaluator
+                if selected_branch is WilsonStationaryBranch.KOHN_SHAM_GGA
+                else None
             ),
             nuclear_repulsion_au=self.nuclear_repulsion_au,
         )
@@ -573,10 +615,12 @@ def prepare_exact_wilson_stationary_factory(
         auxiliary_basis,
         rank_policy=rank_policy,
     )
+    lda_evaluator, gga_evaluator = _prepare_xc_evaluator(quadrature, functional)
     return ExactWilsonStationaryFactory(
         quadrature=quadrature,
         hartree_evaluator=hartree_evaluator,
-        lda_evaluator=prepare_wilson_lda(quadrature, functional),
+        lda_evaluator=lda_evaluator,
+        gga_evaluator=gga_evaluator,
         nuclear_repulsion_au=float(quadrature.pyscf_molecule.energy_nuc()),
         charge=checked_charge,
         mass=checked_mass,
@@ -616,6 +660,28 @@ def prepare_exact_wilson_stationary_model(
         else np.asarray(model.overlap)
     )
     return model
+
+
+def _prepare_xc_evaluator(
+    quadrature: AOQuadrature,
+    functional: str,
+) -> tuple[WilsonLDAEvaluator | None, WilsonGGAEvaluator | None]:
+    from pyscf.dft import libxc
+
+    try:
+        family = str(libxc.xc_type(functional)).upper()
+    except Exception as exc:
+        raise UnsupportedConfigurationError(
+            f"PySCF/libxc cannot resolve functional {functional!r}"
+        ) from exc
+    if family == "LDA":
+        return prepare_wilson_lda(quadrature, functional), None
+    if family == "GGA":
+        return None, prepare_wilson_gga(quadrature, functional)
+    raise UnsupportedConfigurationError(
+        f"functional {functional!r} is {family}; exact Wilson stationary models "
+        "currently support pure LDA and pure GGA only"
+    )
 
 
 @dataclass(slots=True)

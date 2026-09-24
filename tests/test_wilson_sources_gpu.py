@@ -25,7 +25,17 @@ from test_reference_integration import molecular_config
 pytestmark = pytest.mark.gpu
 
 
-def test_nonlinear_weak_sources_cpu_gpu_parity_and_residency() -> None:
+@pytest.mark.parametrize(
+    ("branch", "functional"),
+    (
+        (WilsonStationaryBranch.KOHN_SHAM_LDA, "lda,vwn"),
+        (WilsonStationaryBranch.KOHN_SHAM_GGA, "pbe"),
+    ),
+)
+def test_nonlinear_weak_sources_cpu_gpu_parity_and_residency(
+    branch: WilsonStationaryBranch,
+    functional: str,
+) -> None:
     reference = prepare_pyscf_reference(molecular_config("h2"))
     policy = AOGridPolicy.qualification(1)
     cpu_quadrature = prepare_ao_quadrature(
@@ -52,11 +62,13 @@ def test_nonlinear_weak_sources_cpu_gpu_parity_and_residency() -> None:
     cpu_model = prepare_exact_wilson_stationary_factory(
         cpu_quadrature,
         auxiliary_basis="weigend",
-    ).model(gauge, WilsonStationaryBranch.KOHN_SHAM_LDA)
+        functional=functional,
+    ).model(gauge, branch)
     gpu_model = prepare_exact_wilson_stationary_factory(
         gpu_quadrature,
         auxiliary_basis="weigend",
-    ).model(gauge, WilsonStationaryBranch.KOHN_SHAM_LDA)
+        functional=functional,
+    ).model(gauge, branch)
     cpu_sample = evaluate_exact_wilson_one_electron_sample(cpu_quadrature, source)
     gpu_sample = evaluate_exact_wilson_one_electron_sample(gpu_quadrature, source)
     coefficient = np.asarray(((0.71 + 0.19j,), (-0.23 + 0.41j,)))
