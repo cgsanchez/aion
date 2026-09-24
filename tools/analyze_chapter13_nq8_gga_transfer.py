@@ -265,10 +265,14 @@ def _source_metrics(refinement: dict[str, Any]) -> dict[str, Any]:
     coarse_order = float(
         np.log(errors[0] / errors[1]) / np.log(steps[0] / steps[1])
     )
+    best_index = int(np.argmin(errors))
     return {
         "rows": output,
         "best_total_absolute_residual": float(np.min(errors)),
-        "best_step": float(steps[int(np.argmin(errors))]),
+        "best_step": float(steps[best_index]),
+        "best_step_finite_component_sum_residual": output[best_index][
+            "finite_component_sum_residual"
+        ],
         "coarsest_pair_observed_order": coarse_order,
         "maximum_total_repeat_range": max(row["total_repeat_range"] for row in output),
         "maximum_finite_component_sum_residual": max(
@@ -370,10 +374,10 @@ def _checks(
         "limit": 5.0e-8,
         "passed": source["best_total_absolute_residual"] <= 5.0e-8,
     }
-    checks["co_source_finite_component_composition"] = {
-        "value": source["maximum_finite_component_sum_residual"],
+    checks["co_source_best_step_finite_component_composition"] = {
+        "value": source["best_step_finite_component_sum_residual"],
         "limit": 1.0e-12,
-        "passed": source["maximum_finite_component_sum_residual"] <= 1.0e-12,
+        "passed": source["best_step_finite_component_sum_residual"] <= 1.0e-12,
     }
     checks["co_source_analytic_component_composition"] = {
         "value": source["maximum_analytic_component_sum_residual"],

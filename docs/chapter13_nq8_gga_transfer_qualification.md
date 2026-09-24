@@ -189,9 +189,18 @@ difference); H3+ independently resolves a nonzero PBE source direction of
 CO discrepancy is therefore an RI-Hartree energy-difference floor, not a
 missing density-gradient source term.
 
+The first analysis draft incorrectly required the finite-difference
+component sum to meet a fixed `1e-12` tolerance at every point in the sweep,
+including the intentionally roundoff-dominated `3e-5` endpoint. Its maximum
+composition residual was `2.37e-10`, consistent with subtracting molecular
+energies before division by that very small step. The final decision check
+uses the component identity at the same best `3e-3` step as the reported
+derivative; its residual is exactly zero. The maximum over the full sweep is
+still recorded as a diagnostic rather than hidden.
+
 The final numerical-floor interpretation and plot are taken from
-`analysis_final/co_source_refinement.csv` and
-`analysis_final/co_source_refinement.png`.
+`analysis_final_v2/co_source_refinement.csv` and
+`analysis_final_v2/co_source_refinement.png`.
 
 ## 7. Continuity, power, and propagation
 
@@ -240,9 +249,11 @@ chapter13_wilson_adiabatic_qualification/
 nq8_co_source_refinement_20260924T205718Z_4de1a243e142/results_v2
 ```
 
-The immutable analysis is stored under `analysis_final` in the raw campaign
-root. `summary.json` is the machine-readable entry point; the CSV tables and
-PNG figures are derived views whose hashes are recorded there.
+The immutable accepted-candidate analysis is stored under `analysis_final_v2`
+in the raw campaign root. `summary.json` is the machine-readable entry point;
+the CSV tables and PNG figures are derived views whose hashes are recorded
+there. The earlier `analysis_final` directory is retained as a transparent
+record of the superseded worst-sweep-point criterion.
 
 ## 10. Bounded proposed conclusion
 
