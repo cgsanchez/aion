@@ -636,7 +636,8 @@ def main() -> int:
             path
             for path in output.rglob("*")
             if path.is_file()
-            and path.name not in {"provenance.json", "completed.json", "failure.json"}
+            and path.name
+            not in {"provenance.json", "completed.json", "failure.json", "run.log"}
         )
     )
     provenance = {

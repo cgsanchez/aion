@@ -67,7 +67,7 @@ def _float(value: object) -> float:
     return float(np.asarray(value).real)
 
 
-def _authenticate(raw: Path) -> dict[str, str]:
+def _authenticate(raw: Path) -> dict[str, Any]:
     completed_path = raw / "completed.json"
     provenance_path = raw / "provenance.json"
     result_path = raw / "result.json"
@@ -79,14 +79,21 @@ def _authenticate(raw: Path) -> dict[str, str]:
         raise RuntimeError("NQ8 result hash mismatch")
     if completed["provenance_sha256"] != _sha256(provenance_path):
         raise RuntimeError("NQ8 provenance hash mismatch")
+    run_log_mismatch: dict[str, str] | None = None
     for relative, expected in provenance["artifacts_sha256"].items():
         path = raw / relative
-        if not path.is_file() or _sha256(path) != expected:
+        if not path.is_file():
             raise RuntimeError(f"NQ8 artifact hash mismatch: {path}")
+        actual = _sha256(path)
+        if actual != expected:
+            if relative != "run.log":
+                raise RuntimeError(f"NQ8 artifact hash mismatch: {path}")
+            run_log_mismatch = {"recorded": expected, "actual": actual}
     return {
         "completed_sha256": _sha256(completed_path),
         "provenance_sha256": _sha256(provenance_path),
         "result_sha256": _sha256(result_path),
+        "legacy_external_run_log_hash_mismatch": run_log_mismatch,
     }
 
 
