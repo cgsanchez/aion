@@ -1,0 +1,15 @@
+{
+  "figures": {
+    "nq2_grid_and_auxiliary_convergence.png": "b198bd1c90d7496854192db9eec0cc589728db22e8d339deb418be6b9893340a",
+    "nq4_h3plus_stationary_field_scan.png": "4601fa642382d06a0a3f68f57691b37559ba3f78713e047ef9fc36fa8a9faf65",
+    "nq6_induction_energy_work.png": "6295d26420f23b2a3e9ca8066865d264d961a620bf7f05e8898f5d98ed31d69f",
+    "nq6_timestep_convergence.png": "b49648978e80981aa0c1041c3c89f5625421b313fd111614b46725e2be4c078c",
+    "nq7_domain_metric_boundaries.png": "87ba6efed98153e3f2b4b2af95e91eb532a38829f516a22a9db5ee0c79bc03bd",
+    "nq7_dynamic_model_errors.png": "4e3965944faac94e3ed38b2c24e2696ceace047b6829910a7d3a66da4030919a",
+    "nq7_stationary_field_errors.png": "3b9b11bd968a97bb88b6c211c286b9816a2745349a32bd1e064beb59d68b7df4",
+    "nq8_co_source_refinement.png": "bbc073efe872e52f8616dddbac043f04d9381251bc633a277c8550cf67bb6511",
+    "nq8_transfer_diagnostics.png": "147a1554cd74c8d75124a02b1d9fd4897f6a1469530e8c410607d86f5c06392b"
+  },
+  "schema": "aion.chapter13.nq9-report-figures.v1",
+  "synthesis_completed_sha256": "a6359b8a28e298774ea992d33d111a3ac80009af5ed6a20cf3e48714c447c636"
+}

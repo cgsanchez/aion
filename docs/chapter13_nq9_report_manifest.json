@@ -1,0 +1,38 @@
+{
+  "schema": "aion.chapter13.nq9-report-manifest.v1",
+  "status": "executed_unreviewed",
+  "synthesis": {
+    "root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq9_synthesis_20260924T220919Z_74a493241667",
+    "result_sha256": "4eca05f7fbf774a0a47a6d44146929d35941f7fb013acfa6ace973c5080c6671",
+    "provenance_sha256": "f17444d63cdbe1974353b596d43827291270c663112dbff92f9baba975e66a83",
+    "completed_sha256": "a6359b8a28e298774ea992d33d111a3ac80009af5ed6a20cf3e48714c447c636"
+  },
+  "report": {
+    "entrypoint": "docs/chapter13_nq9_synthesis.md",
+    "entrypoint_sha256": "f0a7fa51a67c731feb77e31553c926bbc92297fc412df06815e509db5ac25c1a",
+    "chapter14_outline": "docs/chapter13_nq9_chapter14_outline.md",
+    "chapter14_outline_sha256": "cd334ce26eeee6634a8588139456d0809b4a00e16f18d8867a8f8cd5eab4549c",
+    "latex_source": "docs/chapter13_nq9_synthesis_report.tex",
+    "latex_source_sha256": "7cb46a94fd8b43f059514570443d50fb5bfbe03db81fed676e9d55b6017260a3",
+    "pdf": "docs/chapter13_nq9_synthesis_report.pdf",
+    "pdf_sha256": "39eaac46d69b179adbc1f2046981ed9d659282e583bd4e3cc3b0df2582f80764",
+    "figure_manifest": "docs/figures/chapter13_nq9/manifest.json",
+    "figure_manifest_sha256": "3f0bb7c4317953ff7a12b3d6fefb9df20f529a0fbc2d4aec8f04454c000b7dd8"
+  },
+  "tools": {
+    "synthesis": "tools/synthesize_chapter13_nq9.py",
+    "synthesis_sha256": "57be40490c5af4e36b005b3f6faf0f0e284c0d40eecf20c3e92a208776fc60ca",
+    "report_assets": "tools/build_chapter13_nq9_report_assets.py",
+    "report_assets_sha256": "5b8b09c64c426d299f89f72ed01e99e23f314735425ae5d495a5467180c4c762"
+  },
+  "compilation": {
+    "command": "/usr/bin/pdflatex -interaction=nonstopmode -halt-on-error chapter13_nq9_synthesis_report.tex",
+    "passes": 2,
+    "final_log_checks": {
+      "fatal_errors": 0,
+      "undefined_references": 0,
+      "missing_files": 0,
+      "overfull_boxes": 0
+    }
+  }
+}
