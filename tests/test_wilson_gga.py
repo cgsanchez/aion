@@ -10,8 +10,10 @@ from aion.config import BackendConfig
 from aion.electromagnetism import (
     AffineMagneticGauge,
     GaussianVectorPotentialVariation,
+    MagneticGaugeKind,
     PerturbedVectorPotential,
     UniformMagneticField,
+    affine_gauge_difference_potential,
 )
 from aion.electronic_structure import (
     AOGridPolicy,
@@ -206,6 +208,82 @@ def test_localized_fixed_history_source_derivative() -> None:
         atol=8.0e-9,
         rtol=8.0e-8,
     )
+
+
+def test_gauge_and_general_coefficient_frame_covariance() -> None:
+    reference, quadrature, evaluator = _prepared(level=2)
+    density = reference.ground_state.density.astype(np.complex128)
+    symmetric = _gauge()
+    landau = AffineMagneticGauge(
+        symmetric.field,
+        kind=MagneticGaugeKind.LANDAU,
+        origin_au=(-0.21, 0.08, -0.19),
+        landau_axis=(
+            symmetric.field.magnetic_field_au[1],
+            -symmetric.field.magnetic_field_au[0],
+            0.0,
+        ),
+    )
+    anchors = reference.core_operators.nuclei.coordinates_au[
+        reference.anchor_topology.ao_to_atom
+    ]
+    gauge_function = np.asarray(
+        affine_gauge_difference_potential(
+            landau,
+            symmetric,
+            anchors,
+            quadrature.backend,
+        )
+    )
+    unitary = np.exp(-1j * gauge_function)
+    landau_density = unitary[:, None] * density * unitary.conj()[None, :]
+    symmetric_result = evaluator.evaluate(density, symmetric)
+    landau_result = evaluator.evaluate(landau_density, landau)
+    np.testing.assert_allclose(
+        landau_result.energy,
+        symmetric_result.energy,
+        atol=3.0e-12,
+        rtol=3.0e-12,
+    )
+    np.testing.assert_allclose(
+        landau_result.lower_xc_matrix,
+        unitary[:, None]
+        * np.asarray(symmetric_result.lower_xc_matrix)
+        * unitary.conj()[None, :],
+        atol=5.0e-12,
+        rtol=5.0e-12,
+    )
+
+    change = np.asarray(
+        ((1.1 + 0.2j, -0.3 + 0.1j), (0.25 - 0.15j, 0.9 - 0.1j)),
+        dtype=np.complex128,
+    )
+    inverse = np.linalg.inv(change)
+    transformed_density = inverse @ density @ inverse.conj().T
+    transformed = evaluator.evaluate(
+        transformed_density,
+        symmetric,
+        coefficient_frame=change,
+    )
+    np.testing.assert_allclose(
+        transformed.energy,
+        symmetric_result.energy,
+        atol=3.0e-12,
+        rtol=3.0e-12,
+    )
+    np.testing.assert_allclose(
+        transformed.lower_xc_matrix,
+        change.conj().T @ symmetric_result.lower_xc_matrix @ change,
+        atol=5.0e-12,
+        rtol=5.0e-12,
+    )
+    np.testing.assert_allclose(
+        transformed.density_gradient,
+        symmetric_result.density_gradient,
+        atol=3.0e-12,
+        rtol=3.0e-12,
+    )
+    assert transformed.coefficient_frame_applied
 
 
 def test_non_gga_functional_is_rejected() -> None:
