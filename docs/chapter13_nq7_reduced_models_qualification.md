@@ -2,9 +2,11 @@
 
 Date: 2026-09-24
 
-Gate state: **executed and analyzed; awaiting user review**
+Gate state: **accepted by the user on 2026-09-24**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq6_review_20260923.json`
+
+Acceptance record: `docs/reviews/chapter13_nq7_review_20260924.json`
 
 Implementation commit: `e11a340c1e0d3049341e85e3dc26b15c7e743a26`
 
@@ -17,9 +19,8 @@ Controlling plan:
 
 This document is the review entry point for NQ7. It distinguishes the
 reduced-action mathematics, reusable implementation, executed calculations,
-and the interpretation proposed for review. It does not accept the gate. A
-separate review record may be created only after the user reviews and accepts
-the evidence.
+and accepted bounded interpretation. The separate review record carries the
+user's acceptance and authorizes NQ8.
 
 ## 1. Question and conclusion proposed for review
 
@@ -406,9 +407,9 @@ Density-resummed C1 remains a reusable, separately labeled diagnostic action.
 This recommendation may be revisited if a later basis/geometry campaign finds
 a reproducible resummation advantage.
 
-## 11. Proposed gate criteria and results
+## 11. Accepted gate criteria and results
 
-All proposed criteria pass, but acceptance remains a user decision.
+All criteria passed and were accepted by the user.
 
 | criterion | result | proposed bound |
 |---|---:|---:|
@@ -501,9 +502,10 @@ NUMEXPR_NUM_THREADS=8 MPLCONFIGDIR=/tmp/aion-nq7-mpl \
 - Spatially nonuniform fields, moving nuclei, periodic systems, GGA,
   pseudopotentials, Maxwell backreaction, longer trajectories, and chemical
   transfer are not qualified here.
-- NQ8 must not begin until this evidence is reviewed and NQ7 is explicitly
-  accepted.
+- This decision authorizes NQ8 but does not pre-accept any GGA or molecular
+  transfer result.
 
-The requested review decision is whether to accept the bounded NQ7 claims,
-the strict-C1 working-action recommendation, and the explicitly retained
-basis-dependent negative result.
+The user accepted the bounded NQ7 claims, the strict-C1 working-action
+recommendation, and the explicitly retained basis-dependent negative result
+on 2026-09-24. The immutable acceptance decision is recorded separately so
+the raw campaign and analysis remain unchanged.

@@ -1,0 +1,81 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ7",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-24T17:49:18Z",
+  "scope": {
+    "implemented_contract": "variational P0, E1, strict-C1, and separately named density-resummed-C1 nonlinear descendants of the accepted exact-Wilson Hartree and restricted pure-LDA Kohn-Sham actions",
+    "fixture": "equilateral H3+ with two electrons in cc-pVDZ/weigend and lda,vwn, stationary fields through Bz=0.06 au, three driven trajectories of length 2.0 au, and an STO-3G/cc-pVDZ/aug-cc-pVDZ reduced-domain stress scan",
+    "included": [
+      "matched stationary energies, mixed and real-space densities, lower matrices, fixed-history source responses, and action-derived power",
+      "exact E1 reduction under a spatially uniform electric field at zero magnetic field",
+      "matched P0, E1, strict-C1, density-resummed-C1, and exact-Wilson nonlinear trajectories",
+      "independent N=16 versus N=32 timestep separation for both C1 actions",
+      "basis-dependent reduced-overlap positivity, conditioning, pointwise-density, and LDA-domain stress tests",
+      "independent exact-Wilson overlap recomputation at every basis/field stress point",
+      "visible retention of all nonpositive reduced-metric failures without clipping, regularization, correction, or projection",
+      "strict-C1 selection as the bounded working approximation because the resummed action showed no systematic accuracy, stability, or domain advantage",
+      "authenticated raw synthesis through immutable accepted NQ4 and NQ6 review records",
+      "deterministically repeated evidence analysis with identical summary hashes",
+      "focused CPU and physical-GPU regression coverage"
+    ]
+  },
+  "effect": "NQ7 accepted and NQ8 pure-GGA extension and broader molecular-transfer qualification authorized",
+  "limitations": [
+    "the accepted physical comparison is bounded to one equilateral H3+ geometry, cc-pVDZ/weigend, one affine gauge representative, one pure LDA functional, the declared field amplitudes, and trajectories of length 2.0 au",
+    "the domain stress scan evaluates a fixed reference coefficient density and brackets sampled failures; it is not a stationary or dynamic campaign at every basis and field and does not locate a continuous critical field",
+    "reduced-metric validity is strongly basis conditioned, with all tested aug-cc-pVDZ reduced levels failing at the first nonzero sampled field Bz=0.03 au while the exact Wilson metric remains positive",
+    "C1 improves states and lower matrices but does not uniformly reduce every finite-field scalar energy or power error coefficient",
+    "density-resummed C1 remains a separately labeled diagnostic action and is not accepted as a repair or safer replacement for strict C1",
+    "the Kohn-Sham source current remains that of the declared auxiliary adiabatic pure-LDA action and is not accepted as an exact interacting transverse current",
+    "spatially nonuniform fields, moving nuclei, periodicity, GGA, pseudopotentials, Maxwell backreaction, longer trajectories, and chemical transfer are not accepted by this decision"
+  ],
+  "implementation_commit": "e11a340c1e0d3049341e85e3dc26b15c7e743a26",
+  "raw_synthesis_commit": "1427fb0",
+  "evidence_analysis_commit": "edeb52e",
+  "evidence_report_commit": "8354827aa560eef758b3518a929978753ecfcfb3",
+  "executed_tests": {
+    "ruff_src_tests_tools": "all checks passed",
+    "mypy_all_source": "no issues in 87 source files",
+    "cpu_fast_suite": "95 passed, 201 deselected",
+    "cpu_focused_integration": "23 passed",
+    "physical_gpu_focused": "1 passed through tools/gpu-python, 1 expected CuPy contraction-engine warning",
+    "authenticated_raw_synthesis": "72/72 stationary, 96/96 domain, and 36/36 dynamic records; all 48 domain failures visible",
+    "deterministic_analysis_repetition": "final and verification summary hashes identical"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq7_reduced_models_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq7_reduced_models_20260923T134902Z_e11a340c1e0d",
+    "accepted_analysis": "analysis_final/summary.json",
+    "result_sha256": "8e76e185a8ea65507e3d18fe36406a04fb56dc521db88b3c582297be09ebdab2",
+    "provenance_sha256": "5f75702dde377966aa00cf71407a35a821628674b7e2314ae6bf9b9563c5cede",
+    "completed_sha256": "5fb933a2fbff5034e828902d9c811337a773ff7bc84ecead16f5079494e918e6",
+    "analysis_summary_sha256": "3e1767e7cedb4caae95695e8fecb25d1b16c3a8b44723f80bf629d80c8b0b2b2"
+  },
+  "accepted_measurements": {
+    "zero_field_energy_error_max_abs_au": 1.936228954946273e-13,
+    "zero_field_mixed_density_relative_error_max": 3.48995656848145e-13,
+    "e1_zero_b_final_density_relative_error_max": 6.583142713193376e-13,
+    "e1_zero_b_energy_trajectory_relative_error_max": 3.735636164925099e-13,
+    "e1_zero_b_power_trajectory_relative_error_max": 1.0029176530733318e-12,
+    "p0_low_field_mixed_density_order": 1.0000246668526425,
+    "strict_c1_low_field_mixed_density_order": 1.9999573652838674,
+    "stationary_c1_density_improvement_factor_min": 13.427868248519827,
+    "dynamic_c1_improvement_over_best_p0_e1_min": 5.692051146738477,
+    "c1_dynamic_final_density_relative_error_max": 0.001555692909272571,
+    "c1_dynamic_model_to_timestep_ratio_min": 6788.0079626380575,
+    "c1_dynamic_power_balance_residual_max_au": 4.8620882774958905e-11,
+    "exact_domain_metric_minimum_eigenvalue": 0.00015713095838289774,
+    "exact_domain_metric_condition_number_max": 39307.62984784087,
+    "reduced_domain_failure_count": 48,
+    "lda_failure_count_where_reduced_metric_valid": 0,
+    "metric_correction_count": 0
+  },
+  "accepted_recommendation": {
+    "working_action": "strict_c1",
+    "reason": "strict C1 is the controlled degree-one variational action, while density-resummed C1 showed the same sampled domain and no systematic numerical advantage"
+  },
+  "raw_artifact_policy": "The completed raw campaign and both identical analysis passes remain immutable; this separate review record carries the user's acceptance decision."
+}
