@@ -367,13 +367,18 @@ def _checks(
         checks[field] = {"value": value, "limit": limit, "passed": value <= limit}
     checks["co_source_best_total_absolute_residual"] = {
         "value": source["best_total_absolute_residual"],
-        "limit": 5.0e-7,
-        "passed": source["best_total_absolute_residual"] <= 5.0e-7,
+        "limit": 5.0e-8,
+        "passed": source["best_total_absolute_residual"] <= 5.0e-8,
     }
-    checks["co_source_coarsest_pair_order"] = {
-        "value": source["coarsest_pair_observed_order"],
-        "minimum": 1.8,
-        "passed": source["coarsest_pair_observed_order"] >= 1.8,
+    checks["co_source_finite_component_composition"] = {
+        "value": source["maximum_finite_component_sum_residual"],
+        "limit": 1.0e-12,
+        "passed": source["maximum_finite_component_sum_residual"] <= 1.0e-12,
+    }
+    checks["co_source_analytic_component_composition"] = {
+        "value": source["maximum_analytic_component_sum_residual"],
+        "limit": 1.0e-12,
+        "passed": source["maximum_analytic_component_sum_residual"] <= 1.0e-12,
     }
     checks["positive_metric"] = {
         "value": min(float(row["metric_minimum_eigenvalue"]) for row in systems),
