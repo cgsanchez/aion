@@ -2,18 +2,20 @@
 
 Date: 2026-09-24
 
-Gate state: **executed and analyzed; awaiting user review**
+Gate state: **accepted by the user on 2026-09-24**
 
 Accepted prerequisite: `docs/reviews/chapter13_nq7_review_20260924.json`
+
+Acceptance record: `docs/reviews/chapter13_nq8_review_20260924.json`
 
 Controlling plan:
 `/home/cgs/00_WORK/Projection_Full_Formalism/REVIEW/implementation/aion_chapter_13_numerical_qualification_plan.md`
 
-This document is the review entry point for NQ8. It distinguishes the
+This document is the accepted review entry point for NQ8. It distinguishes the
 mathematical GGA action, reusable implementation, executed tests, immutable
 raw campaign, follow-up numerical-floor refinement, and proposed scientific
-interpretation. It does not record acceptance; a separate review record must
-carry the user's decision.
+interpretation. The separate review record carries the user's acceptance and
+authorizes NQ9.
 
 ## 1. Mathematical contract
 
@@ -270,5 +272,6 @@ review:
 This evidence does not qualify hybrids, meta-GGAs, nonlocal correlation,
 moving nuclei, pseudopotentials, periodic systems, spatially nonuniform
 propagated fields, Maxwell backreaction, reduced-model GGA expansions, or an
-exact interacting transverse current. NQ8 remains unaccepted until the user
-reviews the final authenticated analysis and records a decision.
+exact interacting transverse current. The user accepted this bounded
+conclusion on 2026-09-24. The separate review record preserves that decision
+without altering the immutable raw evidence.

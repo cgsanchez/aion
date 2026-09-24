@@ -1,0 +1,79 @@
+{
+  "schema": "aion.chapter13-gate-review",
+  "version": "1.0.0",
+  "gate": "NQ8",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-24T22:02:03Z",
+  "scope": {
+    "implemented_contract": "exact straight-Wilson RI-Hartree plus adiabatic pure-PBE GGA action, weak lower matrix, fixed-history source derivative, stationary equation, weak continuity and mechanical-power identities, and nonlinear mixed-density propagation",
+    "fixtures": "equilateral H3+ and closed-shell CO in cc-pVDZ/weigend on unpruned level-4 PySCF grids, including a localized-source refinement for CO",
+    "included": [
+      "one declared quadrature--Wilson GGA realization distinct from the accepted LDA realization",
+      "PBE energy, weak lower matrix, and source derivative from the same discrete quadrature action",
+      "density and density-gradient matter derivatives in unrestricted complex coefficient directions",
+      "affine and localized electromagnetic source directions including the gradient-density response",
+      "zero-field same-grid PySCF/libxc comparisons",
+      "magnetic-gauge representative covariance and general nonunitary coefficient-frame covariance",
+      "stationary, continuity, instantaneous-power, and short nonlinear-propagation transfer from H3+ to CO",
+      "explicit isolation of the deterministic CO RI-Hartree finite-difference floor",
+      "CPU regression and complete physical-GPU regression coverage",
+      "immutable retention of the superseded preliminary analysis criterion"
+    ]
+  },
+  "effect": "NQ8 accepted and NQ9 final synthesis and Chapter 14 handoff authorized",
+  "limitations": [
+    "the accepted GGA claim is bounded to pure PBE, cc-pVDZ/weigend, the declared level-4 grids, fields, source directions, and propagation window",
+    "the CO source derivative is limited by deterministic subtraction in separately evaluated RI-Hartree energies; its best complete residual is 7.39e-9 au",
+    "the accepted trajectory transfer spans only 0.2 au and is not a long-time stability or spectroscopy claim",
+    "reduced P0, E1, strict-C1, and density-resummed GGA actions were deliberately not derived or qualified",
+    "hybrids, meta-GGAs, nonlocal correlation, pseudopotentials, moving nuclei, periodicity, spatially nonuniform propagated fields, Maxwell backreaction, and exact interacting transverse currents remain outside scope",
+    "the final shell-appended raw run.log differs from the internal provenance hash; all numerical artifacts authenticate and the log is excluded from scientific evidence"
+  ],
+  "implementation_commit": "79dce53",
+  "campaign_commit": "57eb8a1",
+  "source_refinement_commit": "4de1a24",
+  "analysis_commit": "09abf44",
+  "evidence_report_commit": "cba8b0e",
+  "executed_tests": {
+    "ruff_all": "all checks passed",
+    "mypy_all_source": "no issues in 88 source files",
+    "cpu_fast_suite": "95 passed, 213 deselected",
+    "cpu_full_integration": "182 passed, 126 deselected",
+    "physical_gpu_complete": "31 passed, 277 deselected, 1 expected CuPy contraction-engine warning",
+    "authenticated_transfer_campaign": "H3+ and CO completed with authenticated numerical artifacts",
+    "authenticated_source_refinement": "seven CO central-difference steps, with bitwise-identical repeated transition-region evaluations",
+    "final_analysis": "all 17 proposed checks passed"
+  },
+  "evidence": {
+    "review_entry_point": "docs/chapter13_nq8_gga_transfer_qualification.md",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq8_gga_transfer_20260924T180834Z_57eb8a1b538d",
+    "source_refinement_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/chapter13_wilson_adiabatic_qualification/nq8_co_source_refinement_20260924T205718Z_4de1a243e142/results_v2",
+    "accepted_analysis": "analysis_final_v2/summary.json",
+    "result_sha256": "8c9117b7eefd5376e0162cfe133ff6ad08e6c6746bc736bbf56aa557853ba84e",
+    "provenance_sha256": "ba975d47d3c4515822c1d331fdcb6698d6d266669a455b92cc4a2fc9aee78521",
+    "completed_sha256": "bf466c132b4ce4c6b6204aedf82d8d6addd1e6966bba75eb0b12f87f287722e4",
+    "refinement_result_sha256": "1e8401fa8bfc69451c05c4aeff5e9253db46ab060201dbe340d0dbb62f6e2a65",
+    "refinement_provenance_sha256": "964aa7a6b9822a13e2ff5b7d16857821a91cac9ce136a8ef7fc2091857e88bfd",
+    "refinement_completed_sha256": "ecaef5293d5ee4fa0774afc192ae411c728c6a038ef5658cffed8f410a56869e",
+    "analysis_summary_sha256": "a79d7ec8099f57d5bdf4f67bf8dfe676e2871915f454f6d2725b883914224d86",
+    "analysis_completed_sha256": "7b493724c9f1fb0696a9ac1f32905e10e91dc52a9dd3ba389472154de64746b4"
+  },
+  "accepted_measurements": {
+    "same_grid_energy_residual_max_au": 5.329070518200751e-15,
+    "same_grid_lower_relative_residual_max": 4.1367060148141315e-16,
+    "stationary_reference_energy_residual_max_au": 3.77760159153695e-7,
+    "field_orbital_residual_max": 3.922022964054481e-12,
+    "co_source_best_total_absolute_residual": 7.388573048956043e-9,
+    "continuity_finite_region_residual_max": 2.3664463327385624e-13,
+    "continuity_global_residual_max": 6.433805272513374e-19,
+    "instantaneous_power_residual_max_au": 3.5580615060162857e-14,
+    "fine_work_energy_residual_max_au": 4.0642249132043467e-10,
+    "final_density_refinement_difference_max": 2.0142605703645053e-8,
+    "fine_particle_number_drift_max": 1.2434497875801753e-14,
+    "fine_hermiticity_residual_max": 1.2303913365106389e-15,
+    "fine_nonlinear_residual_max": 2.445321789751909e-13,
+    "metric_minimum_eigenvalue": 0.021731898092399705
+  },
+  "raw_artifact_policy": "The completed raw campaign, source refinement, failed preliminary analysis, and final accepted-candidate analysis remain immutable; this separate review record carries the user's acceptance decision."
+}
