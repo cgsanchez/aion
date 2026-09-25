@@ -10,6 +10,10 @@ from aion.errors import IncompatibleSchemaVersionError, IncompleteArtifactError,
 from aion.io import (
     REFERENCE_SCHEMA,
     TRAJECTORY_SCHEMA,
+    WILSON_CHECKPOINT_SCHEMA,
+    WILSON_STATIONARY_STATE_SCHEMA,
+    WILSON_TRAJECTORY_SCHEMA,
+    ArtifactSchema,
     SchemaVersion,
     stamp_artifact,
     validate_artifact,
@@ -30,6 +34,26 @@ def test_reference_and_trajectory_schema_fixtures_validate(tmp_path: Path) -> No
     trajectory = stamped(tmp_path / "trajectory.h5", trajectory=True)
     assert validate_artifact(reference).schema is REFERENCE_SCHEMA
     assert validate_artifact(trajectory).schema is TRAJECTORY_SCHEMA
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        WILSON_STATIONARY_STATE_SCHEMA,
+        WILSON_TRAJECTORY_SCHEMA,
+        WILSON_CHECKPOINT_SCHEMA,
+    ],
+)
+def test_density_native_wilson_schema_declarations_validate(
+    tmp_path: Path,
+    schema: ArtifactSchema,
+) -> None:
+    path = tmp_path / f"{schema.kind.value}.h5"
+    with h5py.File(path, "w") as handle:
+        stamp_artifact(handle, schema, complete=True, artifact_id="wilson-fixture")
+    header = validate_artifact(path, expected_schema=schema)
+    assert header.schema is schema
+    assert header.schema.name.startswith("aion.wilson-")
 
 
 def test_compatible_patch_is_accepted_and_new_major_fails_clearly(

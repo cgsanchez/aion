@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any, Protocol
 
 import numpy as np
 from scipy.linalg import eigh
 
-from aion.config import BackendKind
+from aion.config import BackendKind, WilsonStationaryBranch as WilsonStationaryBranch
 from aion.electromagnetism import AffineMagneticGauge
 from aion.electronic_structure.adiabatic import expectation, hermitian_part
 from aion.electronic_structure.ao_quadrature import AOQuadrature
@@ -37,14 +36,6 @@ from aion.electronic_structure.wilson_lda import (
     prepare_wilson_lda,
 )
 from aion.errors import ConfigurationError, FormulationError, UnsupportedConfigurationError
-
-
-class WilsonStationaryBranch(StrEnum):
-    """Implemented exact-Wilson nonlinear stationary branches."""
-
-    HARTREE = "hartree"
-    KOHN_SHAM_LDA = "kohn_sham_lda"
-    KOHN_SHAM_GGA = "kohn_sham_gga"
 
 
 @dataclass(frozen=True, slots=True)

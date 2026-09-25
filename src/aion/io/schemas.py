@@ -25,6 +25,9 @@ class ArtifactKind(StrEnum):
     CASIDA = "casida"
     KICK_SPECTRUM = "kick_spectrum"
     MAGNETIC_BENCHMARK = "magnetic_benchmark"
+    WILSON_STATIONARY_STATE = "wilson_stationary_state"
+    WILSON_TRAJECTORY = "wilson_trajectory"
+    WILSON_CHECKPOINT = "wilson_checkpoint"
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +113,57 @@ MAGNETIC_BENCHMARK_SCHEMA = ArtifactSchema(
     ),
 )
 
+WILSON_STATIONARY_STATE_SCHEMA = ArtifactSchema(
+    name="aion.wilson-stationary-state",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.WILSON_STATIONARY_STATE,
+    required_groups=(
+        "meta",
+        "configuration",
+        "reference",
+        "source",
+        "state",
+        "observables",
+        "diagnostics",
+    ),
+)
+
+WILSON_TRAJECTORY_SCHEMA = ArtifactSchema(
+    name="aion.wilson-trajectory",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.WILSON_TRAJECTORY,
+    required_groups=(
+        "meta",
+        "configuration",
+        "reference",
+        "stationary_state",
+        "time",
+        "source",
+        "observables",
+        "diagnostics",
+        "events",
+        "restart",
+    ),
+)
+
+WILSON_CHECKPOINT_SCHEMA = ArtifactSchema(
+    name="aion.wilson-checkpoint",
+    version=SchemaVersion(1, 0, 0),
+    kind=ArtifactKind.WILSON_CHECKPOINT,
+    required_groups=(
+        "meta",
+        "configuration",
+        "reference",
+        "stationary_state",
+        "time",
+        "source",
+        "state",
+        "observers",
+        "events",
+        "restart",
+    ),
+)
+
 SCHEMAS: dict[str, ArtifactSchema] = {
     schema.name: schema
     for schema in (
@@ -120,6 +174,9 @@ SCHEMAS: dict[str, ArtifactSchema] = {
         CASIDA_SCHEMA,
         KICK_SPECTRUM_SCHEMA,
         MAGNETIC_BENCHMARK_SCHEMA,
+        WILSON_STATIONARY_STATE_SCHEMA,
+        WILSON_TRAJECTORY_SCHEMA,
+        WILSON_CHECKPOINT_SCHEMA,
     )
 }
 

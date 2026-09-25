@@ -15,12 +15,16 @@ from aion.config.models import (
     CONFIG_SCHEMA_VERSION,
     REFERENCE_CONFIG_SCHEMA,
     SIMULATION_CONFIG_SCHEMA,
+    WILSON_SIMULATION_CONFIG_SCHEMA,
+    WILSON_STATIONARY_CONFIG_SCHEMA,
+    AffineElectromagneticSourceConfig,
     AionConfig,
     AtomConfig,
     BackendConfig,
     BackendKind,
     CompiledSourceConfig,
     ElectronicStructureConfig,
+    ExactWilsonActionConfig,
     FormulationConfig,
     FormulationKind,
     GaugeRepresentation,
@@ -35,6 +39,8 @@ from aion.config.models import (
     PropagationConfig,
     PythonProviderSourceConfig,
     RationalApproximation,
+    ReducedWilsonActionConfig,
+    ReducedWilsonLevel,
     ReferenceConfig,
     ReferenceLinkConfig,
     ReferenceOutputConfig,
@@ -43,6 +49,21 @@ from aion.config.models import (
     SourceKind,
     SpinTreatment,
     ValidationConfig,
+    WilsonActionConfig,
+    WilsonActionKind,
+    WilsonGridKind,
+    WilsonGridPruning,
+    WilsonIntegratorKind,
+    WilsonMagneticGaugeKind,
+    WilsonNumericsConfig,
+    WilsonPropagationConfig,
+    WilsonSimulationConfig,
+    WilsonSourceKind,
+    WilsonStationaryBranch,
+    WilsonStationaryConfig,
+    WilsonStationaryOutputConfig,
+    WilsonStationaryPolicyConfig,
+    WilsonStationaryStateLinkConfig,
     XCFamily,
     ZeroSourceConfig,
 )
@@ -90,6 +111,10 @@ def loads_config(text: str) -> ResolvedConfig:
         config: AionConfig = _parse_reference(root)
     elif schema == SIMULATION_CONFIG_SCHEMA:
         config = _parse_simulation(root)
+    elif schema == WILSON_STATIONARY_CONFIG_SCHEMA:
+        config = _parse_wilson_stationary(root)
+    elif schema == WILSON_SIMULATION_CONFIG_SCHEMA:
+        config = _parse_wilson_simulation(root)
     else:
         raise ConfigurationError(f"unsupported configuration schema {schema!r}")
     return ResolvedConfig(
@@ -312,6 +337,298 @@ def _parse_simulation(root: Mapping[str, object]) -> SimulationConfig:
         events=tuple(kicks),
         validation=_parse_validation(root.get("validation", {})),
         output=_parse_output(root.get("output", {})),
+        metadata=_parse_metadata(root.get("metadata", {})),
+    )
+
+
+def _parse_reference_link(value: object, path: str = "reference") -> ReferenceLinkConfig:
+    data = _table(value, path)
+    _fields(data, path, {"fingerprint_sha256", "path"}, {"fingerprint_sha256"})
+    return ReferenceLinkConfig(
+        fingerprint_sha256=_string(
+            data["fingerprint_sha256"],
+            f"{path}.fingerprint_sha256",
+        ),
+        path=Path(_string(data.get("path", "reference.h5"), f"{path}.path")),
+    )
+
+
+def _parse_wilson_action(value: object) -> WilsonActionConfig:
+    data = _table(value, "action")
+    kind = _enum(WilsonActionKind, data.get("kind"), "action.kind")
+    if kind is WilsonActionKind.EXACT:
+        _fields(data, "action", {"kind", "branch"}, {"kind", "branch"})
+        return ExactWilsonActionConfig(
+            _enum(WilsonStationaryBranch, data["branch"], "action.branch")
+        )
+    _fields(
+        data,
+        "action",
+        {"kind", "branch", "level"},
+        {"kind", "branch", "level"},
+    )
+    return ReducedWilsonActionConfig(
+        _enum(WilsonStationaryBranch, data["branch"], "action.branch"),
+        _enum(ReducedWilsonLevel, data["level"], "action.level"),
+    )
+
+
+def _parse_wilson_numerics(value: object) -> WilsonNumericsConfig:
+    data = _table(value, "numerics")
+    required = {
+        "grid_kind",
+        "grid_pruning",
+        "block_size",
+        "auxiliary_basis",
+        "ri_relative_threshold",
+        "ri_absolute_threshold",
+    }
+    _fields(
+        data,
+        "numerics",
+        required | {"grid_level", "ri_maximum_rank", "memory_budget_bytes"},
+        required,
+    )
+    return WilsonNumericsConfig(
+        grid_kind=_enum(WilsonGridKind, data["grid_kind"], "numerics.grid_kind"),
+        grid_level=(
+            _integer(data["grid_level"], "numerics.grid_level") if "grid_level" in data else None
+        ),
+        grid_pruning=_enum(
+            WilsonGridPruning,
+            data["grid_pruning"],
+            "numerics.grid_pruning",
+        ),
+        block_size=_integer(data["block_size"], "numerics.block_size"),
+        auxiliary_basis=_string(data["auxiliary_basis"], "numerics.auxiliary_basis"),
+        ri_relative_threshold=_number(
+            data["ri_relative_threshold"],
+            "numerics.ri_relative_threshold",
+        ),
+        ri_absolute_threshold=_number(
+            data["ri_absolute_threshold"],
+            "numerics.ri_absolute_threshold",
+        ),
+        ri_maximum_rank=(
+            _integer(data["ri_maximum_rank"], "numerics.ri_maximum_rank")
+            if "ri_maximum_rank" in data
+            else None
+        ),
+        memory_budget_bytes=(
+            _integer(data["memory_budget_bytes"], "numerics.memory_budget_bytes")
+            if "memory_budget_bytes" in data
+            else None
+        ),
+    )
+
+
+def _parse_affine_electromagnetic_source(
+    value: object,
+) -> AffineElectromagneticSourceConfig:
+    data = _table(value, "source")
+    required = {
+        "kind",
+        "electric_field_origin_offset_au",
+        "magnetic_field_reference_au",
+        "magnetic_field_rate_au",
+        "magnetic_reference_time_au",
+        "magnetic_gauge",
+        "electric",
+    }
+    _fields(data, "source", required | {"landau_axis"}, required)
+    kind = _enum(WilsonSourceKind, data["kind"], "source.kind")
+    if kind is not WilsonSourceKind.AFFINE_ELECTROMAGNETIC:
+        raise AssertionError("unhandled Wilson source kind")
+    electric = _parse_source(data["electric"])
+    if not isinstance(electric, ZeroSourceConfig | Sin2VectorPotentialPulseConfig):
+        raise ConfigurationError("source.electric must be zero or sin2_vector_potential_pulse")
+    return AffineElectromagneticSourceConfig(
+        electric=electric,
+        electric_field_origin_offset_au=vector3(
+            data["electric_field_origin_offset_au"],
+            "source.electric_field_origin_offset_au",
+        ),
+        magnetic_field_reference_au=vector3(
+            data["magnetic_field_reference_au"],
+            "source.magnetic_field_reference_au",
+        ),
+        magnetic_field_rate_au=vector3(
+            data["magnetic_field_rate_au"],
+            "source.magnetic_field_rate_au",
+        ),
+        magnetic_reference_time_au=_number(
+            data["magnetic_reference_time_au"],
+            "source.magnetic_reference_time_au",
+        ),
+        magnetic_gauge=_enum(
+            WilsonMagneticGaugeKind,
+            data["magnetic_gauge"],
+            "source.magnetic_gauge",
+        ),
+        landau_axis=(
+            vector3(data["landau_axis"], "source.landau_axis") if "landau_axis" in data else None
+        ),
+    )
+
+
+def _parse_wilson_stationary_policy(value: object) -> WilsonStationaryPolicyConfig:
+    data = _table(value, "stationary")
+    fields = {
+        "maximum_iterations",
+        "density_tolerance",
+        "orbital_tolerance",
+        "energy_tolerance_au",
+        "damping",
+        "diis_start_iteration",
+        "diis_space",
+    }
+    _fields(data, "stationary", fields, fields)
+    return WilsonStationaryPolicyConfig(
+        maximum_iterations=_integer(
+            data["maximum_iterations"],
+            "stationary.maximum_iterations",
+        ),
+        density_tolerance=_number(
+            data["density_tolerance"],
+            "stationary.density_tolerance",
+        ),
+        orbital_tolerance=_number(
+            data["orbital_tolerance"],
+            "stationary.orbital_tolerance",
+        ),
+        energy_tolerance_au=_number(
+            data["energy_tolerance_au"],
+            "stationary.energy_tolerance_au",
+        ),
+        damping=_number(data["damping"], "stationary.damping"),
+        diis_start_iteration=_integer(
+            data["diis_start_iteration"],
+            "stationary.diis_start_iteration",
+        ),
+        diis_space=_integer(data["diis_space"], "stationary.diis_space"),
+    )
+
+
+def _parse_wilson_propagation(value: object) -> WilsonPropagationConfig:
+    data = _table(value, "propagation")
+    fields = {
+        "start_time_au",
+        "time_step_au",
+        "intervals",
+        "integrator",
+        "rational_approximation",
+        "nonlinear_tolerance",
+        "maximum_iterations",
+    }
+    _fields(
+        data,
+        "propagation",
+        fields,
+        fields - {"start_time_au"},
+    )
+    return WilsonPropagationConfig(
+        time_grid=FixedTimeGrid(
+            _number(data.get("start_time_au", 0.0), "propagation.start_time_au"),
+            _number(data["time_step_au"], "propagation.time_step_au"),
+            _integer(data["intervals"], "propagation.intervals"),
+        ),
+        integrator=_enum(
+            WilsonIntegratorKind,
+            data["integrator"],
+            "propagation.integrator",
+        ),
+        rational_approximation=_enum(
+            RationalApproximation,
+            data["rational_approximation"],
+            "propagation.rational_approximation",
+        ),
+        nonlinear_tolerance=_number(
+            data["nonlinear_tolerance"],
+            "propagation.nonlinear_tolerance",
+        ),
+        maximum_iterations=_integer(
+            data["maximum_iterations"],
+            "propagation.maximum_iterations",
+        ),
+    )
+
+
+def _parse_wilson_stationary(root: Mapping[str, object]) -> WilsonStationaryConfig:
+    fields = {
+        "schema",
+        "schema_version",
+        "reference",
+        "action",
+        "numerics",
+        "source",
+        "source_time_au",
+        "stationary",
+        "backend",
+        "output",
+        "metadata",
+    }
+    _fields(root, "input", fields, fields - {"metadata"})
+    output = _table(root["output"], "output")
+    _fields(output, "output", {"artifact_path"}, {"artifact_path"})
+    return WilsonStationaryConfig(
+        reference=_parse_reference_link(root["reference"]),
+        action=_parse_wilson_action(root["action"]),
+        numerics=_parse_wilson_numerics(root["numerics"]),
+        source=_parse_affine_electromagnetic_source(root["source"]),
+        source_time_au=_number(root["source_time_au"], "source_time_au"),
+        stationary=_parse_wilson_stationary_policy(root["stationary"]),
+        backend=_parse_backend(root["backend"]),
+        output=WilsonStationaryOutputConfig(
+            Path(_string(output["artifact_path"], "output.artifact_path"))
+        ),
+        metadata=_parse_metadata(root.get("metadata", {})),
+    )
+
+
+def _parse_wilson_simulation(root: Mapping[str, object]) -> WilsonSimulationConfig:
+    fields = {
+        "schema",
+        "schema_version",
+        "reference",
+        "stationary_state",
+        "action",
+        "numerics",
+        "source",
+        "propagation",
+        "backend",
+        "validation",
+        "output",
+        "metadata",
+    }
+    _fields(
+        root,
+        "input",
+        fields,
+        fields - {"validation", "metadata"},
+    )
+    state = _table(root["stationary_state"], "stationary_state")
+    _fields(
+        state,
+        "stationary_state",
+        {"fingerprint_sha256", "path"},
+        {"fingerprint_sha256", "path"},
+    )
+    return WilsonSimulationConfig(
+        reference=_parse_reference_link(root["reference"]),
+        stationary_state=WilsonStationaryStateLinkConfig(
+            _string(
+                state["fingerprint_sha256"],
+                "stationary_state.fingerprint_sha256",
+            ),
+            Path(_string(state["path"], "stationary_state.path")),
+        ),
+        action=_parse_wilson_action(root["action"]),
+        numerics=_parse_wilson_numerics(root["numerics"]),
+        source=_parse_affine_electromagnetic_source(root["source"]),
+        propagation=_parse_wilson_propagation(root["propagation"]),
+        backend=_parse_backend(root["backend"]),
+        validation=_parse_validation(root.get("validation", {})),
+        output=_parse_output(root["output"]),
         metadata=_parse_metadata(root.get("metadata", {})),
     )
 

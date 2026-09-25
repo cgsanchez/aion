@@ -10,10 +10,14 @@ from pathlib import Path
 from typing import cast
 
 from aion.config import (
+    AionConfig,
     CompiledSourceConfig,
     ReferenceConfig,
     ReferenceOutputConfig,
     SimulationConfig,
+    WilsonSimulationConfig,
+    WilsonStationaryConfig,
+    WilsonStationaryOutputConfig,
     dumps_config,
     load_config,
 )
@@ -145,9 +149,9 @@ def _configuration_command(command: str, args: argparse.Namespace) -> int:
 
 
 def _resolve_operational_paths(
-    config: ReferenceConfig | SimulationConfig,
+    config: AionConfig,
     base: Path,
-) -> ReferenceConfig | SimulationConfig:
+) -> AionConfig:
     """Resolve only path-like execution fields relative to the input document."""
 
     def resolve(path: Path) -> Path:
@@ -158,6 +162,22 @@ def _resolve_operational_paths(
         return replace(
             config,
             output=ReferenceOutputConfig(resolve(config.output.artifact_path)),
+        )
+    if isinstance(config, WilsonStationaryConfig):
+        return replace(
+            config,
+            reference=replace(config.reference, path=resolve(config.reference.path)),
+            output=WilsonStationaryOutputConfig(resolve(config.output.artifact_path)),
+        )
+    if isinstance(config, WilsonSimulationConfig):
+        return replace(
+            config,
+            reference=replace(config.reference, path=resolve(config.reference.path)),
+            stationary_state=replace(
+                config.stationary_state,
+                path=resolve(config.stationary_state.path),
+            ),
+            output=replace(config.output, directory=resolve(config.output.directory)),
         )
     source = config.source
     if isinstance(source, CompiledSourceConfig):

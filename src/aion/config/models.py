@@ -25,6 +25,8 @@ from aion.errors import ConfigurationError, UnsupportedConfigurationError
 REFERENCE_CONFIG_SCHEMA = "aion.reference-input"
 ONE_ELECTRON_REFERENCE_CONFIG_SCHEMA = "aion.one-electron-ao-reference-input"
 SIMULATION_CONFIG_SCHEMA = "aion.simulation-input"
+WILSON_STATIONARY_CONFIG_SCHEMA = "aion.wilson-stationary-input"
+WILSON_SIMULATION_CONFIG_SCHEMA = "aion.wilson-simulation-input"
 CONFIG_SCHEMA_VERSION = "1.0.0"
 
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -84,6 +86,47 @@ class SourceKind(StrEnum):
     SIN2_VECTOR_POTENTIAL_PULSE = "sin2_vector_potential_pulse"
     COMPILED = "compiled"
     PYTHON_PROVIDER = "python_provider"
+
+
+class WilsonActionKind(StrEnum):
+    EXACT = "exact_wilson"
+    REDUCED = "reduced_wilson"
+
+
+class WilsonStationaryBranch(StrEnum):
+    HARTREE = "hartree"
+    KOHN_SHAM_LDA = "kohn_sham_lda"
+    KOHN_SHAM_GGA = "kohn_sham_gga"
+
+
+class ReducedWilsonLevel(StrEnum):
+    P0 = "p0"
+    E1 = "e1"
+    STRICT_C1 = "strict_c1"
+    DENSITY_RESUMMED_C1 = "density_resummed_c1"
+
+
+class WilsonGridKind(StrEnum):
+    REFERENCE = "reference"
+    QUALIFICATION = "qualification"
+
+
+class WilsonGridPruning(StrEnum):
+    NONE = "none"
+    NWCHEM = "nwchem"
+
+
+class WilsonMagneticGaugeKind(StrEnum):
+    SYMMETRIC = "symmetric"
+    LANDAU = "landau"
+
+
+class WilsonIntegratorKind(StrEnum):
+    NONLINEAR_GAUSS_MAGNUS = "nonlinear_gauss_magnus"
+
+
+class WilsonSourceKind(StrEnum):
+    AFFINE_ELECTROMAGNETIC = "affine_electromagnetic"
 
 
 def _identifier(value: str, path: str) -> str:
@@ -501,6 +544,122 @@ class FormulationConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactWilsonActionConfig:
+    """Complete straight-Wilson action and nonlinear closure branch."""
+
+    branch: WilsonStationaryBranch
+    kind: WilsonActionKind = field(default=WilsonActionKind.EXACT, init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.branch, WilsonStationaryBranch):
+            raise ConfigurationError("action.branch is invalid")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {"kind": self.kind.value, "branch": self.branch.value}
+
+
+@dataclass(frozen=True, slots=True)
+class ReducedWilsonActionConfig:
+    """One explicitly selected action-level Wilson approximation."""
+
+    branch: WilsonStationaryBranch
+    level: ReducedWilsonLevel
+    kind: WilsonActionKind = field(default=WilsonActionKind.REDUCED, init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.branch, WilsonStationaryBranch):
+            raise ConfigurationError("action.branch is invalid")
+        if not isinstance(self.level, ReducedWilsonLevel):
+            raise ConfigurationError("action.level is invalid")
+        if self.branch is WilsonStationaryBranch.KOHN_SHAM_GGA:
+            raise UnsupportedConfigurationError(
+                "reduced Wilson GGA requires a separately derived and qualified action"
+            )
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "kind": self.kind.value,
+            "branch": self.branch.value,
+            "level": self.level.value,
+        }
+
+
+type WilsonActionConfig = ExactWilsonActionConfig | ReducedWilsonActionConfig
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonNumericsConfig:
+    """Explicit quadrature, blocking, auxiliary, and RI-rank realization."""
+
+    grid_kind: WilsonGridKind
+    grid_level: int | None
+    grid_pruning: WilsonGridPruning
+    block_size: int
+    auxiliary_basis: str
+    ri_relative_threshold: float
+    ri_absolute_threshold: float
+    ri_maximum_rank: int | None
+    memory_budget_bytes: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.grid_kind, WilsonGridKind):
+            raise ConfigurationError("numerics.grid_kind is invalid")
+        if not isinstance(self.grid_pruning, WilsonGridPruning):
+            raise ConfigurationError("numerics.grid_pruning is invalid")
+        if self.grid_kind is WilsonGridKind.REFERENCE:
+            if self.grid_level is not None:
+                raise ConfigurationError("reference Wilson grid does not accept grid_level")
+            if self.grid_pruning is not WilsonGridPruning.NONE:
+                raise ConfigurationError("reference Wilson grid does not select pruning")
+        elif (
+            isinstance(self.grid_level, bool)
+            or not isinstance(self.grid_level, int)
+            or self.grid_level < 0
+        ):
+            raise ConfigurationError(
+                "qualification Wilson grid_level must be a nonnegative integer"
+            )
+        if isinstance(self.block_size, bool) or not isinstance(self.block_size, int):
+            raise ConfigurationError("numerics.block_size must be an integer")
+        if self.block_size < 1:
+            raise ConfigurationError("numerics.block_size must be positive")
+        if not isinstance(self.auxiliary_basis, str) or not self.auxiliary_basis.strip():
+            raise ConfigurationError("numerics.auxiliary_basis must be explicit")
+        for name in ("ri_relative_threshold", "ri_absolute_threshold"):
+            value = finite_float(getattr(self, name), f"numerics.{name}")
+            if value < 0.0:
+                raise ConfigurationError(f"numerics.{name} cannot be negative")
+            object.__setattr__(self, name, value)
+        if self.ri_relative_threshold == 0.0 and self.ri_absolute_threshold == 0.0:
+            raise ConfigurationError("at least one RI metric threshold must be positive")
+        if self.ri_maximum_rank is not None and (
+            isinstance(self.ri_maximum_rank, bool)
+            or not isinstance(self.ri_maximum_rank, int)
+            or self.ri_maximum_rank < 1
+        ):
+            raise ConfigurationError("numerics.ri_maximum_rank must be positive or omitted")
+        if self.memory_budget_bytes is not None and (
+            isinstance(self.memory_budget_bytes, bool)
+            or not isinstance(self.memory_budget_bytes, int)
+            or self.memory_budget_bytes < 1
+        ):
+            raise ConfigurationError("numerics.memory_budget_bytes must be positive or omitted")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "grid_kind": self.grid_kind.value,
+            "grid_level": self.grid_level,
+            "grid_pruning": self.grid_pruning.value,
+            "block_size": self.block_size,
+            "memory_budget_bytes": self.memory_budget_bytes,
+            "auxiliary_basis": self.auxiliary_basis,
+            "ri_relative_threshold": self.ri_relative_threshold,
+            "ri_absolute_threshold": self.ri_absolute_threshold,
+            "ri_maximum_rank": self.ri_maximum_rank,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ZeroSourceConfig:
     kind: SourceKind = field(default=SourceKind.ZERO, init=False)
 
@@ -618,6 +777,90 @@ def source_scientific_mapping(source: SourceConfig) -> dict[str, object]:
     if isinstance(source, CompiledSourceConfig):
         return source.scientific_mapping()
     return source.as_mapping()
+
+
+type WilsonElectricSourceConfig = ZeroSourceConfig | Sin2VectorPotentialPulseConfig
+
+
+@dataclass(frozen=True, slots=True)
+class AffineElectromagneticSourceConfig:
+    """Analytic Maxwell-consistent affine source sampled at arbitrary times."""
+
+    electric: WilsonElectricSourceConfig
+    electric_field_origin_offset_au: Vector3
+    magnetic_field_reference_au: Vector3
+    magnetic_field_rate_au: Vector3
+    magnetic_reference_time_au: float
+    magnetic_gauge: WilsonMagneticGaugeKind
+    landau_axis: Vector3 | None = None
+    kind: WilsonSourceKind = field(
+        default=WilsonSourceKind.AFFINE_ELECTROMAGNETIC,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.electric, ZeroSourceConfig | Sin2VectorPotentialPulseConfig):
+            raise ConfigurationError(
+                "source.electric must be zero or a sin2 vector-potential pulse"
+            )
+        object.__setattr__(
+            self,
+            "electric_field_origin_offset_au",
+            vector3(
+                self.electric_field_origin_offset_au,
+                "source.electric_field_origin_offset_au",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "magnetic_field_reference_au",
+            vector3(
+                self.magnetic_field_reference_au,
+                "source.magnetic_field_reference_au",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "magnetic_field_rate_au",
+            vector3(self.magnetic_field_rate_au, "source.magnetic_field_rate_au"),
+        )
+        object.__setattr__(
+            self,
+            "magnetic_reference_time_au",
+            finite_float(
+                self.magnetic_reference_time_au,
+                "source.magnetic_reference_time_au",
+            ),
+        )
+        if not isinstance(self.magnetic_gauge, WilsonMagneticGaugeKind):
+            raise ConfigurationError("source.magnetic_gauge is invalid")
+        if self.magnetic_gauge is WilsonMagneticGaugeKind.SYMMETRIC:
+            if self.landau_axis is not None:
+                raise ConfigurationError(
+                    "source.landau_axis is valid only for a Landau magnetic gauge"
+                )
+        elif self.landau_axis is None:
+            raise ConfigurationError("Landau magnetic gauge requires source.landau_axis")
+        else:
+            object.__setattr__(
+                self,
+                "landau_axis",
+                vector3(self.landau_axis, "source.landau_axis"),
+            )
+
+    def as_mapping(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "kind": self.kind.value,
+            "electric_field_origin_offset_au": list(self.electric_field_origin_offset_au),
+            "magnetic_field_reference_au": list(self.magnetic_field_reference_au),
+            "magnetic_field_rate_au": list(self.magnetic_field_rate_au),
+            "magnetic_reference_time_au": self.magnetic_reference_time_au,
+            "magnetic_gauge": self.magnetic_gauge.value,
+            "electric": self.electric.as_mapping(),
+        }
+        if self.landau_axis is not None:
+            result["landau_axis"] = list(self.landau_axis)
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -779,6 +1022,257 @@ class OutputConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WilsonStationaryPolicyConfig:
+    maximum_iterations: int
+    density_tolerance: float
+    orbital_tolerance: float
+    energy_tolerance_au: float
+    damping: float
+    diis_start_iteration: int
+    diis_space: int
+
+    def __post_init__(self) -> None:
+        for name in ("maximum_iterations", "diis_start_iteration", "diis_space"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ConfigurationError(f"stationary.{name} must be an integer")
+        if self.maximum_iterations < 1:
+            raise ConfigurationError("stationary.maximum_iterations must be positive")
+        if self.diis_start_iteration < 1:
+            raise ConfigurationError("stationary.diis_start_iteration must be positive")
+        if self.diis_space < 2:
+            raise ConfigurationError("stationary.diis_space must be at least two")
+        for name in ("density_tolerance", "orbital_tolerance", "energy_tolerance_au"):
+            value = finite_float(getattr(self, name), f"stationary.{name}")
+            if value <= 0.0:
+                raise ConfigurationError(f"stationary.{name} must be positive")
+            object.__setattr__(self, name, value)
+        damping = finite_float(self.damping, "stationary.damping")
+        if not 0.0 < damping <= 1.0:
+            raise ConfigurationError("stationary.damping must lie in (0, 1]")
+        object.__setattr__(self, "damping", damping)
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "maximum_iterations": self.maximum_iterations,
+            "density_tolerance": self.density_tolerance,
+            "orbital_tolerance": self.orbital_tolerance,
+            "energy_tolerance_au": self.energy_tolerance_au,
+            "damping": self.damping,
+            "diis_start_iteration": self.diis_start_iteration,
+            "diis_space": self.diis_space,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonStationaryOutputConfig:
+    artifact_path: Path
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "artifact_path", Path(self.artifact_path))
+
+    def as_mapping(self) -> dict[str, object]:
+        return {"artifact_path": str(self.artifact_path)}
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonStationaryStateLinkConfig:
+    fingerprint_sha256: str
+    path: Path
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "fingerprint_sha256",
+            _digest(self.fingerprint_sha256, "stationary_state.fingerprint_sha256"),
+        )
+        object.__setattr__(self, "path", Path(self.path))
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "fingerprint_sha256": self.fingerprint_sha256,
+            "path": str(self.path),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonPropagationConfig:
+    time_grid: FixedTimeGrid
+    integrator: WilsonIntegratorKind
+    rational_approximation: RationalApproximation
+    nonlinear_tolerance: float
+    maximum_iterations: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.time_grid, FixedTimeGrid):
+            raise ConfigurationError("propagation.time_grid must be a FixedTimeGrid")
+        if self.integrator is not WilsonIntegratorKind.NONLINEAR_GAUSS_MAGNUS:
+            raise UnsupportedConfigurationError(
+                "Wilson propagation requires nonlinear_gauss_magnus"
+            )
+        if self.rational_approximation is not RationalApproximation.PADE_22:
+            raise UnsupportedConfigurationError(
+                "fourth-order Wilson propagation requires the pade_22 link"
+            )
+        tolerance = finite_float(
+            self.nonlinear_tolerance,
+            "propagation.nonlinear_tolerance",
+        )
+        if tolerance <= 0.0:
+            raise ConfigurationError("propagation.nonlinear_tolerance must be positive")
+        object.__setattr__(self, "nonlinear_tolerance", tolerance)
+        if (
+            isinstance(self.maximum_iterations, bool)
+            or not isinstance(self.maximum_iterations, int)
+            or self.maximum_iterations < 1
+        ):
+            raise ConfigurationError("propagation.maximum_iterations must be positive")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "start_time_au": self.time_grid.start_au,
+            "time_step_au": self.time_grid.step_au,
+            "intervals": self.time_grid.intervals,
+            "integrator": self.integrator.value,
+            "rational_approximation": self.rational_approximation.value,
+            "nonlinear_tolerance": self.nonlinear_tolerance,
+            "maximum_iterations": self.maximum_iterations,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonStationaryConfig:
+    reference: ReferenceLinkConfig
+    action: WilsonActionConfig
+    numerics: WilsonNumericsConfig
+    source: AffineElectromagneticSourceConfig
+    source_time_au: float
+    stationary: WilsonStationaryPolicyConfig
+    backend: BackendConfig
+    output: WilsonStationaryOutputConfig
+    metadata: MetadataConfig = field(default_factory=MetadataConfig)
+
+    def __post_init__(self) -> None:
+        expected = (
+            ("reference", self.reference, ReferenceLinkConfig),
+            ("numerics", self.numerics, WilsonNumericsConfig),
+            ("source", self.source, AffineElectromagneticSourceConfig),
+            ("stationary", self.stationary, WilsonStationaryPolicyConfig),
+            ("backend", self.backend, BackendConfig),
+            ("output", self.output, WilsonStationaryOutputConfig),
+            ("metadata", self.metadata, MetadataConfig),
+        )
+        for name, value, expected_type in expected:
+            if not isinstance(value, expected_type):
+                raise ConfigurationError(f"Wilson stationary {name} has the wrong type")
+        if not isinstance(self.action, ExactWilsonActionConfig | ReducedWilsonActionConfig):
+            raise ConfigurationError("Wilson stationary action has the wrong type")
+        object.__setattr__(
+            self,
+            "source_time_au",
+            finite_float(self.source_time_au, "source_time_au"),
+        )
+
+    @property
+    def scientific_id(self) -> str:
+        return canonical_sha256(self.scientific_mapping())
+
+    def scientific_mapping(self) -> dict[str, object]:
+        return {
+            "schema": WILSON_STATIONARY_CONFIG_SCHEMA,
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "reference_fingerprint_sha256": self.reference.fingerprint_sha256,
+            "action": self.action.as_mapping(),
+            "numerics": self.numerics.as_mapping(),
+            "source": self.source.as_mapping(),
+            "source_time_au": self.source_time_au,
+            "stationary": self.stationary.as_mapping(),
+            "backend": self.backend.scientific_mapping(),
+        }
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "schema": WILSON_STATIONARY_CONFIG_SCHEMA,
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "reference": self.reference.as_mapping(),
+            "action": self.action.as_mapping(),
+            "numerics": self.numerics.as_mapping(),
+            "source": self.source.as_mapping(),
+            "source_time_au": self.source_time_au,
+            "stationary": self.stationary.as_mapping(),
+            "backend": self.backend.as_mapping(),
+            "output": self.output.as_mapping(),
+            "metadata": self.metadata.as_mapping(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonSimulationConfig:
+    reference: ReferenceLinkConfig
+    stationary_state: WilsonStationaryStateLinkConfig
+    action: ExactWilsonActionConfig | ReducedWilsonActionConfig
+    numerics: WilsonNumericsConfig
+    source: AffineElectromagneticSourceConfig
+    propagation: WilsonPropagationConfig
+    backend: BackendConfig
+    output: OutputConfig
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
+    metadata: MetadataConfig = field(default_factory=MetadataConfig)
+
+    def __post_init__(self) -> None:
+        expected = (
+            ("reference", self.reference, ReferenceLinkConfig),
+            ("stationary_state", self.stationary_state, WilsonStationaryStateLinkConfig),
+            ("numerics", self.numerics, WilsonNumericsConfig),
+            ("source", self.source, AffineElectromagneticSourceConfig),
+            ("propagation", self.propagation, WilsonPropagationConfig),
+            ("backend", self.backend, BackendConfig),
+            ("output", self.output, OutputConfig),
+            ("validation", self.validation, ValidationConfig),
+            ("metadata", self.metadata, MetadataConfig),
+        )
+        for name, value, expected_type in expected:
+            if not isinstance(value, expected_type):
+                raise ConfigurationError(f"Wilson simulation {name} has the wrong type")
+        if not isinstance(self.action, ExactWilsonActionConfig | ReducedWilsonActionConfig):
+            raise ConfigurationError("Wilson simulation action has the wrong type")
+
+    @property
+    def scientific_id(self) -> str:
+        return canonical_sha256(self.scientific_mapping())
+
+    def scientific_mapping(self) -> dict[str, object]:
+        return {
+            "schema": WILSON_SIMULATION_CONFIG_SCHEMA,
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "reference_fingerprint_sha256": self.reference.fingerprint_sha256,
+            "stationary_state_fingerprint_sha256": (self.stationary_state.fingerprint_sha256),
+            "action": self.action.as_mapping(),
+            "numerics": self.numerics.as_mapping(),
+            "source": self.source.as_mapping(),
+            "propagation": self.propagation.as_mapping(),
+            "backend": self.backend.scientific_mapping(),
+            "validation": self.validation.as_mapping(),
+        }
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "schema": WILSON_SIMULATION_CONFIG_SCHEMA,
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "reference": self.reference.as_mapping(),
+            "stationary_state": self.stationary_state.as_mapping(),
+            "action": self.action.as_mapping(),
+            "numerics": self.numerics.as_mapping(),
+            "source": self.source.as_mapping(),
+            "propagation": self.propagation.as_mapping(),
+            "backend": self.backend.as_mapping(),
+            "validation": self.validation.as_mapping(),
+            "output": self.output.as_mapping(),
+            "metadata": self.metadata.as_mapping(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SimulationConfig:
     """Complete, resolved scientific and execution configuration for one run."""
 
@@ -873,4 +1367,6 @@ class SimulationConfig:
         }
 
 
-type AionConfig = ReferenceConfig | SimulationConfig
+type AionConfig = (
+    ReferenceConfig | SimulationConfig | WilsonStationaryConfig | WilsonSimulationConfig
+)

@@ -1,5 +1,10 @@
 """Potential-first physical sources, gauge projection, compilation, and events."""
 
+from aion.electromagnetism.affine_source import (
+    AffineElectromagneticSourceProvider,
+    AnalyticAffineElectromagneticSource,
+    build_affine_electromagnetic_source,
+)
 from aion.electromagnetism.api import compile_source_for_reference
 from aion.electromagnetism.compiled import (
     CompiledUniformSource,
@@ -57,9 +62,11 @@ from aion.electromagnetism.test_variations import (
 __all__ = [
     "TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD",
     "AdditiveUniformSource",
+    "AffineElectromagneticSourceProvider",
     "AffineGaugeDifferenceVariation",
     "AffineMagneticGauge",
     "AffineVectorFieldVariation",
+    "AnalyticAffineElectromagneticSource",
     "CenterLoopHolonomy",
     "CompiledUniformSource",
     "DiscreteKickEvent",
@@ -86,6 +93,7 @@ __all__ = [
     "ZeroUniformSource",
     "affine_gauge_difference_potential",
     "anchored_vectors",
+    "build_affine_electromagnetic_source",
     "build_magnetic_pair_geometry",
     "center_loop_holonomy",
     "compile_event_schedule",
