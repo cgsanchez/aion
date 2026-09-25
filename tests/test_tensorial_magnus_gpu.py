@@ -9,6 +9,7 @@ from aion.backends import CuPyBackend, NumPyBackend
 from aion.formulations import EOMTriple
 from aion.propagation import (
     ExperimentalGaussMagnusHistory,
+    NonlinearContravariantDensityPropagator,
     NonlinearGaussMagnusPolicy,
     propagate_experimental_mixed_density,
     propagate_nonlinear_contravariant_density,
@@ -202,7 +203,8 @@ def test_nonlinear_congruence_gauss_magnus_cpu_gpu_parity() -> None:
             amplitude = xp.real(xp.trace(probe @ density))
             return EOMTriple(metric, base + 0.7 * amplitude * response, zero)
 
-        return propagate_nonlinear_contravariant_density(
+        policy = NonlinearGaussMagnusPolicy(tolerance=1.0e-12)
+        batch = propagate_nonlinear_contravariant_density(
             backend.asarray(host_initial),
             initial_time_au=0.0,
             interval_au=0.04,
@@ -210,8 +212,33 @@ def test_nonlinear_congruence_gauss_magnus_cpu_gpu_parity() -> None:
             metric_provider=lambda _time: metric,
             eom_provider=triple,
             backend=backend,
-            policy=NonlinearGaussMagnusPolicy(tolerance=1.0e-12),
+            policy=policy,
         )
+        stateful = NonlinearContravariantDensityPropagator[EOMTriple](
+            initial_contravariant_density=backend.asarray(host_initial),
+            initial_time_au=0.0,
+            interval_au=0.04,
+            metric_provider=lambda _time: metric,
+            evaluation_provider=triple,
+            eom_extractor=lambda value: value,
+            backend=backend,
+            policy=policy,
+        )
+        steps = tuple(stateful.step() for _ in range(10))
+        for result in steps:
+            for value in (
+                result.contravariant_density,
+                result.mixed_density,
+                result.gauss_minus_contravariant_density,
+                result.gauss_plus_contravariant_density,
+                result.link,
+            ):
+                backend.assert_resident(value, name="stateful nonlinear congruence result")
+        np.testing.assert_array_equal(
+            backend.to_host(stateful.current_contravariant_density),
+            backend.to_host(batch.contravariant_densities[-1]),
+        )
+        return batch
 
     cpu_result = run(NumPyBackend())
     gpu = CuPyBackend(0)

@@ -105,6 +105,17 @@ class ReducedWilsonLevel(StrEnum):
     STRICT_C1 = "strict_c1"
     DENSITY_RESUMMED_C1 = "density_resummed_c1"
 
+    @property
+    def retains_electric_increment(self) -> bool:
+        return self is not ReducedWilsonLevel.P0
+
+    @property
+    def retains_first_magnetic_order(self) -> bool:
+        return self in (
+            ReducedWilsonLevel.STRICT_C1,
+            ReducedWilsonLevel.DENSITY_RESUMMED_C1,
+        )
+
 
 class WilsonGridKind(StrEnum):
     REFERENCE = "reference"

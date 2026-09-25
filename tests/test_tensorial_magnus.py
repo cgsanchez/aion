@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from aion.errors import PropagationError
 from aion.formulations import EOMTriple
 from aion.propagation import (
     ExperimentalGaussMagnusHistory,
+    NonlinearContravariantDensityPropagator,
     NonlinearGaussMagnusPolicy,
     contravariant_to_mixed_density,
     mixed_to_contravariant_density,
@@ -294,3 +296,74 @@ def test_nonlinear_congruence_self_consistent_fixed_metric_converges() -> None:
         errors.append(_relative(trajectory.contravariant_densities[-1] - exact, exact))
         assert max(item.nonlinear_residual for item in trajectory.diagnostics) < 2.0e-13
     assert min(errors[index] / errors[index + 1] for index in range(3)) > 10.0
+
+
+@dataclass(frozen=True, slots=True)
+class _RetainedEvaluation:
+    triple: EOMTriple
+    time_au: float
+
+
+def test_stateful_congruence_steps_match_batch_and_retain_node_evaluations() -> None:
+    backend = NumPyBackend()
+    interval = 0.05
+    intervals = 4
+
+    def evaluate(time: float, density: np.ndarray) -> _RetainedEvaluation:
+        return _RetainedEvaluation(_nonlinear_triple(density), time)
+
+    propagator = NonlinearContravariantDensityPropagator[_RetainedEvaluation](
+        initial_contravariant_density=backend.asarray(_P0),
+        initial_time_au=0.0,
+        interval_au=interval,
+        metric_provider=lambda _time: backend.asarray(np.eye(2)),
+        evaluation_provider=evaluate,
+        eom_extractor=lambda value: value.triple,
+        backend=backend,
+        policy=NonlinearGaussMagnusPolicy(tolerance=2.0e-13, maximum_iterations=80),
+    )
+    steps = [propagator.step() for _ in range(intervals)]
+    batch = propagate_nonlinear_contravariant_density(
+        backend.asarray(_P0),
+        initial_time_au=0.0,
+        interval_au=interval,
+        intervals=intervals,
+        metric_provider=lambda _time: backend.asarray(np.eye(2)),
+        eom_provider=lambda _time, density: _nonlinear_triple(density),
+        backend=backend,
+        policy=NonlinearGaussMagnusPolicy(tolerance=2.0e-13, maximum_iterations=80),
+    )
+
+    assert propagator.boundary_index == intervals
+    assert propagator.current_time_au == intervals * interval
+    for index, result in enumerate(steps):
+        np.testing.assert_array_equal(
+            result.contravariant_density,
+            batch.contravariant_densities[index + 1],
+        )
+        np.testing.assert_array_equal(result.link, batch.links[index])
+        assert result.start_boundary_index == index
+        assert result.end_boundary_index == index + 1
+        assert result.gauss_minus_evaluation.time_au == result.gauss_minus_time_au
+        assert result.gauss_plus_evaluation.time_au == result.gauss_plus_time_au
+        assert result.metric_correction_applied is False
+
+
+def test_failed_stateful_congruence_step_does_not_commit_state() -> None:
+    backend = NumPyBackend()
+    propagator = NonlinearContravariantDensityPropagator[EOMTriple](
+        initial_contravariant_density=backend.asarray(_P0),
+        initial_time_au=0.0,
+        interval_au=0.7,
+        metric_provider=lambda _time: backend.asarray(np.eye(2)),
+        evaluation_provider=lambda _time, density: _nonlinear_triple(density),
+        eom_extractor=lambda value: value,
+        backend=backend,
+        policy=NonlinearGaussMagnusPolicy(tolerance=1.0e-16, maximum_iterations=1),
+    )
+    accepted = np.array(propagator.current_contravariant_density, copy=True)
+    with pytest.raises(PropagationError, match="nonlinear congruence Gauss-node solve failed"):
+        propagator.step()
+    assert propagator.boundary_index == 0
+    assert propagator.current_time_au == 0.0
+    np.testing.assert_array_equal(propagator.current_contravariant_density, accepted)

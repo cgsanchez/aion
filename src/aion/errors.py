@@ -45,6 +45,10 @@ class ReferencePreparationError(AionError, RuntimeError):
     """A static electronic reference could not be prepared or authenticated."""
 
 
+class WilsonStateError(AionError, RuntimeError):
+    """A Wilson stationary state is inconsistent or cannot be authenticated."""
+
+
 class SourceCompilationError(AionError, ValueError):
     """An electromagnetic source violates its compilation contract."""
 

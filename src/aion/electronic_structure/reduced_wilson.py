@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
 
 import numpy as np
 
+from aion.config import ReducedWilsonLevel as ReducedWilsonLevel
 from aion.electromagnetism import (
     AffineMagneticGauge,
     UniformMagneticSourceSample,
@@ -53,26 +53,6 @@ from aion.errors import (
     UnsupportedConfigurationError,
 )
 from aion.formulations import EOMTriple, one_electron_velocity_density
-
-
-class ReducedWilsonLevel(StrEnum):
-    """Action-level electromagnetic descendants qualified by NQ7."""
-
-    P0 = "p0"
-    E1 = "e1"
-    STRICT_C1 = "strict_c1"
-    DENSITY_RESUMMED_C1 = "density_resummed_c1"
-
-    @property
-    def retains_electric_increment(self) -> bool:
-        return self is not ReducedWilsonLevel.P0
-
-    @property
-    def retains_first_magnetic_order(self) -> bool:
-        return self in (
-            ReducedWilsonLevel.STRICT_C1,
-            ReducedWilsonLevel.DENSITY_RESUMMED_C1,
-        )
 
 
 @dataclass(frozen=True, slots=True)

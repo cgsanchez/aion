@@ -1,15 +1,15 @@
-"""Experimental mixed-index density propagation on an evolving AO manifold.
+"""Tensorial density propagation on an evolving AO manifold.
 
-This module deliberately does not participate in the production propagator
-factory.  It implements the tensorial density ``D = P S`` and advances it by
-similarity with an uncorrected fourth-order Gauss--Magnus transport link.
+The stateful contravariant-density engine implements the accepted nonlinear
+congruence algorithm.  Earlier mixed-similarity experiments remain available
+as explicit experimental records and functions for numerical comparison.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass, field
 from typing import Any
 
 from aion.backends import ArrayBackend
@@ -130,6 +130,355 @@ class NonlinearContravariantDensityPropagation:
     diagnostics: tuple[NonlinearMixedDensityStepDiagnostics, ...]
     metric_correction_applied: bool = False
     density_update: str = "coefficient_congruence"
+
+
+@dataclass(frozen=True, slots=True)
+class NonlinearContravariantDensityStep[EvaluationT]:
+    """One accepted nonlinear congruence step and its converged node data."""
+
+    start_boundary_index: int
+    end_boundary_index: int
+    start_time_au: float
+    end_time_au: float
+    gauss_minus_time_au: float
+    gauss_plus_time_au: float
+    contravariant_density: Any
+    mixed_density: Any
+    gauss_minus_contravariant_density: Any
+    gauss_plus_contravariant_density: Any
+    gauss_minus_evaluation: EvaluationT
+    gauss_plus_evaluation: EvaluationT
+    link: Any
+    diagnostics: NonlinearMixedDensityStepDiagnostics
+    metric_correction_applied: bool = False
+    density_update: str = "coefficient_congruence"
+
+
+@dataclass(slots=True)
+class NonlinearContravariantDensityPropagator[EvaluationT]:
+    """Stateful accepted fourth-order nonlinear contravariant-density engine.
+
+    The object owns exactly one accepted boundary density and fixed-size
+    nonlinear scratch.  A successful :meth:`step` commits one congruence
+    update.  Failed node solves leave the accepted state and boundary index
+    unchanged.
+    """
+
+    initial_contravariant_density: InitVar[Any]
+    initial_time_au: float
+    interval_au: float
+    metric_provider: Callable[[float], Any]
+    evaluation_provider: Callable[[float, Any], EvaluationT]
+    eom_extractor: Callable[[EvaluationT], EOMTriple]
+    backend: ArrayBackend
+    policy: NonlinearGaussMagnusPolicy = field(default_factory=NonlinearGaussMagnusPolicy)
+    hbar: float = 1.0
+    initial_boundary_index: int = 0
+    _current_contravariant_density: Any = field(init=False, repr=False)
+    _initial_occupation_spectrum: Any = field(init=False, repr=False)
+    _boundary_index: int = field(init=False, repr=False)
+    _dimension: int = field(init=False, repr=False)
+
+    def __post_init__(self, initial_contravariant_density: Any) -> None:
+        _validate_square(
+            initial_contravariant_density,
+            self.backend,
+            "initial contravariant density",
+        )
+        start_time = float(self.initial_time_au)
+        step = float(self.interval_au)
+        if not math.isfinite(start_time):
+            raise PropagationError("initial time must be finite")
+        if not math.isfinite(step) or step <= 0.0:
+            raise PropagationError("propagation interval must be finite and positive")
+        if not isinstance(self.policy, NonlinearGaussMagnusPolicy):
+            raise TypeError("policy must be a NonlinearGaussMagnusPolicy")
+        if not math.isfinite(self.hbar) or self.hbar <= 0.0:
+            raise PropagationError("hbar must be finite and positive")
+        if (
+            isinstance(self.initial_boundary_index, bool)
+            or not isinstance(self.initial_boundary_index, int)
+            or self.initial_boundary_index < 0
+        ):
+            raise PropagationError("initial boundary index must be a nonnegative integer")
+        if not callable(self.metric_provider):
+            raise TypeError("metric_provider must be callable")
+        if not callable(self.evaluation_provider):
+            raise TypeError("evaluation_provider must be callable")
+        if not callable(self.eom_extractor):
+            raise TypeError("eom_extractor must be callable")
+
+        object.__setattr__(self, "initial_time_au", start_time)
+        object.__setattr__(self, "interval_au", step)
+        xp = self.backend.namespace
+        dimension = initial_contravariant_density.shape[0]
+        current = xp.array(
+            initial_contravariant_density,
+            dtype=xp.complex128,
+            copy=True,
+        )
+        initial_metric = self.metric_provider(start_time)
+        _validate_matrix_shape(
+            initial_metric,
+            dimension,
+            self.backend,
+            "initial endpoint metric",
+        )
+        object.__setattr__(self, "_dimension", dimension)
+        object.__setattr__(self, "_current_contravariant_density", current)
+        object.__setattr__(
+            self,
+            "_initial_occupation_spectrum",
+            xp.linalg.eigvals(current @ initial_metric),
+        )
+        object.__setattr__(self, "_boundary_index", self.initial_boundary_index)
+
+    @property
+    def boundary_index(self) -> int:
+        return self._boundary_index
+
+    @property
+    def current_time_au(self) -> float:
+        offset = self._boundary_index - self.initial_boundary_index
+        return self.initial_time_au + offset * self.interval_au
+
+    @property
+    def current_contravariant_density(self) -> Any:
+        """Return the backend-resident accepted state owned by this propagator."""
+
+        return self._current_contravariant_density
+
+    def current_mixed_density(self) -> Any:
+        """Return ``P S`` at the current exact endpoint metric."""
+
+        metric = self.metric_provider(self.current_time_au)
+        _validate_matrix_shape(
+            metric,
+            self._dimension,
+            self.backend,
+            "current endpoint metric",
+        )
+        return self._current_contravariant_density @ metric
+
+    def _triple(self, evaluation: EvaluationT) -> EOMTriple:
+        triple = self.eom_extractor(evaluation)
+        _validate_triple(triple, self.backend, expected_dimension=self._dimension)
+        return triple
+
+    def step(self) -> NonlinearContravariantDensityStep[EvaluationT]:
+        """Solve and atomically commit one nonlinear two-node Magnus step."""
+
+        backend = self.backend
+        xp = backend.namespace
+        step = self.interval_au
+        left_index = self._boundary_index
+        right_index = left_index + 1
+        left_time = self.current_time_au
+        right_time = left_time + step
+        c_minus = 0.5 - math.sqrt(3.0) / 6.0
+        c_plus = 0.5 + math.sqrt(3.0) / 6.0
+        minus_time = left_time + c_minus * step
+        plus_time = left_time + c_plus * step
+        start_metric = self.metric_provider(left_time)
+        target_metric = self.metric_provider(right_time)
+        _validate_matrix_shape(
+            start_metric,
+            self._dimension,
+            backend,
+            "start endpoint metric",
+        )
+        _validate_matrix_shape(
+            target_metric,
+            self._dimension,
+            backend,
+            "target endpoint metric",
+        )
+        current = self._current_contravariant_density
+        guess_minus = xp.array(current, dtype=xp.complex128, copy=True)
+        guess_plus = xp.array(current, dtype=xp.complex128, copy=True)
+        converged = False
+        nonlinear_residual = math.inf
+        final_minus: EvaluationT | None = None
+        final_plus: EvaluationT | None = None
+        nonlinear_iterations = 0
+
+        for iteration in range(1, self.policy.maximum_iterations + 1):
+            nonlinear_iterations = iteration
+            try:
+                minus_evaluation = self.evaluation_provider(minus_time, guess_minus)
+                plus_evaluation = self.evaluation_provider(plus_time, guess_plus)
+            except Exception as exc:
+                raise PropagationError(
+                    "nonlinear congruence node evaluation failed at interval "
+                    f"{left_index}, iteration {iteration}"
+                ) from exc
+            minus_generator = mixed_eom_generator(
+                self._triple(minus_evaluation),
+                backend,
+                hbar=self.hbar,
+            )
+            plus_generator = mixed_eom_generator(
+                self._triple(plus_evaluation),
+                backend,
+                hbar=self.hbar,
+            )
+            minus_link = partial_fourth_order_gauss_magnus_link(
+                minus_generator,
+                plus_generator,
+                step,
+                c_minus,
+                backend,
+            )
+            plus_link = partial_fourth_order_gauss_magnus_link(
+                minus_generator,
+                plus_generator,
+                step,
+                c_plus,
+                backend,
+            )
+            proposed_minus = minus_link @ current @ minus_link.conj().T
+            proposed_plus = plus_link @ current @ plus_link.conj().T
+            nonlinear_residual = max(
+                relative_frobenius(proposed_minus - guess_minus, proposed_minus, backend),
+                relative_frobenius(proposed_plus - guess_plus, proposed_plus, backend),
+            )
+            guess_minus = proposed_minus
+            guess_plus = proposed_plus
+            if nonlinear_residual <= self.policy.tolerance:
+                final_minus = self.evaluation_provider(minus_time, guess_minus)
+                final_plus = self.evaluation_provider(plus_time, guess_plus)
+                check_minus_generator = mixed_eom_generator(
+                    self._triple(final_minus),
+                    backend,
+                    hbar=self.hbar,
+                )
+                check_plus_generator = mixed_eom_generator(
+                    self._triple(final_plus),
+                    backend,
+                    hbar=self.hbar,
+                )
+                check_minus_link = partial_fourth_order_gauss_magnus_link(
+                    check_minus_generator,
+                    check_plus_generator,
+                    step,
+                    c_minus,
+                    backend,
+                )
+                check_plus_link = partial_fourth_order_gauss_magnus_link(
+                    check_minus_generator,
+                    check_plus_generator,
+                    step,
+                    c_plus,
+                    backend,
+                )
+                check_minus = check_minus_link @ current @ check_minus_link.conj().T
+                check_plus = check_plus_link @ current @ check_plus_link.conj().T
+                nonlinear_residual = max(
+                    relative_frobenius(check_minus - guess_minus, check_minus, backend),
+                    relative_frobenius(check_plus - guess_plus, check_plus, backend),
+                )
+                guess_minus = check_minus
+                guess_plus = check_plus
+                if nonlinear_residual <= self.policy.tolerance:
+                    converged = True
+                    break
+
+        if not converged or final_minus is None or final_plus is None:
+            raise PropagationError(
+                "nonlinear congruence Gauss-node solve failed at interval "
+                f"{left_index} after {self.policy.maximum_iterations} iterations; "
+                f"residual {nonlinear_residual:.3e}"
+            )
+
+        final_minus = self.evaluation_provider(minus_time, guess_minus)
+        final_plus = self.evaluation_provider(plus_time, guess_plus)
+        link = fourth_order_gauss_magnus_link(
+            self._triple(final_minus),
+            self._triple(final_plus),
+            step,
+            backend,
+            hbar=self.hbar,
+        )
+        input_mixed = current @ start_metric
+        input_trace = xp.trace(input_mixed)
+        next_density = link @ current @ link.conj().T
+        mixed = next_density @ target_metric
+        output_trace = xp.trace(mixed)
+        trace_scale = xp.maximum(xp.asarray(1.0), xp.abs(input_trace))
+        spectrum = xp.linalg.eigvals(mixed)
+        spectrum_scale = xp.maximum(
+            xp.asarray(1.0),
+            xp.linalg.norm(self._initial_occupation_spectrum),
+        )
+        real_spectrum_drift = (
+            xp.linalg.norm(
+                xp.sort(xp.real(spectrum)) - xp.sort(xp.real(self._initial_occupation_spectrum))
+            )
+            / spectrum_scale
+        )
+        imaginary_spectrum_drift = (
+            xp.maximum(
+                xp.max(xp.abs(xp.imag(spectrum))),
+                xp.max(xp.abs(xp.imag(self._initial_occupation_spectrum))),
+            )
+            / spectrum_scale
+        )
+        diagnostics = NonlinearMixedDensityStepDiagnostics(
+            start_time_au=left_time,
+            end_time_au=right_time,
+            nonlinear_iterations=nonlinear_iterations,
+            nonlinear_residual=nonlinear_residual,
+            cross_metric_residual=cross_metric_residual(
+                link,
+                start_metric,
+                target_metric,
+                backend,
+            ),
+            trace_drift=backend.scalar_to_float(xp.abs(output_trace - input_trace) / trace_scale),
+            trace_imaginary_abs=backend.scalar_to_float(xp.abs(xp.imag(output_trace))),
+            occupation_spectrum_drift=backend.scalar_to_float(
+                xp.maximum(real_spectrum_drift, imaginary_spectrum_drift)
+            ),
+            metric_hermiticity_residual=mixed_metric_hermiticity_residual(
+                mixed,
+                target_metric,
+                backend,
+            ),
+            contravariant_hermiticity_residual=relative_frobenius(
+                next_density - next_density.conj().T,
+                next_density,
+                backend,
+            ),
+        )
+
+        accepted_density = xp.array(next_density, dtype=xp.complex128, copy=True)
+        result = NonlinearContravariantDensityStep(
+            start_boundary_index=left_index,
+            end_boundary_index=right_index,
+            start_time_au=left_time,
+            end_time_au=right_time,
+            gauss_minus_time_au=minus_time,
+            gauss_plus_time_au=plus_time,
+            contravariant_density=accepted_density,
+            mixed_density=xp.array(mixed, dtype=xp.complex128, copy=True),
+            gauss_minus_contravariant_density=xp.array(
+                guess_minus,
+                dtype=xp.complex128,
+                copy=True,
+            ),
+            gauss_plus_contravariant_density=xp.array(
+                guess_plus,
+                dtype=xp.complex128,
+                copy=True,
+            ),
+            gauss_minus_evaluation=final_minus,
+            gauss_plus_evaluation=final_plus,
+            link=xp.array(link, dtype=xp.complex128, copy=True),
+            diagnostics=diagnostics,
+        )
+        object.__setattr__(self, "_current_contravariant_density", accepted_density)
+        object.__setattr__(self, "_boundary_index", right_index)
+        return result
 
 
 def contravariant_to_mixed_density(
@@ -661,198 +1010,52 @@ def propagate_nonlinear_contravariant_density(
     to the finite-step endpoint-metric error.
     """
 
-    _validate_square(initial_contravariant_density, backend, "initial contravariant density")
-    start_time = float(initial_time_au)
-    step = float(interval_au)
-    if not math.isfinite(start_time):
-        raise PropagationError("initial time must be finite")
-    if not math.isfinite(step) or step <= 0.0:
-        raise PropagationError("propagation interval must be finite and positive")
     if isinstance(intervals, bool) or not isinstance(intervals, int) or intervals <= 0:
         raise PropagationError("interval count must be a positive integer")
-    if not math.isfinite(hbar) or hbar <= 0.0:
-        raise PropagationError("hbar must be finite and positive")
     selected = NonlinearGaussMagnusPolicy() if policy is None else policy
-    if not isinstance(selected, NonlinearGaussMagnusPolicy):
-        raise TypeError("policy must be a NonlinearGaussMagnusPolicy")
-
     xp = backend.namespace
-    dimension = initial_contravariant_density.shape[0]
-    current = xp.array(initial_contravariant_density, dtype=xp.complex128, copy=True)
-    initial_metric = metric_provider(start_time)
-    _validate_matrix_shape(initial_metric, dimension, backend, "initial endpoint metric")
-    initial_mixed = current @ initial_metric
-    initial_spectrum = xp.linalg.eigvals(initial_mixed)
-    times = tuple(start_time + index * step for index in range(intervals + 1))
-    contravariant_values = [xp.array(current, dtype=xp.complex128, copy=True)]
-    mixed_values = [xp.array(initial_mixed, dtype=xp.complex128, copy=True)]
+    propagator = NonlinearContravariantDensityPropagator[EOMTriple](
+        initial_contravariant_density=initial_contravariant_density,
+        initial_time_au=initial_time_au,
+        interval_au=interval_au,
+        metric_provider=metric_provider,
+        evaluation_provider=eom_provider,
+        eom_extractor=_identity_eom_triple,
+        backend=backend,
+        policy=selected,
+        hbar=hbar,
+    )
+    times = tuple(
+        propagator.initial_time_au + index * propagator.interval_au
+        for index in range(intervals + 1)
+    )
+    contravariant_values = [
+        xp.array(
+            propagator.current_contravariant_density,
+            dtype=xp.complex128,
+            copy=True,
+        )
+    ]
+    mixed_values = [
+        xp.array(
+            propagator.current_mixed_density(),
+            dtype=xp.complex128,
+            copy=True,
+        )
+    ]
     minus_nodes: list[Any] = []
     plus_nodes: list[Any] = []
     links: list[Any] = []
     diagnostics: list[NonlinearMixedDensityStepDiagnostics] = []
-    c_minus = 0.5 - math.sqrt(3.0) / 6.0
-    c_plus = 0.5 + math.sqrt(3.0) / 6.0
 
-    for index in range(intervals):
-        left_time = times[index]
-        right_time = times[index + 1]
-        minus_time = left_time + c_minus * step
-        plus_time = left_time + c_plus * step
-        start_metric = metric_provider(left_time)
-        target_metric = metric_provider(right_time)
-        _validate_matrix_shape(start_metric, dimension, backend, "start endpoint metric")
-        _validate_matrix_shape(target_metric, dimension, backend, "target endpoint metric")
-        guess_minus = xp.array(current, dtype=xp.complex128, copy=True)
-        guess_plus = xp.array(current, dtype=xp.complex128, copy=True)
-        converged = False
-        nonlinear_residual = math.inf
-        final_minus: EOMTriple | None = None
-        final_plus: EOMTriple | None = None
-        nonlinear_iterations = 0
-
-        for iteration in range(1, selected.maximum_iterations + 1):
-            nonlinear_iterations = iteration
-            try:
-                minus_triple = eom_provider(minus_time, guess_minus)
-                plus_triple = eom_provider(plus_time, guess_plus)
-            except Exception as exc:
-                raise PropagationError(
-                    "nonlinear congruence node evaluation failed at interval "
-                    f"{index}, iteration {iteration}"
-                ) from exc
-            minus_generator = mixed_eom_generator(minus_triple, backend, hbar=hbar)
-            plus_generator = mixed_eom_generator(plus_triple, backend, hbar=hbar)
-            minus_link = partial_fourth_order_gauss_magnus_link(
-                minus_generator,
-                plus_generator,
-                step,
-                c_minus,
-                backend,
-            )
-            plus_link = partial_fourth_order_gauss_magnus_link(
-                minus_generator,
-                plus_generator,
-                step,
-                c_plus,
-                backend,
-            )
-            proposed_minus = minus_link @ current @ minus_link.conj().T
-            proposed_plus = plus_link @ current @ plus_link.conj().T
-            nonlinear_residual = max(
-                relative_frobenius(proposed_minus - guess_minus, proposed_minus, backend),
-                relative_frobenius(proposed_plus - guess_plus, proposed_plus, backend),
-            )
-            guess_minus = proposed_minus
-            guess_plus = proposed_plus
-            if nonlinear_residual <= selected.tolerance:
-                final_minus = eom_provider(minus_time, guess_minus)
-                final_plus = eom_provider(plus_time, guess_plus)
-                check_minus_generator = mixed_eom_generator(
-                    final_minus,
-                    backend,
-                    hbar=hbar,
-                )
-                check_plus_generator = mixed_eom_generator(
-                    final_plus,
-                    backend,
-                    hbar=hbar,
-                )
-                check_minus_link = partial_fourth_order_gauss_magnus_link(
-                    check_minus_generator,
-                    check_plus_generator,
-                    step,
-                    c_minus,
-                    backend,
-                )
-                check_plus_link = partial_fourth_order_gauss_magnus_link(
-                    check_minus_generator,
-                    check_plus_generator,
-                    step,
-                    c_plus,
-                    backend,
-                )
-                check_minus = check_minus_link @ current @ check_minus_link.conj().T
-                check_plus = check_plus_link @ current @ check_plus_link.conj().T
-                nonlinear_residual = max(
-                    relative_frobenius(check_minus - guess_minus, check_minus, backend),
-                    relative_frobenius(check_plus - guess_plus, check_plus, backend),
-                )
-                guess_minus = check_minus
-                guess_plus = check_plus
-                if nonlinear_residual <= selected.tolerance:
-                    converged = True
-                    break
-
-        if not converged or final_minus is None or final_plus is None:
-            raise PropagationError(
-                "nonlinear congruence Gauss-node solve failed at interval "
-                f"{index} after {selected.maximum_iterations} iterations; "
-                f"residual {nonlinear_residual:.3e}"
-            )
-        final_minus = eom_provider(minus_time, guess_minus)
-        final_plus = eom_provider(plus_time, guess_plus)
-        link = fourth_order_gauss_magnus_link(
-            final_minus,
-            final_plus,
-            step,
-            backend,
-            hbar=hbar,
-        )
-        input_mixed = current @ start_metric
-        input_trace = xp.trace(input_mixed)
-        current = link @ current @ link.conj().T
-        mixed = current @ target_metric
-        output_trace = xp.trace(mixed)
-        trace_scale = xp.maximum(xp.asarray(1.0), xp.abs(input_trace))
-        spectrum = xp.linalg.eigvals(mixed)
-        spectrum_scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(initial_spectrum))
-        real_spectrum_drift = (
-            xp.linalg.norm(xp.sort(xp.real(spectrum)) - xp.sort(xp.real(initial_spectrum)))
-            / spectrum_scale
-        )
-        imaginary_spectrum_drift = (
-            xp.maximum(
-                xp.max(xp.abs(xp.imag(spectrum))),
-                xp.max(xp.abs(xp.imag(initial_spectrum))),
-            )
-            / spectrum_scale
-        )
-        diagnostics.append(
-            NonlinearMixedDensityStepDiagnostics(
-                start_time_au=left_time,
-                end_time_au=right_time,
-                nonlinear_iterations=nonlinear_iterations,
-                nonlinear_residual=nonlinear_residual,
-                cross_metric_residual=cross_metric_residual(
-                    link,
-                    start_metric,
-                    target_metric,
-                    backend,
-                ),
-                trace_drift=backend.scalar_to_float(
-                    xp.abs(output_trace - input_trace) / trace_scale
-                ),
-                trace_imaginary_abs=backend.scalar_to_float(xp.abs(xp.imag(output_trace))),
-                occupation_spectrum_drift=backend.scalar_to_float(
-                    xp.maximum(real_spectrum_drift, imaginary_spectrum_drift)
-                ),
-                metric_hermiticity_residual=mixed_metric_hermiticity_residual(
-                    mixed,
-                    target_metric,
-                    backend,
-                ),
-                contravariant_hermiticity_residual=relative_frobenius(
-                    current - current.conj().T,
-                    current,
-                    backend,
-                ),
-            )
-        )
-        contravariant_values.append(xp.array(current, dtype=xp.complex128, copy=True))
-        mixed_values.append(xp.array(mixed, dtype=xp.complex128, copy=True))
-        minus_nodes.append(xp.array(guess_minus, dtype=xp.complex128, copy=True))
-        plus_nodes.append(xp.array(guess_plus, dtype=xp.complex128, copy=True))
-        links.append(xp.array(link, dtype=xp.complex128, copy=True))
+    for _ in range(intervals):
+        result = propagator.step()
+        contravariant_values.append(result.contravariant_density)
+        mixed_values.append(result.mixed_density)
+        minus_nodes.append(result.gauss_minus_contravariant_density)
+        plus_nodes.append(result.gauss_plus_contravariant_density)
+        links.append(result.link)
+        diagnostics.append(result.diagnostics)
 
     return NonlinearContravariantDensityPropagation(
         times_au=times,
@@ -863,6 +1066,10 @@ def propagate_nonlinear_contravariant_density(
         links=tuple(links),
         diagnostics=tuple(diagnostics),
     )
+
+
+def _identity_eom_triple(value: EOMTriple) -> EOMTriple:
+    return value
 
 
 def _validate_square(value: Any, backend: ArrayBackend, name: str) -> None:

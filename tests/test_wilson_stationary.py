@@ -1,26 +1,46 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from aion.backends import NumPyBackend
-from aion.config import BackendConfig, XCFamily
+from aion.config import (
+    AffineElectromagneticSourceConfig,
+    BackendConfig,
+    ExactWilsonActionConfig,
+    ReferenceLinkConfig,
+    WilsonGridKind,
+    WilsonGridPruning,
+    WilsonMagneticGaugeKind,
+    WilsonNumericsConfig,
+    WilsonStationaryConfig,
+    WilsonStationaryOutputConfig,
+    WilsonStationaryPolicyConfig,
+    XCFamily,
+    ZeroSourceConfig,
+)
 from aion.electromagnetism import (
     AffineMagneticGauge,
     MagneticGaugeKind,
     UniformMagneticField,
     affine_gauge_difference_potential,
+    build_affine_electromagnetic_source,
 )
 from aion.electronic_structure import (
     AOGridPolicy,
     AOQuadrature,
     StationarySCFPolicy,
     WilsonStationaryBranch,
+    auxiliary_space_fingerprint,
+    capture_wilson_stationary_state,
+    load_wilson_stationary_state,
     prepare_ao_quadrature,
     prepare_exact_wilson_stationary_model,
     prepare_pyscf_reference,
+    save_wilson_stationary_state,
 )
 from test_reference_integration import molecular_config
 
@@ -57,6 +77,7 @@ def _quadrature() -> AOQuadrature:
 def test_stationary_solver_converges_with_independent_residuals_and_invariants(
     branch: WilsonStationaryBranch,
     field_strength: float,
+    tmp_path: Path,
 ) -> None:
     quadrature = _quadrature()
     gauge = AffineMagneticGauge(UniformMagneticField((0.0, 0.0, field_strength)))
@@ -91,6 +112,65 @@ def test_stationary_solver_converges_with_independent_residuals_and_invariants(
     assert state.closed_shell_density_polynomial_residual < 2.0e-12
     assert state.double_counting_residual_au < 2.0e-11
     assert state.metric_minimum_eigenvalue > 0.0
+
+    if branch is WilsonStationaryBranch.KOHN_SHAM_LDA and field_strength == 0.0:
+        source_config = AffineElectromagneticSourceConfig(
+            electric=ZeroSourceConfig(),
+            electric_field_origin_offset_au=(0.0, 0.0, 0.0),
+            magnetic_field_reference_au=(0.0, 0.0, field_strength),
+            magnetic_field_rate_au=(0.0, 0.0, 0.0),
+            magnetic_reference_time_au=0.0,
+            magnetic_gauge=WilsonMagneticGaugeKind.SYMMETRIC,
+        )
+        config = WilsonStationaryConfig(
+            reference=ReferenceLinkConfig(
+                quadrature.reference.fingerprint_sha256,
+                Path("reference.h5"),
+            ),
+            action=ExactWilsonActionConfig(branch),
+            numerics=WilsonNumericsConfig(
+                grid_kind=WilsonGridKind.QUALIFICATION,
+                grid_level=2,
+                grid_pruning=WilsonGridPruning.NONE,
+                block_size=1024,
+                auxiliary_basis="weigend",
+                ri_relative_threshold=0.0,
+                ri_absolute_threshold=1.0e-7,
+                ri_maximum_rank=None,
+            ),
+            source=source_config,
+            source_time_au=0.0,
+            stationary=WilsonStationaryPolicyConfig(
+                maximum_iterations=80,
+                density_tolerance=2.0e-9,
+                orbital_tolerance=2.0e-9,
+                energy_tolerance_au=2.0e-10,
+                damping=0.5,
+                diis_start_iteration=2,
+                diis_space=8,
+            ),
+            backend=BackendConfig(),
+            output=WilsonStationaryOutputConfig(tmp_path / "stationary.h5"),
+        )
+        source = build_affine_electromagnetic_source(
+            source_config,
+            gauge.origin_au,
+        ).sample(0.0)
+        portable = capture_wilson_stationary_state(
+            config,
+            state,
+            source,
+            grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
+            auxiliary_space_fingerprint_sha256=auxiliary_space_fingerprint(model.hartree_evaluator),
+            backend=quadrature.backend,
+        )
+        save_wilson_stationary_state(portable, config.output.artifact_path)
+        loaded = load_wilson_stationary_state(config.output.artifact_path)
+        assert loaded.fingerprint_sha256 == portable.fingerprint_sha256
+        np.testing.assert_array_equal(
+            loaded.contravariant_density,
+            np.asarray(state.coefficient_density),
+        )
 
 
 def test_gauge_related_stationary_solutions_have_equal_energy_and_density() -> None:

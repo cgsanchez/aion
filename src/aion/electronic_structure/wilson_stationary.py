@@ -9,7 +9,8 @@ from typing import Any, Protocol
 import numpy as np
 from scipy.linalg import eigh
 
-from aion.config import BackendKind, WilsonStationaryBranch as WilsonStationaryBranch
+from aion.config import BackendKind
+from aion.config import WilsonStationaryBranch as WilsonStationaryBranch
 from aion.electromagnetism import AffineMagneticGauge
 from aion.electronic_structure.adiabatic import expectation, hermitian_part
 from aion.electronic_structure.ao_quadrature import AOQuadrature
