@@ -258,6 +258,10 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
     accepted_electron_count = float(checkpoint["electrons"])
     electron_count_residual = abs(reference.ground_state.electron_count - accepted_electron_count)
     expected_shape = (int(checkpoint["nao"]), int(checkpoint["nao"]))
+    expected_coefficient_shape = (
+        int(checkpoint["nao"]),
+        int(checkpoint["electrons"]) // 2,
+    )
     reconstruction_checks = {
         "scientific_configuration_id": reference.config.scientific_id,
         "accepted_reference_fingerprint_sha256": checkpoint["reference_fingerprint_sha256"],
@@ -274,6 +278,7 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
         "density_shape": list(reference.ground_state.density.shape),
         "accepted_state_shape": list(initial_coefficients.shape),
         "expected_ao_shape": list(expected_shape),
+        "expected_closed_shell_coefficient_shape": list(expected_coefficient_shape),
         "interpretation": (
             "The prepared-reference fingerprint includes bytewise SCF orbital and "
             "density arrays. A repeated converged PySCF calculation need not reproduce "
@@ -289,7 +294,7 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
         raise RuntimeError("reconstructed CO electron count does not match accepted NQ8 input")
     if reference.ground_state.density.shape != expected_shape:
         raise RuntimeError("reconstructed CO AO dimension does not match accepted NQ8 input")
-    if initial_coefficients.shape != expected_shape:
+    if initial_coefficients.shape != expected_coefficient_shape:
         raise RuntimeError("accepted CO warm-start state has an incompatible AO dimension")
     quadrature = _timed(
         stages,
