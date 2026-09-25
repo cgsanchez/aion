@@ -78,6 +78,7 @@ the discrete action:
 - AO grid source (`reference` or explicit qualification grid), level and
   pruning;
 - AO block size and optional memory budget;
+- a strict maximum number of spatial and temporal dynamic-cache entries;
 - auxiliary basis;
 - RI metric relative threshold, absolute threshold, and optional maximum
   rank; and

@@ -16,11 +16,17 @@ from aion.observables.records import (
     ObservableRecord,
     SamplingLocation,
 )
+from aion.observables.wilson import (
+    ExactWilsonEndpointObservation,
+    WilsonEnergyObservation,
+    evaluate_exact_wilson_endpoint_observation,
+)
 
 __all__ = [
     "DiagnosticCalculator",
     "DipoleCurrentCalculator",
     "EnergyCalculator",
+    "ExactWilsonEndpointObservation",
     "InstantaneousDiagnostics",
     "ObservableArray",
     "ObservableCalculators",
@@ -28,6 +34,8 @@ __all__ = [
     "ObservableDependency",
     "ObservableRecord",
     "SamplingLocation",
+    "WilsonEnergyObservation",
     "build_observable_calculators",
+    "evaluate_exact_wilson_endpoint_observation",
     "observable_definition_catalog",
 ]

@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from dataclasses import replace
+
+import numpy as np
+import pytest
+
+from aion.config import BackendConfig, BackendKind
+from aion.workflows import BuiltWilsonSimulation, build_simulation
+from test_wilson_workflow import prepare_exact_wilson_inputs
+
+pytestmark = pytest.mark.gpu
+
+
+def test_exact_wilson_runtime_observables_and_step_remain_on_physical_gpu() -> None:
+    cpu_config, reference, state = prepare_exact_wilson_inputs()
+    cpu = build_simulation(cpu_config, reference, stationary_state=state)
+    gpu_config = replace(
+        cpu_config,
+        backend=BackendConfig(kind=BackendKind.GPU, device_index=0),
+    )
+    gpu = build_simulation(gpu_config, reference, stationary_state=state)
+    assert isinstance(gpu, BuiltWilsonSimulation)
+    gpu.quadrature.backend.assert_resident(gpu.density, name="GPU Wilson density")
+
+    cpu_observation = cpu.observe_endpoint(include_energy=True)
+    gpu_observation = gpu.observe_endpoint(include_energy=True)
+    gpu.quadrature.backend.assert_resident(
+        gpu_observation.uniform_source_current_au,
+        name="GPU Wilson source current",
+    )
+    gpu.quadrature.backend.assert_resident(
+        gpu_observation.electronic_dipole_au,
+        name="GPU Wilson dipole",
+    )
+    np.testing.assert_allclose(
+        gpu.quadrature.backend.to_host(gpu_observation.uniform_source_current_au),
+        cpu_observation.uniform_source_current_au,
+        atol=2.0e-9,
+        rtol=2.0e-9,
+    )
+    np.testing.assert_allclose(
+        gpu.quadrature.backend.to_host(gpu_observation.electronic_dipole_au),
+        cpu_observation.electronic_dipole_au,
+        atol=2.0e-9,
+        rtol=2.0e-9,
+    )
+    gpu.step()
+    gpu.quadrature.backend.assert_resident(gpu.density, name="stepped GPU Wilson density")
+    np.testing.assert_allclose(
+        gpu.quadrature.backend.to_host(gpu.density),
+        cpu.step().contravariant_density,
+        atol=2.0e-9,
+        rtol=2.0e-9,
+    )

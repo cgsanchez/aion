@@ -5,13 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, overload
 
 from aion.config import (
     BackendConfig,
     OutputConfig,
     ReferenceConfig,
     SimulationConfig,
+    WilsonSimulationConfig,
     dumps_config,
 )
 from aion.electromagnetism import (
@@ -22,6 +23,10 @@ from aion.electromagnetism import (
     compile_source_for_reference,
 )
 from aion.electronic_structure import PreparedReference as PreparedReference
+from aion.electronic_structure import (
+    WilsonStationaryStateData,
+    load_wilson_stationary_state,
+)
 from aion.errors import FormulationError
 from aion.formulations import (
     AODensity,
@@ -40,6 +45,7 @@ from aion.propagation import (
     build_initial_orbital_state,
     build_propagator,
 )
+from aion.workflows.wilson import BuiltWilsonSimulation, build_wilson_simulation
 
 if TYPE_CHECKING:
     from aion.workflows.runner import RunControl
@@ -139,16 +145,50 @@ def load_reference(
     )
 
 
+@overload
 def build_simulation(
     config: SimulationConfig,
     reference: PreparedReference,
     *,
     original_toml: str | None = None,
-) -> BuiltSimulation:
+) -> BuiltSimulation: ...
+
+
+@overload
+def build_simulation(
+    config: WilsonSimulationConfig,
+    reference: PreparedReference,
+    *,
+    stationary_state: WilsonStationaryStateData | None = None,
+    original_toml: str | None = None,
+) -> BuiltWilsonSimulation: ...
+
+
+def build_simulation(
+    config: SimulationConfig | WilsonSimulationConfig,
+    reference: PreparedReference,
+    *,
+    stationary_state: WilsonStationaryStateData | None = None,
+    original_toml: str | None = None,
+) -> BuiltSimulation | BuiltWilsonSimulation:
     """Build an independent source/formulation/state/workspace binding."""
 
+    if isinstance(config, WilsonSimulationConfig):
+        wilson_state = (
+            load_wilson_stationary_state(config.stationary_state.path)
+            if stationary_state is None
+            else stationary_state
+        )
+        return build_wilson_simulation(
+            config,
+            reference,
+            wilson_state,
+            original_toml=original_toml,
+        )
     if not isinstance(config, SimulationConfig):
-        raise TypeError("config must be SimulationConfig")
+        raise TypeError("config must be SimulationConfig or WilsonSimulationConfig")
+    if stationary_state is not None:
+        raise TypeError("stationary_state is valid only for a Wilson simulation")
     if not isinstance(reference, PreparedReference):
         raise TypeError("reference must be PreparedReference")
     if config.reference.fingerprint_sha256 != reference.fingerprint_sha256:
@@ -159,7 +199,7 @@ def build_simulation(
     events = compile_event_schedule(config.events, config.propagation.time_grid)
     runtime_source = RuntimeSourceController(workspace, events)
     formulation = build_formulation(config.formulation, reference, workspace)
-    state = build_initial_orbital_state(formulation, workspace)
+    orbital_state = build_initial_orbital_state(formulation, workspace)
     propagator = build_propagator(formulation, config.propagation, workspace)
     calculators = build_observable_calculators(
         config.output.schedules,
@@ -173,7 +213,7 @@ def build_simulation(
         reference=reference,
         source=source,
         formulation=formulation,
-        state=state,
+        state=orbital_state,
         propagator=propagator,
         calculators=calculators,
         events=events,

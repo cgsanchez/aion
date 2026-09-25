@@ -606,6 +606,7 @@ class WilsonNumericsConfig:
     grid_level: int | None
     grid_pruning: WilsonGridPruning
     block_size: int
+    dynamic_cache_entries: int
     auxiliary_basis: str
     ri_relative_threshold: float
     ri_absolute_threshold: float
@@ -634,6 +635,12 @@ class WilsonNumericsConfig:
             raise ConfigurationError("numerics.block_size must be an integer")
         if self.block_size < 1:
             raise ConfigurationError("numerics.block_size must be positive")
+        if (
+            isinstance(self.dynamic_cache_entries, bool)
+            or not isinstance(self.dynamic_cache_entries, int)
+            or self.dynamic_cache_entries < 1
+        ):
+            raise ConfigurationError("numerics.dynamic_cache_entries must be positive")
         if not isinstance(self.auxiliary_basis, str) or not self.auxiliary_basis.strip():
             raise ConfigurationError("numerics.auxiliary_basis must be explicit")
         for name in ("ri_relative_threshold", "ri_absolute_threshold"):
@@ -662,6 +669,7 @@ class WilsonNumericsConfig:
             "grid_level": self.grid_level,
             "grid_pruning": self.grid_pruning.value,
             "block_size": self.block_size,
+            "dynamic_cache_entries": self.dynamic_cache_entries,
             "memory_budget_bytes": self.memory_budget_bytes,
             "auxiliary_basis": self.auxiliary_basis,
             "ri_relative_threshold": self.ri_relative_threshold,

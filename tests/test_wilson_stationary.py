@@ -133,6 +133,7 @@ def test_stationary_solver_converges_with_independent_residuals_and_invariants(
                 grid_level=2,
                 grid_pruning=WilsonGridPruning.NONE,
                 block_size=1024,
+                dynamic_cache_entries=4,
                 auxiliary_basis="weigend",
                 ri_relative_threshold=0.0,
                 ri_absolute_threshold=1.0e-7,

@@ -379,6 +379,7 @@ def _parse_wilson_numerics(value: object) -> WilsonNumericsConfig:
         "grid_kind",
         "grid_pruning",
         "block_size",
+        "dynamic_cache_entries",
         "auxiliary_basis",
         "ri_relative_threshold",
         "ri_absolute_threshold",
@@ -400,6 +401,10 @@ def _parse_wilson_numerics(value: object) -> WilsonNumericsConfig:
             "numerics.grid_pruning",
         ),
         block_size=_integer(data["block_size"], "numerics.block_size"),
+        dynamic_cache_entries=_integer(
+            data["dynamic_cache_entries"],
+            "numerics.dynamic_cache_entries",
+        ),
         auxiliary_basis=_string(data["auxiliary_basis"], "numerics.auxiliary_basis"),
         ri_relative_threshold=_number(
             data["ri_relative_threshold"],

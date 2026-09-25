@@ -31,11 +31,19 @@ from aion.workflows.magnetic_benchmark import (
     save_magnetic_benchmark,
 )
 from aion.workflows.runner import RunControl
+from aion.workflows.wilson import (
+    BuiltWilsonSimulation,
+    ExactWilsonDynamicCache,
+    WilsonDynamicCacheStatistics,
+    build_wilson_simulation,
+)
 
 __all__ = [
     "BuiltSimulation",
+    "BuiltWilsonSimulation",
     "ComparisonManifest",
     "ComparisonMember",
+    "ExactWilsonDynamicCache",
     "MagneticBenchmarkConfig",
     "MagneticBenchmarkResult",
     "MagneticDiagnostic",
@@ -47,7 +55,9 @@ __all__ = [
     "RunControl",
     "Simulation",
     "Trajectory",
+    "WilsonDynamicCacheStatistics",
     "build_simulation",
+    "build_wilson_simulation",
     "create_comparison_manifest",
     "inspect_magnetic_benchmark",
     "load_magnetic_benchmark",

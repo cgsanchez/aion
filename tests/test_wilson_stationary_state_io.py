@@ -55,6 +55,7 @@ def stationary_state() -> WilsonStationaryStateData:
             grid_level=4,
             grid_pruning=WilsonGridPruning.NONE,
             block_size=2048,
+            dynamic_cache_entries=4,
             auxiliary_basis="weigend",
             ri_relative_threshold=0.0,
             ri_absolute_threshold=1.0e-7,
