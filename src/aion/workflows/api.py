@@ -37,6 +37,7 @@ from aion.formulations import (
     build_formulation,
 )
 from aion.io.trajectory import Trajectory as Trajectory
+from aion.io.wilson_trajectory import WilsonTrajectory
 from aion.observables import ObservableCalculators, build_observable_calculators
 from aion.propagation import (
     OrbitalState,
@@ -222,13 +223,33 @@ def build_simulation(
     )
 
 
+@overload
 def run(
     simulation: BuiltSimulation,
     *,
     control: RunControl | None = None,
-) -> Trajectory:
+) -> Trajectory: ...
+
+
+@overload
+def run(
+    simulation: BuiltWilsonSimulation,
+    *,
+    control: RunControl | None = None,
+) -> WilsonTrajectory: ...
+
+
+def run(
+    simulation: BuiltSimulation | BuiltWilsonSimulation,
+    *,
+    control: RunControl | None = None,
+) -> Trajectory | WilsonTrajectory:
     """Execute one validated simulation in the current process."""
 
+    if isinstance(simulation, BuiltWilsonSimulation):
+        from aion.workflows.wilson_runner import execute_wilson_simulation
+
+        return execute_wilson_simulation(simulation, control=control)
     from aion.workflows.runner import execute_simulation
 
     return execute_simulation(simulation, control=control)
@@ -238,19 +259,35 @@ def resume(
     checkpoint: PathInput,
     *,
     output: OutputConfig | PathInput | None = None,
-) -> Trajectory:
+) -> Trajectory | WilsonTrajectory:
     """Reconstruct a checkpoint and publish a child trajectory segment."""
 
+    from aion.io import ArtifactKind, validate_artifact
+
+    path = Path(checkpoint)
+    header = validate_artifact(path)
     from aion.workflows.runner import resume_simulation
 
     resolved_output: OutputConfig | str | Path | None
     resolved_output = Path(output) if isinstance(output, PathLike) else output
-    return resume_simulation(Path(checkpoint), output=resolved_output)
+    if header.schema.kind is ArtifactKind.WILSON_CHECKPOINT:
+        from aion.workflows.wilson_runner import resume_wilson_simulation
+
+        return resume_wilson_simulation(path, output=resolved_output)
+    return resume_simulation(path, output=resolved_output)
 
 
-def load_trajectory(path: PathInput) -> Trajectory:
+def load_trajectory(path: PathInput) -> Trajectory | WilsonTrajectory:
     """Load and validate a completed trajectory lazily."""
 
+    from aion.io import ArtifactKind, validate_artifact
+
+    artifact_path = Path(path)
+    header = validate_artifact(artifact_path)
+    if header.schema.kind is ArtifactKind.WILSON_TRAJECTORY:
+        from aion.io.wilson_trajectory import load_wilson_trajectory
+
+        return load_wilson_trajectory(artifact_path)
     from aion.io.trajectory import load_trajectory as load
 
-    return load(Path(path))
+    return load(artifact_path)

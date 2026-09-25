@@ -5,13 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from aion.electromagnetism import AffineVectorFieldVariation
+from aion.electromagnetism import (
+    AffineVectorFieldVariation,
+    GaussianScalarGaugeVariation,
+)
 from aion.electronic_structure import (
     ExactWilsonDynamicEvaluation,
     ExactWilsonPowerObservation,
+    NonlinearDensityPureGaugeWardResult,
+    NonlinearWeakContinuityResult,
     NonlinearWeakCurrentPairing,
     evaluate_exact_wilson_charge,
     evaluate_exact_wilson_power,
+    evaluate_nonlinear_density_pure_gauge_ward,
+    evaluate_nonlinear_weak_continuity,
     evaluate_nonlinear_weak_current_pairing,
 )
 
@@ -26,6 +33,19 @@ class WilsonEnergyObservation:
     nuclear_repulsion_au: Any
     electronic_au: Any
     molecular_total_au: Any
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonIdentityObservation:
+    """Accepted density-Ward and weak-continuity audit at one endpoint."""
+
+    variation: GaussianScalarGaugeVariation
+    density_ward: NonlinearDensityPureGaugeWardResult
+    weak_continuity: NonlinearWeakContinuityResult
+    ward_residual_abs: Any
+    density_shell_residual_relative_norm: float
+    finite_region_continuity_residual_abs: Any
+    global_charge_residual_abs: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +67,7 @@ class ExactWilsonEndpointObservation:
     power_identity_residual_au: Any
     power: ExactWilsonPowerObservation
     energy: WilsonEnergyObservation | None
+    identities: WilsonIdentityObservation | None
 
 
 def evaluate_exact_wilson_endpoint_observation(
@@ -54,6 +75,8 @@ def evaluate_exact_wilson_endpoint_observation(
     coefficient_density: object,
     *,
     include_energy: bool,
+    include_identities: bool = False,
+    identity_variation: GaussianScalarGaugeVariation | None = None,
 ) -> ExactWilsonEndpointObservation:
     """Evaluate dipole, source current, power, charge, and scheduled energy."""
 
@@ -126,6 +149,41 @@ def evaluate_exact_wilson_endpoint_observation(
         if include_energy
         else None
     )
+    identities = None
+    if include_identities:
+        identity_test = (
+            GaussianScalarGaugeVariation(
+                amplitude=0.37,
+                center_au=(0.11, -0.17, 0.23),
+                exponent_au_inverse2=0.41,
+            )
+            if identity_variation is None
+            else identity_variation
+        )
+        if not isinstance(identity_test, GaussianScalarGaugeVariation):
+            raise TypeError("identity_variation must be a GaussianScalarGaugeVariation")
+        ward = evaluate_nonlinear_density_pure_gauge_ward(
+            model,
+            sample.one_electron,
+            density,
+            power.velocity_density,
+            identity_test,
+        )
+        continuity = evaluate_nonlinear_weak_continuity(
+            model,
+            sample.one_electron,
+            density,
+            identity_test,
+        )
+        identities = WilsonIdentityObservation(
+            variation=identity_test,
+            density_ward=ward,
+            weak_continuity=continuity,
+            ward_residual_abs=xp.abs(ward.total_ward_residual),
+            density_shell_residual_relative_norm=(ward.lower_density_shell_residual_relative_norm),
+            finite_region_continuity_residual_abs=xp.abs(continuity.finite_region_residual),
+            global_charge_residual_abs=xp.abs(continuity.global_charge_residual),
+        )
     return ExactWilsonEndpointObservation(
         time_au=sample.source.time_au,
         electronic_dipole_au=electronic_dipole,
@@ -144,4 +202,5 @@ def evaluate_exact_wilson_endpoint_observation(
         power_identity_residual_au=power.power_identity_residual_au,
         power=power,
         energy=energy,
+        identities=identities,
     )

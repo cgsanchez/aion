@@ -174,12 +174,17 @@ class NonlinearContravariantDensityPropagator[EvaluationT]:
     policy: NonlinearGaussMagnusPolicy = field(default_factory=NonlinearGaussMagnusPolicy)
     hbar: float = 1.0
     initial_boundary_index: int = 0
+    initial_occupation_spectrum: InitVar[Any | None] = None
     _current_contravariant_density: Any = field(init=False, repr=False)
     _initial_occupation_spectrum: Any = field(init=False, repr=False)
     _boundary_index: int = field(init=False, repr=False)
     _dimension: int = field(init=False, repr=False)
 
-    def __post_init__(self, initial_contravariant_density: Any) -> None:
+    def __post_init__(
+        self,
+        initial_contravariant_density: Any,
+        initial_occupation_spectrum: Any | None,
+    ) -> None:
         _validate_square(
             initial_contravariant_density,
             self.backend,
@@ -226,11 +231,14 @@ class NonlinearContravariantDensityPropagator[EvaluationT]:
         )
         object.__setattr__(self, "_dimension", dimension)
         object.__setattr__(self, "_current_contravariant_density", current)
-        object.__setattr__(
-            self,
-            "_initial_occupation_spectrum",
-            xp.linalg.eigvals(current @ initial_metric),
-        )
+        if initial_occupation_spectrum is None:
+            spectrum = xp.linalg.eigvals(current @ initial_metric)
+        else:
+            spectrum = xp.asarray(initial_occupation_spectrum, dtype=xp.complex128)
+            self.backend.assert_resident(spectrum, name="initial occupation spectrum")
+            if spectrum.shape != (dimension,):
+                raise PropagationError("initial occupation spectrum has an incompatible dimension")
+        object.__setattr__(self, "_initial_occupation_spectrum", spectrum)
         object.__setattr__(self, "_boundary_index", self.initial_boundary_index)
 
     @property

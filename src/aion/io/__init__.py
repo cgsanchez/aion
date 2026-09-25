@@ -31,6 +31,17 @@ from aion.io.status import (
 )
 from aion.io.transaction import publish_hdf5, write_dataset
 from aion.io.versions import SchemaVersion
+from aion.io.wilson_checkpoint import (
+    WilsonCheckpointData,
+    load_wilson_checkpoint,
+    save_wilson_checkpoint,
+)
+from aion.io.wilson_trajectory import (
+    WilsonSeries,
+    WilsonTrajectory,
+    WilsonTrajectoryWriter,
+    load_wilson_trajectory,
+)
 
 __all__ = [
     "CASIDA_SCHEMA",
@@ -53,10 +64,17 @@ __all__ = [
     "RunPhase",
     "RunStatus",
     "SchemaVersion",
+    "WilsonCheckpointData",
+    "WilsonSeries",
+    "WilsonTrajectory",
+    "WilsonTrajectoryWriter",
     "dumps_status",
+    "load_wilson_checkpoint",
+    "load_wilson_trajectory",
     "loads_status",
     "publish_hdf5",
     "read_status",
+    "save_wilson_checkpoint",
     "stamp_artifact",
     "validate_artifact",
     "validate_open_artifact",

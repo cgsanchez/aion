@@ -1,5 +1,6 @@
 """Reusable preparation, simulation, execution, and loading workflows."""
 
+from aion.io.wilson_trajectory import WilsonTrajectory
 from aion.workflows.api import (
     BuiltSimulation,
     PreparedReference,
@@ -37,6 +38,7 @@ from aion.workflows.wilson import (
     WilsonDynamicCacheStatistics,
     build_wilson_simulation,
 )
+from aion.workflows.wilson_runner import WilsonRestartContext
 
 __all__ = [
     "BuiltSimulation",
@@ -56,6 +58,8 @@ __all__ = [
     "Simulation",
     "Trajectory",
     "WilsonDynamicCacheStatistics",
+    "WilsonRestartContext",
+    "WilsonTrajectory",
     "build_simulation",
     "build_wilson_simulation",
     "create_comparison_manifest",

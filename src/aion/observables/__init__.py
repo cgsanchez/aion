@@ -19,6 +19,7 @@ from aion.observables.records import (
 from aion.observables.wilson import (
     ExactWilsonEndpointObservation,
     WilsonEnergyObservation,
+    WilsonIdentityObservation,
     evaluate_exact_wilson_endpoint_observation,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "ObservableRecord",
     "SamplingLocation",
     "WilsonEnergyObservation",
+    "WilsonIdentityObservation",
     "build_observable_calculators",
     "evaluate_exact_wilson_endpoint_observation",
     "observable_definition_catalog",

@@ -221,16 +221,50 @@ class BuiltWilsonSimulation:
         selected_density = self.density if density is None else density
         return self.dynamic_cache.evaluate(selected_time, selected_density)
 
-    def observe_endpoint(self, *, include_energy: bool = False) -> ExactWilsonEndpointObservation:
+    def observe_endpoint(
+        self,
+        *,
+        include_energy: bool = False,
+        include_identities: bool = False,
+    ) -> ExactWilsonEndpointObservation:
         evaluation = self.evaluate()
         return evaluate_exact_wilson_endpoint_observation(
             evaluation,
             self.density,
             include_energy=include_energy,
+            include_identities=include_identities,
         )
 
     def step(self) -> NonlinearContravariantDensityStep[ExactWilsonDynamicEvaluation]:
         return self.propagator.step()
+
+    def restore_boundary(self, density: object, boundary_index: int) -> None:
+        """Replace the accepted state from one authenticated restart boundary."""
+
+        grid = self.config.propagation.time_grid
+        if (
+            isinstance(boundary_index, bool)
+            or not isinstance(boundary_index, int)
+            or not 0 <= boundary_index <= grid.intervals
+        ):
+            raise WilsonStateError("restart boundary index lies outside the simulation grid")
+        restored = self.quadrature.backend.asarray(
+            density,
+            dtype=self.quadrature.backend.namespace.complex128,
+        )
+        expected = self.stationary_state.contravariant_density.shape
+        if restored.shape != expected:
+            raise WilsonStateError(
+                f"restart density has shape {restored.shape}; expected {expected}"
+            )
+        self.propagator = _build_propagator(
+            self.config,
+            self.quadrature,
+            self.dynamic_cache,
+            restored,
+            boundary_index=boundary_index,
+            initial_occupation_spectrum=self.stationary_state.occupation_spectrum,
+        )
 
 
 def _grid_policy(config: WilsonSimulationConfig) -> AOGridPolicy:
@@ -266,6 +300,36 @@ def _validate_stationary_link(
         raise WilsonStateError("stationary source time is not the simulation start time")
     if state.config.backend.precision != config.backend.precision:
         raise WilsonStateError("stationary and simulation backend precision disagree")
+
+
+def _build_propagator(
+    config: WilsonSimulationConfig,
+    quadrature: AOQuadrature,
+    dynamic_cache: ExactWilsonDynamicCache,
+    initial_density: object,
+    *,
+    boundary_index: int,
+    initial_occupation_spectrum: object,
+) -> NonlinearContravariantDensityPropagator[ExactWilsonDynamicEvaluation]:
+    grid = config.propagation.time_grid
+    return NonlinearContravariantDensityPropagator[ExactWilsonDynamicEvaluation](
+        initial_contravariant_density=initial_density,
+        initial_time_au=grid.time_at(boundary_index),
+        interval_au=grid.step_au,
+        metric_provider=lambda time: dynamic_cache.sample(time).one_electron.metric,
+        evaluation_provider=dynamic_cache.evaluate,
+        eom_extractor=lambda evaluation: evaluation.triple,
+        backend=quadrature.backend,
+        policy=NonlinearGaussMagnusPolicy(
+            tolerance=config.propagation.nonlinear_tolerance,
+            maximum_iterations=config.propagation.maximum_iterations,
+        ),
+        initial_boundary_index=boundary_index,
+        initial_occupation_spectrum=quadrature.backend.asarray(
+            initial_occupation_spectrum,
+            dtype=quadrature.backend.namespace.complex128,
+        ),
+    )
 
 
 def build_wilson_simulation(
@@ -348,18 +412,13 @@ def build_wilson_simulation(
         stationary_state.contravariant_density,
         dtype=quadrature.backend.namespace.complex128,
     )
-    propagator = NonlinearContravariantDensityPropagator[ExactWilsonDynamicEvaluation](
-        initial_contravariant_density=initial_density,
-        initial_time_au=config.propagation.time_grid.start_au,
-        interval_au=config.propagation.time_grid.step_au,
-        metric_provider=lambda time: dynamic_cache.sample(time).one_electron.metric,
-        evaluation_provider=dynamic_cache.evaluate,
-        eom_extractor=lambda evaluation: evaluation.triple,
-        backend=quadrature.backend,
-        policy=NonlinearGaussMagnusPolicy(
-            tolerance=config.propagation.nonlinear_tolerance,
-            maximum_iterations=config.propagation.maximum_iterations,
-        ),
+    propagator = _build_propagator(
+        config,
+        quadrature,
+        dynamic_cache,
+        initial_density,
+        boundary_index=0,
+        initial_occupation_spectrum=stationary_state.occupation_spectrum,
     )
     quadrature.backend.assert_resident(initial_density, name="initial Wilson density")
     return BuiltWilsonSimulation(

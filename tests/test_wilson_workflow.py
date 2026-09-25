@@ -197,6 +197,7 @@ def test_exact_runtime_build_step_and_action_observables(
 
     lightweight = runtime.observe_endpoint()
     assert lightweight.energy is None
+    assert lightweight.identities is None
     assert lightweight.uniform_source_current_au.shape == (3,)
     assert lightweight.electronic_dipole_au.shape == (3,)
     np.testing.assert_allclose(
@@ -205,8 +206,12 @@ def test_exact_runtime_build_step_and_action_observables(
     )
     assert float(lightweight.metric_particle_number) == pytest.approx(2.0, abs=2.0e-10)
 
-    complete = runtime.observe_endpoint(include_energy=True)
+    complete = runtime.observe_endpoint(include_energy=True, include_identities=True)
     assert complete.energy is not None
+    assert complete.identities is not None
+    assert float(complete.identities.ward_residual_abs) < 2.0e-9
+    assert float(complete.identities.finite_region_continuity_residual_abs) < 2.0e-9
+    assert float(complete.identities.global_charge_residual_abs) < 2.0e-9
     assert float(complete.energy.molecular_total_au) == pytest.approx(
         state.energies.molecular_total_au,
         abs=2.0e-9,
