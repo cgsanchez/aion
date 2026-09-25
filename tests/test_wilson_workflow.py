@@ -13,6 +13,8 @@ from aion.config import (
     FixedTimeGrid,
     OutputConfig,
     RationalApproximation,
+    ReducedWilsonActionConfig,
+    ReducedWilsonLevel,
     ReferenceLinkConfig,
     WilsonGridKind,
     WilsonGridPruning,
@@ -31,17 +33,10 @@ from aion.config import (
 )
 from aion.electromagnetism import build_affine_electromagnetic_source
 from aion.electronic_structure import (
-    AOGridPolicy,
     ExactWilsonDynamicSample,
     PreparedReference,
-    RIMetricRankPolicy,
-    StationarySCFPolicy,
     WilsonStationaryStateData,
-    auxiliary_space_fingerprint,
-    capture_wilson_stationary_state,
-    prepare_ao_quadrature,
     prepare_exact_wilson_dynamic_sample,
-    prepare_exact_wilson_stationary_factory,
     prepare_pyscf_reference,
 )
 from aion.observables import evaluate_exact_wilson_endpoint_observation
@@ -53,6 +48,7 @@ from aion.workflows import (
     BuiltWilsonSimulation,
     ExactWilsonDynamicCache,
     build_simulation,
+    prepare_wilson_stationary_state,
 )
 from test_reference_integration import molecular_config
 
@@ -115,44 +111,7 @@ def prepare_exact_wilson_inputs() -> tuple[
         backend=BackendConfig(),
         output=WilsonStationaryOutputConfig(Path("stationary.h5")),
     )
-    quadrature = prepare_ao_quadrature(
-        reference,
-        BackendConfig(),
-        grid_policy=AOGridPolicy.reference(),
-        block_size=numerics.block_size,
-    )
-    rank_policy = RIMetricRankPolicy(
-        relative_threshold=numerics.ri_relative_threshold,
-        absolute_threshold=numerics.ri_absolute_threshold,
-    )
-    factory = prepare_exact_wilson_stationary_factory(
-        quadrature,
-        auxiliary_basis=numerics.auxiliary_basis,
-        functional=reference.config.electronic_structure.functional,
-        rank_policy=rank_policy,
-    )
-    source_provider = build_affine_electromagnetic_source(
-        source_config,
-        reference.electromagnetic_origin_au,
-    )
-    source = source_provider.sample(0.0)
-    model = factory.model(source.gauge, action.branch)
-    solved = model.solve(
-        policy=StationarySCFPolicy(
-            maximum_iterations=80,
-            density_tolerance=2.0e-9,
-            orbital_tolerance=2.0e-9,
-            energy_tolerance_au=2.0e-10,
-        )
-    )
-    state = capture_wilson_stationary_state(
-        stationary_config,
-        solved,
-        source,
-        grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
-        auxiliary_space_fingerprint_sha256=auxiliary_space_fingerprint(factory.hartree_evaluator),
-        backend=quadrature.backend,
-    )
+    state = prepare_wilson_stationary_state(stationary_config, reference)
     simulation = WilsonSimulationConfig(
         reference=stationary_config.reference,
         stationary_state=WilsonStationaryStateLinkConfig(
@@ -182,6 +141,21 @@ def exact_wilson_inputs() -> tuple[
     WilsonStationaryStateData,
 ]:
     return prepare_exact_wilson_inputs()
+
+
+def test_reduced_stationary_preparation_uses_the_common_state_contract() -> None:
+    _, reference, exact_state = prepare_exact_wilson_inputs()
+    reduced_config = replace(
+        exact_state.config,
+        action=ReducedWilsonActionConfig(
+            WilsonStationaryBranch.KOHN_SHAM_LDA,
+            ReducedWilsonLevel.E1,
+        ),
+    )
+    reduced = prepare_wilson_stationary_state(reduced_config, reference)
+    assert reduced.config.action == reduced_config.action
+    assert reduced.residuals.converged
+    assert reduced.residuals.particle_number == pytest.approx(2.0, abs=2.0e-10)
 
 
 def test_exact_runtime_build_step_and_action_observables(

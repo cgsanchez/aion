@@ -11,6 +11,7 @@ import numpy as np
 from aion.errors import TrajectoryError
 from aion.io.trajectory import Trajectory, load_trajectory
 from aion.io.util import publish_text
+from aion.io.wilson_trajectory import WilsonTrajectory, load_wilson_trajectory
 
 
 def _column_names(shape: tuple[int, ...], *, complex_values: bool) -> list[str]:
@@ -99,6 +100,87 @@ def export_trajectory_csv(
             json.dumps(
                 {
                     "schema": "aion.csv-export",
+                    "schema_version": "1.0.0",
+                    "source_trajectory": str(source.path.resolve()),
+                    "source_trajectory_sha256": source.sha256,
+                    "streams": records,
+                },
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n",
+        )
+    except FileExistsError as exc:
+        raise TrajectoryError(str(exc)) from exc
+    return (*outputs, manifest)
+
+
+def export_wilson_trajectory_csv(
+    trajectory: WilsonTrajectory | str | Path,
+    directory: str | Path,
+    *,
+    series_names: tuple[str, ...] | None = None,
+) -> tuple[Path, ...]:
+    """Export each selected Wilson observable series to its own CSV."""
+
+    source = (
+        load_wilson_trajectory(trajectory) if isinstance(trajectory, str | Path) else trajectory
+    )
+    selected = source.series_names if series_names is None else tuple(series_names)
+    unknown = sorted(set(selected) - set(source.series_names))
+    if unknown:
+        raise TrajectoryError("unknown Wilson series for CSV export: " + ", ".join(unknown))
+    target = Path(directory)
+    target.mkdir(parents=True, exist_ok=True)
+    outputs: list[Path] = []
+    records: list[dict[str, object]] = []
+    for name in selected:
+        series = source.read_series(name)
+        path = target / f"{name.replace('/', '__')}.csv"
+        if path.exists():
+            raise TrajectoryError(f"refusing to overwrite CSV export {path}")
+        columns = _column_names(
+            tuple(series.values.shape[1:]),
+            complex_values=np.iscomplexobj(series.values),
+        )
+        temporary = path.with_name(f".{path.name}.partial")
+        try:
+            with temporary.open("x", encoding="utf-8", newline="") as stream:
+                writer = csv.writer(stream)
+                writer.writerow(("global_step", "time_au", *columns))
+                numeric = _rows(series.values)
+                for index in range(series.steps.size):
+                    writer.writerow(
+                        (
+                            int(series.steps[index]),
+                            repr(float(series.times_au[index])),
+                            *(repr(float(value)) for value in numeric[index]),
+                        )
+                    )
+            try:
+                path.hardlink_to(temporary)
+            except FileExistsError:
+                raise TrajectoryError(f"refusing to overwrite CSV export {path}") from None
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        outputs.append(path)
+        records.append(
+            {
+                "series_name": name,
+                "file": path.name,
+                "physical_dimension": series.physical_dimension,
+                "shape": list(series.values.shape[1:]),
+                "unit": series.unit,
+            }
+        )
+    manifest = target / "export_manifest.json"
+    try:
+        publish_text(
+            manifest,
+            json.dumps(
+                {
+                    "schema": "aion.wilson-csv-export",
                     "schema_version": "1.0.0",
                     "source_trajectory": str(source.path.resolve()),
                     "source_trajectory_sha256": source.sha256,

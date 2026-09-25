@@ -22,12 +22,13 @@ from aion.config import (
     load_config,
 )
 from aion.errors import AionError, ConfigurationError, RunCancelledError, SchemaError
-from aion.io import validate_artifact
-from aion.io.export import export_trajectory_csv
+from aion.io import ArtifactKind, validate_artifact
+from aion.io.export import export_trajectory_csv, export_wilson_trajectory_csv
 from aion.workflows import (
     build_simulation,
     load_reference,
     prepare_reference,
+    prepare_wilson_stationary_state,
     resume,
     run,
 )
@@ -99,11 +100,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if command == "export":
             selected = cast(list[str] | None, args.observables)
-            outputs = export_trajectory_csv(
-                cast(Path, args.artifact),
-                cast(Path, args.output),
-                observable_ids=None if selected is None else tuple(selected),
-            )
+            artifact = cast(Path, args.artifact)
+            header = validate_artifact(artifact)
+            if header.schema.kind is ArtifactKind.WILSON_TRAJECTORY:
+                outputs = export_wilson_trajectory_csv(
+                    artifact,
+                    cast(Path, args.output),
+                    series_names=None if selected is None else tuple(selected),
+                )
+            else:
+                outputs = export_trajectory_csv(
+                    artifact,
+                    cast(Path, args.output),
+                    observable_ids=None if selected is None else tuple(selected),
+                )
             for output in outputs:
                 print(output)
             return 0
@@ -128,14 +138,24 @@ def _configuration_command(command: str, args: argparse.Namespace) -> int:
     if cast(bool, args.validate_only):
         return 0
     if command == "prepare":
-        if not isinstance(config, ReferenceConfig):
-            raise ConfigurationError("prepare requires an aion.reference-input document")
-        reference = prepare_reference(config)
-        reference.save()
-        print(f"reference = {config.output.artifact_path}")
-        return 0
-    if not isinstance(config, SimulationConfig):
-        raise ConfigurationError("run requires an aion.simulation-input document")
+        if isinstance(config, ReferenceConfig):
+            reference = prepare_reference(config)
+            reference.save()
+            print(f"reference = {config.output.artifact_path}")
+            return 0
+        if isinstance(config, WilsonStationaryConfig):
+            reference = load_reference(config.reference.path, backend=config.backend)
+            state = prepare_wilson_stationary_state(config, reference)
+            state.save()
+            print(f"stationary_state = {config.output.artifact_path}")
+            return 0
+        raise ConfigurationError(
+            "prepare requires an aion.reference-input or aion.wilson-stationary-input document"
+        )
+    if not isinstance(config, SimulationConfig | WilsonSimulationConfig):
+        raise ConfigurationError(
+            "run requires an aion.simulation-input or aion.wilson-simulation-input document"
+        )
     reference = load_reference(config.reference.path, backend=config.backend)
     simulation = build_simulation(
         config,

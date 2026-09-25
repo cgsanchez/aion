@@ -24,15 +24,23 @@ def test_public_api_is_small_and_versioned() -> None:
     assert aion.__version__ == "0.2.0.dev7"
     assert set(aion.__all__) == {
         "BackendConfig",
+        "BuiltWilsonSimulation",
+        "ExactWilsonActionConfig",
         "FormulationConfig",
         "ReferenceConfig",
         "SimulationConfig",
+        "WilsonSimulationConfig",
+        "WilsonStationaryConfig",
+        "WilsonStationaryStateData",
+        "WilsonTrajectory",
         "__version__",
         "build_simulation",
         "load_config",
         "load_reference",
         "load_trajectory",
+        "load_wilson_stationary_state",
         "prepare_reference",
+        "prepare_wilson_stationary_state",
         "resume",
         "run",
     }

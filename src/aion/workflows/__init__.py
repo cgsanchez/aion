@@ -1,5 +1,9 @@
 """Reusable preparation, simulation, execution, and loading workflows."""
 
+from aion.electronic_structure import (
+    WilsonStationaryStateData,
+    load_wilson_stationary_state,
+)
 from aion.io.wilson_trajectory import WilsonTrajectory
 from aion.workflows.api import (
     BuiltSimulation,
@@ -37,6 +41,7 @@ from aion.workflows.wilson import (
     ExactWilsonDynamicCache,
     WilsonDynamicCacheStatistics,
     build_wilson_simulation,
+    prepare_wilson_stationary_state,
 )
 from aion.workflows.wilson_runner import WilsonRestartContext
 
@@ -59,6 +64,7 @@ __all__ = [
     "Trajectory",
     "WilsonDynamicCacheStatistics",
     "WilsonRestartContext",
+    "WilsonStationaryStateData",
     "WilsonTrajectory",
     "build_simulation",
     "build_wilson_simulation",
@@ -67,7 +73,9 @@ __all__ = [
     "load_magnetic_benchmark",
     "load_reference",
     "load_trajectory",
+    "load_wilson_stationary_state",
     "prepare_reference",
+    "prepare_wilson_stationary_state",
     "resume",
     "run",
     "run_magnetic_benchmark",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import asdict, dataclass, field
+from os import PathLike
 from typing import Any, cast
 
 import numpy as np
@@ -344,6 +345,16 @@ class WilsonStationaryStateData:
             "residuals": self.residuals.as_mapping(),
             "iterations": [asdict(value) for value in self.iterations],
         }
+
+    def save(self, path: str | PathLike[str] | None = None) -> None:
+        """Transactionally publish this stationary state."""
+
+        from aion.electronic_structure.wilson_state_io import (
+            save_wilson_stationary_state,
+        )
+
+        target = self.config.output.artifact_path if path is None else path
+        save_wilson_stationary_state(self, target)
 
 
 def auxiliary_space_fingerprint(evaluator: RIWilsonHartreeEvaluator) -> str:

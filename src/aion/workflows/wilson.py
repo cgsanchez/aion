@@ -9,10 +9,13 @@ from typing import Any
 import numpy as np
 
 from aion.config import (
+    BackendKind,
     ExactWilsonActionConfig,
+    ReducedWilsonActionConfig,
     WilsonGridKind,
     WilsonSimulationConfig,
     WilsonStationaryBranch,
+    WilsonStationaryConfig,
     dumps_config,
 )
 from aion.electromagnetism import (
@@ -31,11 +34,14 @@ from aion.electronic_structure import (
     PreparedExactWilsonDynamicSpatialAction,
     PreparedReference,
     RIMetricRankPolicy,
+    StationarySCFPolicy,
     WilsonStationaryStateData,
     auxiliary_space_fingerprint,
+    capture_wilson_stationary_state,
     prepare_ao_quadrature,
     prepare_exact_wilson_dynamic_spatial_action,
     prepare_exact_wilson_stationary_factory,
+    prepare_reduced_wilson_factory,
 )
 from aion.errors import FormulationError, UnsupportedConfigurationError, WilsonStateError
 from aion.observables import (
@@ -276,6 +282,95 @@ def _grid_policy(config: WilsonSimulationConfig) -> AOGridPolicy:
         kind=AOGridKind.QUALIFICATION,
         level=numerics.grid_level,
         pruning=AOPruningKind(numerics.grid_pruning.value),
+    )
+
+
+def _stationary_grid_policy(config: WilsonStationaryConfig) -> AOGridPolicy:
+    numerics = config.numerics
+    if numerics.grid_kind is WilsonGridKind.REFERENCE:
+        return AOGridPolicy.reference()
+    assert numerics.grid_level is not None
+    return AOGridPolicy(
+        kind=AOGridKind.QUALIFICATION,
+        level=numerics.grid_level,
+        pruning=AOPruningKind(numerics.grid_pruning.value),
+    )
+
+
+def prepare_wilson_stationary_state(
+    config: WilsonStationaryConfig,
+    reference: PreparedReference,
+) -> WilsonStationaryStateData:
+    """Solve and capture one authenticated exact or reduced Wilson state."""
+
+    if not isinstance(config, WilsonStationaryConfig):
+        raise TypeError("config must be WilsonStationaryConfig")
+    if not isinstance(reference, PreparedReference):
+        raise TypeError("reference must be PreparedReference")
+    if config.reference.fingerprint_sha256 != reference.fingerprint_sha256:
+        raise WilsonStateError("stationary reference link does not match the supplied reference")
+    if config.backend.kind is BackendKind.GPU:
+        raise UnsupportedConfigurationError(
+            "Wilson stationary SCF is CPU-hosted; prepare a portable CPU state before GPU dynamics"
+        )
+    quadrature = prepare_ao_quadrature(
+        reference,
+        config.backend,
+        grid_policy=_stationary_grid_policy(config),
+        block_size=config.numerics.block_size,
+        memory_budget_bytes=config.numerics.memory_budget_bytes,
+    )
+    rank_policy = RIMetricRankPolicy(
+        relative_threshold=config.numerics.ri_relative_threshold,
+        absolute_threshold=config.numerics.ri_absolute_threshold,
+        maximum_rank=config.numerics.ri_maximum_rank,
+    )
+    exact_factory = prepare_exact_wilson_stationary_factory(
+        quadrature,
+        auxiliary_basis=config.numerics.auxiliary_basis,
+        functional=reference.config.electronic_structure.functional,
+        rank_policy=rank_policy,
+    )
+    source_provider = build_affine_electromagnetic_source(
+        config.source,
+        reference.electromagnetic_origin_au,
+    )
+    source = source_provider.sample(config.source_time_au)
+    model: Any
+    if isinstance(config.action, ExactWilsonActionConfig):
+        model = exact_factory.model(source.gauge, config.action.branch)
+    elif isinstance(config.action, ReducedWilsonActionConfig):
+        model = (
+            prepare_reduced_wilson_factory(exact_factory)
+            .spatial_action(
+                source.gauge,
+                config.action.level,
+            )
+            .sample(source, config.action.branch)
+        )
+    else:  # pragma: no cover - protected by the typed config boundary
+        raise TypeError("unsupported Wilson stationary action configuration")
+    policy = config.stationary
+    solved = model.solve(
+        policy=StationarySCFPolicy(
+            maximum_iterations=policy.maximum_iterations,
+            density_tolerance=policy.density_tolerance,
+            orbital_tolerance=policy.orbital_tolerance,
+            energy_tolerance_au=policy.energy_tolerance_au,
+            damping=policy.damping,
+            diis_start_iteration=policy.diis_start_iteration,
+            diis_space=policy.diis_space,
+        )
+    )
+    return capture_wilson_stationary_state(
+        config,
+        solved,
+        source,
+        grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
+        auxiliary_space_fingerprint_sha256=auxiliary_space_fingerprint(
+            exact_factory.hartree_evaluator
+        ),
+        backend=quadrature.backend,
     )
 
 

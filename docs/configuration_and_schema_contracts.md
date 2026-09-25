@@ -1,8 +1,10 @@
 # Aion 0.2 configuration and schema contracts
 
 Status: contracts through reusable execution, observation, checkpoint/restart,
-monitoring, and spectroscopy are implemented by WP1--WP6 for Aion
-`0.2.0.dev7`.
+monitoring, and spectroscopy are implemented by WP1--WP7 for Aion
+`0.2.0.dev7`. Phase Two P2-1 adds a separate exact/reduced Wilson
+configuration and artifact family; its H3+/LDA numerical evidence is an
+executed candidate pending explicit user review.
 
 ## 1. Authority and strictness
 
@@ -22,12 +24,14 @@ types. A CPU backend with a device index, a zero source with pulse parameters,
 an off-grid kick, or a formulation with the wrong integrator fails before
 numerical work.
 
-The two accepted configuration schemas are independently identified as:
+The four configuration schemas are independently identified as:
 
 | Document | `schema` | `schema_version` |
 | --- | --- | --- |
 | reference preparation | `aion.reference-input` | `1.0.0` |
 | real-time simulation | `aion.simulation-input` | `1.0.0` |
+| Wilson stationary preparation | `aion.wilson-stationary-input` | `1.0.0` |
+| Wilson real-time simulation | `aion.wilson-simulation-input` | `1.0.0` |
 
 Python 3.12 `tomllib` parses user input. `dumps_config` emits complete,
 deterministic TOML whose reload produces an equal immutable object and the
@@ -108,6 +112,45 @@ and LG/VG/P0 node-link gauge derivation. A pulse is simply a source object; its
 scientific use belongs to a workflow. Kicks are separate exact events and must
 lie on a state boundary.
 
+### 3.1 Exact/reduced Wilson configuration family
+
+`WilsonStationaryConfig` and `WilsonSimulationConfig` are deliberately not
+optional tables inside the ordinary simulation schema. They describe a
+different nonlinear action, propagated variable, integrator, stationary
+state, source domain, and artifact lineage.
+
+A stationary document contains an authenticated reference link, one exact or
+reduced action and closure branch, explicit Wilson numerical realization, one
+analytic affine electromagnetic source and preparation time, SCF policy, CPU
+backend, output artifact, and metadata. The numerical realization fixes:
+
+- reference or explicit qualification AO grid, level, and pruning;
+- AO block size and optional memory budget;
+- bounded dynamic-cache capacity;
+- auxiliary basis and RI metric rank thresholds; and
+- optional maximum retained RI rank.
+
+The exact action admits `hartree`, `kohn_sham_lda`, and `kohn_sham_gga`
+branches. The reduced action records a named `p0`, `strict_c1`, or
+`density_resummed_c1` level, but reusable reduced dynamics is rejected until
+P2-6. Stationary preparation is CPU-only; the resulting portable state may be
+consumed by CPU or GPU dynamics with the same precision.
+
+The affine source composes a zero or compact potential-first uniform electric
+provider, constant electric-field offset, `B` at a reference time, constant
+analytic `dB/dt`, electromagnetic origin, and symmetric or Landau gauge. It
+is sampled directly at arbitrary Gauss nodes. Arbitrary time-dependent
+magnetic envelopes and spatially nonuniform potentials are future provider
+variants, not hidden callbacks in this schema.
+
+A Wilson simulation links both reference and stationary-state content hashes,
+repeats the action/numerical/source identities, fixes an endpoint-inclusive
+grid, and requires `nonlinear_gauss_magnus` with Padé `[2/2]`. It stores an
+explicit nonlinear tolerance and iteration limit, backend, validation policy,
+and the same independent output schedules as the ordinary runner. Construction
+rejects a changed reference, grid, RI space, initial source sample, metric,
+precision, action, or stationary-state fingerprint before propagation.
+
 ## 4. Scientific identity
 
 `canonical_sha256` is a type-tagged, length-delimited canonical encoding. It
@@ -144,8 +187,11 @@ than edit one in place.
 | --- | --- | --- |
 | prepared reference | `aion.reference` `1.0.0` | `meta`, `configuration`, `reference` |
 | trajectory | `aion.trajectory` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `observables`, `diagnostics`, `events`, `restart` |
+| Wilson stationary state | `aion.wilson-stationary-state` `1.0.0` | `meta`, `configuration`, `reference`, `source`, `state`, `observables`, `diagnostics` |
+| Wilson trajectory | `aion.wilson-trajectory` `1.0.0` | `meta`, `configuration`, `reference`, `stationary_state`, `time`, `source`, `observables`, `diagnostics`, `events`, `restart` |
 | source history | `aion.source-history` `2.0.0` | `meta`, `configuration`, `time`, `source` |
 | checkpoint | `aion.checkpoint` `1.0.0` | `meta`, `configuration`, `reference`, `time`, `source`, `state`, `events`, `restart` |
+| Wilson checkpoint | `aion.wilson-checkpoint` `1.0.0` | `meta`, `configuration`, `reference`, `stationary_state`, `time`, `source`, `state`, `observers`, `events`, `restart` |
 | Casida result | `aion.casida` `1.0.0` | `meta`, `configuration`, `reference`, `roots`, `selection` |
 | kick spectrum | `aion.kick-spectrum` `1.0.0` | `meta`, `configuration`, `source`, `time`, `frequency`, `response` |
 
@@ -190,11 +236,12 @@ status at phase changes and approximately every 30 seconds during propagation.
 
 ## 7. API and CLI boundary
 
-The top-level public API exports configuration types and:
+The top-level public API exports ordinary and Wilson configuration types and:
 
 ```text
 prepare_reference  load_reference  build_simulation
 run                resume          load_trajectory
+prepare_wilson_stationary_state     load_wilson_stationary_state
 ```
 
 `prepare_reference` and `load_reference` are implemented by WP2, formulation
@@ -214,10 +261,23 @@ and checkpoints, and emits either `trajectory.h5` or a controlled
 `trajectory.failed.h5`. `resume` authenticates and reconstructs the saved
 reference, source, state, work, and event IDs before advancing a child segment.
 
+For a Wilson input, `build_simulation` authenticates the portable stationary
+state and constructs a bounded exact-action cache plus the stateful
+contravariant-density propagator. `run` streams action-owned dipole, uniform
+source current, charge, energy components, source power/work, Ward,
+weak-continuity, metric, and nonlinear diagnostics. A checkpoint contains the
+accepted density rather than an occupied-orbital gauge representative and
+preserves observer schedule state and accumulated Gauss-node work. Resume
+reconstructs the same integer boundary and produces a lineage-linked child
+trajectory.
+
 The `aion` command exposes `prepare`, `run`, `resume`, `inspect`, and `export`.
 `prepare` and `run` accept `--validate-only`, print the fully resolved TOML and
-scientific ID, and perform no numerical work in that mode. Ordinary `prepare`
-runs RKS and transactionally publishes the configured reference artifact.
+scientific ID, and perform no numerical work in that mode. `prepare` dispatches
+between ordinary reference preparation and Wilson stationary preparation by
+schema; `run`, `resume`, `inspect`, and `export` likewise dispatch by typed
+configuration or artifact schema. Ordinary reference preparation runs RKS and
+transactionally publishes the configured reference artifact.
 `inspect` validates and reports a completed HDF5 artifact header. `export`
 writes one CSV per independently sampled observable plus a provenance manifest.
 Exit status 2 denotes configuration/schema failure, 130 denotes graceful

@@ -702,18 +702,27 @@ P2-6 preparation may overlap P2-4 after P2-3 fixes reference comparisons.
 Application selection remains gated even if method qualification is already
 complete.
 
-## 15. Immediate next work
+## 15. Current execution state and next work
 
-The next gate is P2-0. Its first actions are:
+P2-0 is accepted in
+`docs/reviews/phase_two_p2_0_review_20260925.json`. P2-1 has completed its
+implementation, full software gates, authenticated H3+/LDA NQ4/NQ6
+reproduction, driven direct-oracle parity, deterministic restart, and
+physical-GPU parity/residency campaign. Its review entry point is
+`docs/phase_two_p2_1_qualification.md`; the gate remains pending explicit user
+review and is not self-accepted by the implementation agent.
 
-1. verify the branch and accepted-parent relationship;
-2. authenticate the accepted NQ9 manifest;
-3. execute the current CPU quality and integration gates;
-4. execute the complete physical-GPU gate with explicit permission;
-5. identify and hash the minimal ammonia heritage set; and
-6. write the P2-1 API and schema decision record before changing source code.
+If P2-1 is accepted, the next gate is P2-2 in its existing bounded order:
 
-No new molecular trajectory begins until these baseline actions pass.
+1. reproduce the selected CO/cc-pVDZ/PBE accepted NQ8 short transfer result;
+2. construct the fixed `G_DZ` NH3/cc-pVDZ/PBE exact-action zero-field bridge;
+3. compare that zero-field result with matching ordinary bare-length dynamics
+   as a reduction/integration check;
+4. apply the short smooth electric pulse along the NH3 C3 axis; and
+5. execute CPU followed by physical-GPU parity with the declared diagnostics.
+
+This update does not select a later production application or expand the P2-2
+basis/source matrix.
 
 ## 16. Change record
 
@@ -733,3 +742,6 @@ No new molecular trajectory begins until these baseline actions pass.
 - Separated field-free spectroscopy from magnetic and reduced-action transfer.
 - Deferred physical-application selection and execution to explicit later
   user gates.
+- Completed the P2-0 baseline and recorded its user acceptance.
+- Implemented P2-1 through increments A--E and linked its executed,
+  pending-review H3+/LDA qualification entry point.

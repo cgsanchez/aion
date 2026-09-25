@@ -7,7 +7,8 @@ import h5py
 import numpy as np
 import pytest
 
-from aion.config import FixedTimeGrid, WilsonStationaryStateLinkConfig
+from aion.cli import main
+from aion.config import FixedTimeGrid, WilsonStationaryStateLinkConfig, dumps_config
 from aion.electromagnetism import build_affine_electromagnetic_source
 from aion.electronic_structure import save_wilson_stationary_state
 from aion.errors import RunCancelledError
@@ -191,3 +192,39 @@ def test_wilson_interval_work_uses_the_two_converged_gauss_nodes(tmp_path: Path)
     np.testing.assert_allclose(increments, expected, atol=0.0, rtol=0.0)
     np.testing.assert_allclose(accumulated, np.cumsum(increments), atol=2.0e-16, rtol=0.0)
     assert np.max(np.abs(powers)) > 1.0e-9
+
+
+def test_wilson_cli_prepares_runs_inspects_exports_and_resumes(tmp_path: Path) -> None:
+    simulation_config, reference, prepared_state = prepare_exact_wilson_inputs()
+    reference_path = tmp_path / "reference.h5"
+    stationary_path = tmp_path / "stationary.h5"
+    reference.save(reference_path)
+    stationary_config = replace(
+        prepared_state.config,
+        reference=replace(prepared_state.config.reference, path=reference_path),
+        output=replace(prepared_state.config.output, artifact_path=stationary_path),
+    )
+    stationary_toml = tmp_path / "stationary.toml"
+    stationary_toml.write_text(dumps_config(stationary_config), encoding="utf-8")
+    assert main(["prepare", str(stationary_toml)]) == 0
+
+    config = replace(
+        simulation_config,
+        reference=replace(simulation_config.reference, path=reference_path),
+        stationary_state=WilsonStationaryStateLinkConfig(
+            prepared_state.fingerprint_sha256,
+            stationary_path,
+        ),
+        output=replace(simulation_config.output, directory=tmp_path / "run"),
+    )
+    simulation_toml = tmp_path / "simulation.toml"
+    simulation_toml.write_text(dumps_config(config), encoding="utf-8")
+    assert main(["run", str(simulation_toml)]) == 0
+    trajectory_path = tmp_path / "run/trajectory.h5"
+    assert main(["inspect", str(trajectory_path)]) == 0
+    export_path = tmp_path / "export"
+    assert main(["export", str(trajectory_path), str(export_path)]) == 0
+    assert (export_path / "export_manifest.json").is_file()
+    checkpoint_path = tmp_path / "run/checkpoint_00000002.h5"
+    assert main(["resume", str(checkpoint_path), "--output", str(tmp_path / "resumed")]) == 0
+    assert (tmp_path / "resumed/trajectory.h5").is_file()

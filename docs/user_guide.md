@@ -3,21 +3,36 @@
 ## Scope
 
 Aion 0.2 propagates fixed-nucleus, finite, all-electron molecules with
-closed-shell spin-summed RKS and pure LDA/GGA functionals. It supports
-prescribed uniform electric fields on fixed time grids in bare length gauge,
-bare velocity gauge, and the P0 and P0+E1 covariant models. CPU and NVIDIA GPU
-backends use float64/complex128 and never silently fall back between devices.
+closed-shell spin-summed RKS and pure LDA/GGA functionals. The original
+runtime supports prescribed uniform electric fields on fixed time grids in
+bare length gauge, bare velocity gauge, and the P0 and P0+E1 covariant
+models. The Phase Two runtime additionally supports the exact straight-Wilson
+action for analytic affine electromagnetic sources, including a uniform
+electric field, a uniform magnetic field, and the induction field required by
+a linearly time-dependent magnetic field. CPU and NVIDIA GPU backends use
+float64/complex128 and never silently fall back between devices.
 
 The release deliberately rejects pseudopotentials and nonlocal ionic
 operators, hybrids, moving nuclei, periodic boundary conditions, Maxwell
-backreaction, adaptive time steps, and magnetic or spatially nonuniform
-sources. The covariant interfaces preserve room for later nonuniform sources,
-but that physics is not claimed by 0.2.
+backreaction, adaptive time steps, and spatially nonuniform sources. Magnetic
+sources are accepted only by the exact/reduced Wilson configuration family;
+they remain invalid for the original bare/P0/P0+E1 runtime. The source-provider
+interface preserves room for later nonuniform sources, but EELS, moving
+charges, and general beyond-dipole fields are not claimed by 0.2.
+
+The reusable exact workflow is numerically qualified for the exact
+Kohn--Sham LDA action on equilateral H3+/cc-pVDZ with an unpruned level-4
+grid and `weigend` auxiliary basis. Exact Hartree and pure-GGA branches are
+implemented descendants of the accepted Chapter 13 action, but their
+reusable molecular transfer belongs to P2-2; reduced P0/E1 dynamics remains
+disabled until P2-6. This distinction is recorded so an available type is not
+mistaken for reviewed application evidence.
 
 ## Workflow
 
-An Aion calculation has two immutable stages. First, `prepare_reference()` (or
-`aion prepare`) performs the ground-state RKS calculation and stores its exact
+An ordinary bare/P0/P0+E1 calculation has two immutable stages. First,
+`prepare_reference()` (or `aion prepare`) performs the ground-state RKS
+calculation and stores its exact
 quadrature grid, AO operators, density, orbitals, nuclei, atom anchors, and
 fingerprints in `reference.h5`. Second, each `SimulationConfig` binds that
 authenticated reference to one source, formulation, fixed grid, backend, and
@@ -36,7 +51,22 @@ scientific identity and reconstruction contract because density fitting
 changes the approximated Coulomb functional; Aion never enables it merely as
 an unrecorded performance optimization.
 
-The three runnable workflows in [`examples/`](../examples/README.md) are the
+An exact-Wilson calculation adds an immutable stationary-state stage:
+
+1. prepare an ordinary `ReferenceConfig`;
+2. prepare a `WilsonStationaryConfig`, which solves the source-fixed exact
+   generalized eigenproblem and writes a portable
+   `aion.wilson-stationary-state` artifact; and
+3. run a `WilsonSimulationConfig` linked by both reference and stationary-state
+   content fingerprints.
+
+Stationary preparation is deliberately CPU-hosted. Its artifact contains
+backend-neutral complex128 arrays and can be consumed directly by CPU or GPU
+dynamics. The runtime authenticates the reference, action, grid, RI auxiliary
+space, source at the initial time, metric, precision, and stationary-state
+fingerprints before the first step.
+
+The runnable workflows in [`examples/`](../examples/README.md) are the
 shortest starting points. They cover reference/Casida response, all four
 comparison formulations under one pulse, and CLI checkpoint/resume.
 
@@ -49,6 +79,16 @@ support clamps the vector potential exactly to zero at both ends. Set
 field-free source. Always build its grid with `pulse_aligned_time_grid()` so
 the support boundary is an exact integer step. Kicks are exact, idempotent
 events on state boundaries and have formulation-owned maps.
+
+`AffineElectromagneticSourceConfig` is the exact-Wilson source contract. It
+combines zero or the same potential-first compact electric pulse, an optional
+constant electric-field offset at the electromagnetic origin, a magnetic
+field at an explicit reference time, a constant analytic magnetic-field
+derivative, and a symmetric or Landau affine gauge. Sampling at arbitrary
+Gauss nodes returns mutually consistent `E_origin(t)`, `B(t)`, and
+`dB(t)/dt`; the induction field is not supplied independently. The first
+schema intentionally does not encode an arbitrary direct electric-field
+envelope.
 
 ## Formulations and observables
 
@@ -90,6 +130,14 @@ Use independent `StepSchedule` values for dipole/current, energy, diagnostics,
 source samples, checkpoints, and optional density snapshots. Sparse schedules
 reduce I/O and expensive DFT energy evaluations without changing propagation.
 
+The exact runtime propagates the contravariant AO density with the accepted
+self-consistent two-node fourth-order Gauss--Magnus method and a Padé `[2/2]`
+coefficient link. There is no Löwdin/Cholesky propagation frame and no metric
+projection or cleanup. Its primary current, source power, energy components,
+dipole, charge, Ward identity, and weak-continuity diagnostic are all derived
+from the selected exact action. Gauss-node source power is integrated on every
+accepted interval even when endpoint energy output is sparse.
+
 ## Spectroscopy
 
 `aion.spectroscopy.run_casida()` reconstructs PySCF Casida-TDDFT from a saved
@@ -119,6 +167,34 @@ aion resume CHECKPOINT.h5 [--output DIRECTORY]
 aion inspect ARTIFACT.h5
 aion export TRAJECTORY.h5 DIRECTORY [--observable DEFINITION_ID ...]
 ```
+
+`prepare` dispatches by schema: it accepts both `aion.reference-input` and
+`aion.wilson-stationary-input`. Likewise `run`, `resume`, `inspect`, and
+`export` dispatch between ordinary and exact-Wilson artifacts. A minimal
+expert-Python lifecycle is:
+
+```python
+from aion import (
+    build_simulation,
+    load_reference,
+    load_wilson_stationary_state,
+    prepare_wilson_stationary_state,
+    run,
+)
+
+reference = load_reference("reference.h5")
+state = prepare_wilson_stationary_state(stationary_config, reference)
+state.save()
+state = load_wilson_stationary_state("stationary.h5")
+simulation = build_simulation(simulation_config, reference, stationary_state=state)
+trajectory = run(simulation)
+```
+
+The two typed configurations may be serialized with `dumps_config`; reloading
+the resolved TOML must preserve equality and the scientific ID. The lower
+level `BuiltWilsonSimulation.step()` interface advances exactly one accepted
+interval in memory and is intended for expert orchestration and tests; `run()`
+is the normal streaming, checkpointing, cancellation-aware execution boundary.
 
 Long campaigns should launch one run per process and live outside the Aion
 repository. A run directory is immutable: choose a new directory for a new
