@@ -63,8 +63,15 @@ An exact-Wilson calculation adds an immutable stationary-state stage:
 Stationary preparation is deliberately CPU-hosted. Its artifact contains
 backend-neutral complex128 arrays and can be consumed directly by CPU or GPU
 dynamics. The runtime authenticates the reference, action, grid, RI auxiliary
-space, source at the initial time, metric, precision, and stationary-state
-fingerprints before the first step.
+space, metric, precision, and stationary-state fingerprints before the first
+step. `WilsonSimulationConfig.initial_source_policy` defaults to `matched`,
+which also requires the full stationary and simulation source definitions to
+agree. `continuous_density_quench` is the narrow expert alternative for
+starting a run with a finite electric or magnetic-field-rate quench while
+leaving the density continuous: the initial magnetic field, spatial gauge
+representative, origin, and metric must remain exactly the same. It cannot be
+used for a magnetic-field jump or as a substitute for an exact discontinuous
+vector-potential kick.
 
 The runnable workflows in [`examples/`](../examples/README.md) are the
 shortest starting points. They cover reference/Casida response, all four

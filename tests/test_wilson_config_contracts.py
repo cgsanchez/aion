@@ -19,6 +19,7 @@ from aion.config import (
     Sin2VectorPotentialPulseConfig,
     WilsonGridKind,
     WilsonGridPruning,
+    WilsonInitialSourcePolicy,
     WilsonIntegratorKind,
     WilsonMagneticGaugeKind,
     WilsonNumericsConfig,
@@ -153,6 +154,15 @@ def test_operational_paths_and_metadata_do_not_change_scientific_identity() -> N
         metadata=MetadataConfig(host="other-host"),
     )
     assert moved_simulation.scientific_id == simulation.scientific_id
+
+
+def test_continuous_density_quench_is_explicit_and_round_trips() -> None:
+    config = replace(
+        simulation_config(),
+        initial_source_policy=WilsonInitialSourcePolicy.CONTINUOUS_DENSITY_QUENCH,
+    )
+    assert loads_config(dumps_config(config)).config == config
+    assert config.scientific_id != simulation_config().scientific_id
 
 
 def test_wilson_unknown_fields_and_unqualified_algorithm_choices_fail() -> None:

@@ -132,6 +132,13 @@ class WilsonMagneticGaugeKind(StrEnum):
     LANDAU = "landau"
 
 
+class WilsonInitialSourcePolicy(StrEnum):
+    """Compatibility required between a prepared state and run source."""
+
+    MATCHED = "matched"
+    CONTINUOUS_DENSITY_QUENCH = "continuous_density_quench"
+
+
 class WilsonIntegratorKind(StrEnum):
     NONLINEAR_GAUSS_MAGNUS = "nonlinear_gauss_magnus"
 
@@ -1235,6 +1242,7 @@ class WilsonSimulationConfig:
     propagation: WilsonPropagationConfig
     backend: BackendConfig
     output: OutputConfig
+    initial_source_policy: WilsonInitialSourcePolicy = WilsonInitialSourcePolicy.MATCHED
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
 
@@ -1247,6 +1255,7 @@ class WilsonSimulationConfig:
             ("propagation", self.propagation, WilsonPropagationConfig),
             ("backend", self.backend, BackendConfig),
             ("output", self.output, OutputConfig),
+            ("initial_source_policy", self.initial_source_policy, WilsonInitialSourcePolicy),
             ("validation", self.validation, ValidationConfig),
             ("metadata", self.metadata, MetadataConfig),
         )
@@ -1269,6 +1278,7 @@ class WilsonSimulationConfig:
             "action": self.action.as_mapping(),
             "numerics": self.numerics.as_mapping(),
             "source": self.source.as_mapping(),
+            "initial_source_policy": self.initial_source_policy.value,
             "propagation": self.propagation.as_mapping(),
             "backend": self.backend.scientific_mapping(),
             "validation": self.validation.as_mapping(),
@@ -1283,6 +1293,7 @@ class WilsonSimulationConfig:
             "action": self.action.as_mapping(),
             "numerics": self.numerics.as_mapping(),
             "source": self.source.as_mapping(),
+            "initial_source_policy": self.initial_source_policy.value,
             "propagation": self.propagation.as_mapping(),
             "backend": self.backend.as_mapping(),
             "validation": self.validation.as_mapping(),

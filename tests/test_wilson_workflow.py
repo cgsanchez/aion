@@ -18,6 +18,7 @@ from aion.config import (
     ReferenceLinkConfig,
     WilsonGridKind,
     WilsonGridPruning,
+    WilsonInitialSourcePolicy,
     WilsonIntegratorKind,
     WilsonMagneticGaugeKind,
     WilsonNumericsConfig,
@@ -39,6 +40,7 @@ from aion.electronic_structure import (
     prepare_exact_wilson_dynamic_sample,
     prepare_pyscf_reference,
 )
+from aion.errors import WilsonStateError
 from aion.observables import evaluate_exact_wilson_endpoint_observation
 from aion.propagation import (
     NonlinearGaussMagnusPolicy,
@@ -278,3 +280,35 @@ def test_dynamic_cache_is_bounded_and_uniform_current_pairs_to_power(
         atol=2.0e-10,
         rtol=2.0e-10,
     )
+
+
+def test_continuous_density_source_quench_requires_the_same_spatial_gauge(
+    exact_wilson_inputs: tuple[
+        WilsonSimulationConfig, PreparedReference, WilsonStationaryStateData
+    ],
+) -> None:
+    config, reference, state = exact_wilson_inputs
+    temporal_quench = replace(
+        config,
+        source=replace(
+            config.source,
+            electric_field_origin_offset_au=(2.0e-4, -1.0e-4, 3.0e-4),
+            magnetic_field_rate_au=(0.0, 0.0, 1.0e-5),
+        ),
+        initial_source_policy=WilsonInitialSourcePolicy.CONTINUOUS_DENSITY_QUENCH,
+    )
+    runtime = build_simulation(temporal_quench, reference, stationary_state=state)
+    np.testing.assert_array_equal(runtime.density, state.contravariant_density)
+
+    with pytest.raises(WilsonStateError, match="unchanged initial spatial gauge"):
+        build_simulation(
+            replace(
+                temporal_quench,
+                source=replace(
+                    temporal_quench.source,
+                    magnetic_field_reference_au=(0.0, 0.0, 0.011),
+                ),
+            ),
+            reference,
+            stationary_state=state,
+        )

@@ -13,6 +13,7 @@ from aion.config import (
     ExactWilsonActionConfig,
     ReducedWilsonActionConfig,
     WilsonGridKind,
+    WilsonInitialSourcePolicy,
     WilsonSimulationConfig,
     WilsonStationaryBranch,
     WilsonStationaryConfig,
@@ -389,7 +390,10 @@ def _validate_stationary_link(
         raise WilsonStateError("stationary and simulation action configurations disagree")
     if state.config.numerics != config.numerics:
         raise WilsonStateError("stationary and simulation numerical realizations disagree")
-    if state.config.source != config.source:
+    if (
+        config.initial_source_policy is WilsonInitialSourcePolicy.MATCHED
+        and state.config.source != config.source
+    ):
         raise WilsonStateError("stationary and simulation source configurations disagree")
     if state.config.source_time_au != config.propagation.time_grid.start_au:
         raise WilsonStateError("stationary source time is not the simulation start time")
@@ -480,11 +484,24 @@ def build_wilson_simulation(
         config.source,
         reference.electromagnetic_origin_au,
     )
-    if source_provider.fingerprint_sha256 != stationary_state.source_fingerprint_sha256:
+    if (
+        config.initial_source_policy is WilsonInitialSourcePolicy.MATCHED
+        and source_provider.fingerprint_sha256 != stationary_state.source_fingerprint_sha256
+    ):
         raise WilsonStateError("rebuilt source fingerprint disagrees with stationary state")
     initial_source = source_provider.sample(config.propagation.time_grid.start_au)
-    if initial_source != stationary_state.source_sample:
+    if (
+        config.initial_source_policy is WilsonInitialSourcePolicy.MATCHED
+        and initial_source != stationary_state.source_sample
+    ):
         raise WilsonStateError("simulation source at its start disagrees with stationary state")
+    if (
+        config.initial_source_policy is WilsonInitialSourcePolicy.CONTINUOUS_DENSITY_QUENCH
+        and initial_source.gauge != stationary_state.source_sample.gauge
+    ):
+        raise WilsonStateError(
+            "continuous-density source quench requires an unchanged initial spatial gauge"
+        )
 
     dynamic_cache = ExactWilsonDynamicCache(
         factory=factory,

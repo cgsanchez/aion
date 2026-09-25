@@ -144,12 +144,21 @@ magnetic envelopes and spatially nonuniform potentials are future provider
 variants, not hidden callbacks in this schema.
 
 A Wilson simulation links both reference and stationary-state content hashes,
-repeats the action/numerical/source identities, fixes an endpoint-inclusive
+repeats the action/numerical/source identities, declares its initial-source
+policy, fixes an endpoint-inclusive
 grid, and requires `nonlinear_gauss_magnus` with Padé `[2/2]`. It stores an
 explicit nonlinear tolerance and iteration limit, backend, validation policy,
 and the same independent output schedules as the ordinary runner. Construction
-rejects a changed reference, grid, RI space, initial source sample, metric,
-precision, action, or stationary-state fingerprint before propagation.
+rejects a changed reference, grid, RI space, metric, precision, action, or
+stationary-state fingerprint before propagation. The default `matched`
+initial-source policy also requires the stationary and simulation source
+definitions and initial samples to be identical. The explicit
+`continuous_density_quench` policy permits an instantaneous change of the
+scalar/temporal source while retaining the prepared density only when the
+initial spatial Wilson gauge is exactly unchanged. It therefore admits a
+finite electric or magnetic-field-rate quench in a fixed spatial frame, but
+rejects a magnetic-field, magnetic-gauge, origin, or metric jump. It is not a
+discontinuous vector-potential kick or a density transformation.
 
 ## 4. Scientific identity
 
