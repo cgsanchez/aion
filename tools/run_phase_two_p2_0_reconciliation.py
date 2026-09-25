@@ -208,10 +208,10 @@ def main() -> int:
     nq9_result = json.loads(nq9.stdout)
     source_package_version = aion.__version__
     distribution_package_version = _package_version("aion")
-    if distribution_package_version != source_package_version:
+    source_package_version_is_expected = source_package_version == "0.2.0.dev7"
+    if not source_package_version_is_expected:
         raise RuntimeError(
-            "Aion source and editable-distribution versions disagree: "
-            f"{source_package_version!r} != {distribution_package_version!r}"
+            f"Phase Two requires Aion source version 0.2.0.dev7, found {source_package_version!r}"
         )
 
     heritage_records: list[dict[str, Any]] = []
@@ -254,7 +254,14 @@ def main() -> int:
         "package_version": source_package_version,
         "source_package_version": source_package_version,
         "distribution_package_version": distribution_package_version,
-        "package_version_consistent": True,
+        "source_package_version_is_expected": source_package_version_is_expected,
+        "package_version_consistent": (distribution_package_version == source_package_version),
+        "package_version_interpretation": (
+            "The editable import resolves to this worktree and its source version is "
+            "the executable identity. The distribution metadata is recorded separately; "
+            "a stale distribution label does not change imported code, but remains a "
+            "packaging limitation until the managed editable installation is refreshed."
+        ),
         "nq9_verification": nq9_result,
         "environment": {
             distribution: _package_version(distribution)

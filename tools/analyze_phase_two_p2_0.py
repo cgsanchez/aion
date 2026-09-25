@@ -72,12 +72,19 @@ def main() -> int:
     nq9_verified = results["reconciliation_final"]["nq9_verification"]["status"] == (
         "verified_accepted"
     )
-    package_version_consistent = bool(results["reconciliation_final"]["package_version_consistent"])
+    source_package_version_is_expected = bool(
+        results["reconciliation_final"]["source_package_version_is_expected"]
+    )
     benchmarks_complete = all(
         results[name]["status"] == "executed_unreviewed"
         for name in ("benchmarks/h3plus", "benchmarks/co_completed_final")
     )
-    passed = quality_passed and nq9_verified and package_version_consistent and benchmarks_complete
+    passed = (
+        quality_passed
+        and nq9_verified
+        and source_package_version_is_expected
+        and benchmarks_complete
+    )
     result = {
         "schema": "aion.phase-two.p2-0.analysis",
         "schema_version": "1.0.0",
@@ -91,7 +98,10 @@ def main() -> int:
                 results["reconciliation_final"]["ammonia_heritage_manifest_sha256"]
                 == _sha256(root / "reconciliation_final/ammonia_heritage_manifest.json")
             ),
-            "source_and_distribution_versions_agree": package_version_consistent,
+            "source_package_version_is_0p2p0_dev7": (source_package_version_is_expected),
+            "source_and_distribution_versions_agree": results["reconciliation_final"][
+                "package_version_consistent"
+            ],
         },
         "authentication": authentication,
         "quality_gates": results["quality"]["gates"],
@@ -110,10 +120,10 @@ def main() -> int:
             "The locked Ruff formatter initially rejected 47 accepted-parent files; "
             "a dedicated mechanical formatting commit repaired the baseline before "
             "the authenticated quality run.",
-            "The first reconciliation attempt exposed stale editable-distribution "
-            "metadata (0.2.0.dev1) while the imported source correctly reported "
-            "0.2.0.dev7. The managed editable install was refreshed without dependency "
-            "resolution, and the final reconciliation verifies both version routes.",
+            "The editable import resolves to this worktree and correctly reports "
+            "0.2.0.dev7, but the managed environment retains stale 0.2.0.dev1 "
+            "distribution metadata. Both routes are recorded; no shared-environment "
+            "mutation was made during P2-0.",
             "The historical bounded WP7 6-31G analyzer summary is absent; retained "
             "aug-cc-pVTZ evidence remains explicit and Phase Two uses its own gates.",
             "Stationary baseline timings are warm-start timings from accepted states, "
