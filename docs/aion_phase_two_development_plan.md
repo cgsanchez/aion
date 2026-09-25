@@ -724,6 +724,12 @@ The active gate is P2-2 in its existing bounded order:
 This update does not select a later production application or expand the P2-2
 basis/source matrix.
 
+The pre-execution numerical matrix, explicit CO initial-source quench
+boundary, NH3 compact axial pulse, CPU/GPU stage order, diagnostics, and
+thresholded analysis contract are fixed in
+`docs/phase_two_p2_2_execution_matrix.md` and implemented by
+`tools/run_phase_two_p2_2_bridge.py`.
+
 ## 16. Change record
 
 ### 25 September 2026
@@ -746,3 +752,6 @@ basis/source matrix.
 - Implemented P2-1 through increments A--E and linked its executed,
   H3+/LDA qualification entry point.
 - Recorded the user's acceptance of P2-1 and opened bounded P2-2 execution.
+- Fixed and implemented the stagewise P2-2 CO/NH3 execution matrix, including
+  explicit reference-grid pruning and the continuous-density source-quench
+  boundary required by the accepted NQ8 CO initial condition.

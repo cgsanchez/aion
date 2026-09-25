@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from aion.config import BackendConfig, BackendKind
+from aion.config import BackendConfig, BackendKind, WilsonInitialSourcePolicy
 from aion.workflows import BuiltWilsonSimulation, build_simulation
 from test_wilson_workflow import prepare_exact_wilson_inputs
 
@@ -49,6 +49,37 @@ def test_exact_wilson_runtime_observables_and_step_remain_on_physical_gpu() -> N
     gpu.quadrature.backend.assert_resident(gpu.density, name="stepped GPU Wilson density")
     np.testing.assert_allclose(
         gpu.quadrature.backend.to_host(gpu.density),
+        cpu.step().contravariant_density,
+        atol=2.0e-9,
+        rtol=2.0e-9,
+    )
+
+
+def test_continuous_density_source_quench_has_cpu_gpu_step_parity() -> None:
+    baseline, reference, state = prepare_exact_wilson_inputs()
+    quenched = replace(
+        baseline,
+        source=replace(
+            baseline.source,
+            electric_field_origin_offset_au=(2.0e-4, -1.0e-4, 3.0e-4),
+            magnetic_field_rate_au=(0.0, 0.0, 1.0e-5),
+        ),
+        initial_source_policy=WilsonInitialSourcePolicy.CONTINUOUS_DENSITY_QUENCH,
+    )
+    cpu = build_simulation(quenched, reference, stationary_state=state)
+    gpu = build_simulation(
+        replace(
+            quenched,
+            backend=BackendConfig(kind=BackendKind.GPU, device_index=0),
+        ),
+        reference,
+        stationary_state=state,
+    )
+    assert isinstance(cpu, BuiltWilsonSimulation)
+    assert isinstance(gpu, BuiltWilsonSimulation)
+    gpu.quadrature.backend.assert_resident(gpu.density, name="quenched GPU Wilson density")
+    np.testing.assert_allclose(
+        gpu.quadrature.backend.to_host(gpu.step().contravariant_density),
         cpu.step().contravariant_density,
         atol=2.0e-9,
         rtol=2.0e-9,
