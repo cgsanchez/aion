@@ -51,12 +51,12 @@ def main() -> int:
     parser.add_argument("--root", type=Path, required=True)
     arguments = parser.parse_args()
     root = arguments.root.expanduser().resolve()
-    output = root / "analysis"
+    output = root / "analysis_final"
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
     output.mkdir()
     names = (
-        "reconciliation",
+        "reconciliation_final",
         "quality",
         "benchmarks/h3plus",
         "benchmarks/co_completed_final",
@@ -69,12 +69,15 @@ def main() -> int:
         authentication[name] = hashes
 
     quality_passed = bool(results["quality"]["all_passed"])
-    nq9_verified = results["reconciliation"]["nq9_verification"]["status"] == ("verified_accepted")
+    nq9_verified = results["reconciliation_final"]["nq9_verification"]["status"] == (
+        "verified_accepted"
+    )
+    package_version_consistent = bool(results["reconciliation_final"]["package_version_consistent"])
     benchmarks_complete = all(
         results[name]["status"] == "executed_unreviewed"
         for name in ("benchmarks/h3plus", "benchmarks/co_completed_final")
     )
-    passed = quality_passed and nq9_verified and benchmarks_complete
+    passed = quality_passed and nq9_verified and package_version_consistent and benchmarks_complete
     result = {
         "schema": "aion.phase-two.p2-0.analysis",
         "schema_version": "1.0.0",
@@ -85,9 +88,10 @@ def main() -> int:
             "all_software_quality_gates_passed": quality_passed,
             "h3plus_and_co_baselines_completed": benchmarks_complete,
             "ammonia_heritage_authenticated": (
-                results["reconciliation"]["ammonia_heritage_manifest_sha256"]
-                == _sha256(root / "reconciliation/ammonia_heritage_manifest.json")
+                results["reconciliation_final"]["ammonia_heritage_manifest_sha256"]
+                == _sha256(root / "reconciliation_final/ammonia_heritage_manifest.json")
             ),
+            "source_and_distribution_versions_agree": package_version_consistent,
         },
         "authentication": authentication,
         "quality_gates": results["quality"]["gates"],
@@ -101,11 +105,15 @@ def main() -> int:
             }
             for name in ("benchmarks/h3plus", "benchmarks/co_completed_final")
         },
-        "inherited_wp7": results["reconciliation"]["wp7_reconciliation"],
+        "inherited_wp7": results["reconciliation_final"]["wp7_reconciliation"],
         "limitations": [
             "The locked Ruff formatter initially rejected 47 accepted-parent files; "
             "a dedicated mechanical formatting commit repaired the baseline before "
             "the authenticated quality run.",
+            "The first reconciliation attempt exposed stale editable-distribution "
+            "metadata (0.2.0.dev1) while the imported source correctly reported "
+            "0.2.0.dev7. The managed editable install was refreshed without dependency "
+            "resolution, and the final reconciliation verifies both version routes.",
             "The historical bounded WP7 6-31G analyzer summary is absent; retained "
             "aug-cc-pVTZ evidence remains explicit and Phase Two uses its own gates.",
             "Stationary baseline timings are warm-start timings from accepted states, "

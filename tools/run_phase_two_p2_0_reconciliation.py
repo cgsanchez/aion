@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import aion
+
 ACCEPTED_PARENT = "dc6d4e2e0267bf2542074528ca1305e5fdff592b"
 NH3_ROOT = Path(
     "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/"
@@ -204,6 +206,13 @@ def main() -> int:
         text=True,
     )
     nq9_result = json.loads(nq9.stdout)
+    source_package_version = aion.__version__
+    distribution_package_version = _package_version("aion")
+    if distribution_package_version != source_package_version:
+        raise RuntimeError(
+            "Aion source and editable-distribution versions disagree: "
+            f"{source_package_version!r} != {distribution_package_version!r}"
+        )
 
     heritage_records: list[dict[str, Any]] = []
     for role, relative, use, limitation in HERITAGE:
@@ -242,7 +251,10 @@ def main() -> int:
         "accepted_parent": ACCEPTED_PARENT,
         "accepted_parent_is_ancestor": True,
         "phase_two_head": head,
-        "package_version": _package_version("aion"),
+        "package_version": source_package_version,
+        "source_package_version": source_package_version,
+        "distribution_package_version": distribution_package_version,
+        "package_version_consistent": True,
         "nq9_verification": nq9_result,
         "environment": {
             distribution: _package_version(distribution)
