@@ -142,9 +142,7 @@ def test_affine_gauges_give_equal_barred_matrices_and_congruent_spectra() -> Non
     symmetric, landau = evaluate_magnetic_one_electron_matrices(
         quadrature, (field, field), direct_gauges=gauges
     )
-    for left, right in zip(
-        _matrix_families(symmetric), _matrix_families(landau), strict=True
-    ):
+    for left, right in zip(_matrix_families(symmetric), _matrix_families(landau), strict=True):
         np.testing.assert_allclose(left.exact, right.exact, atol=0.0, rtol=0.0)
         np.testing.assert_allclose(left.b1, right.b1, atol=0.0, rtol=0.0)
         np.testing.assert_allclose(left.b2, right.b2, atol=0.0, rtol=0.0)
@@ -242,17 +240,14 @@ def test_displaced_lih_B1_matches_independent_libcint_giao_derivatives() -> None
         block_size=2048,
     )
     fields = tuple(
-        UniformMagneticField((float(axis[0]), float(axis[1]), float(axis[2])))
-        for axis in np.eye(3)
+        UniformMagneticField((float(axis[0]), float(axis[1]), float(axis[2]))) for axis in np.eye(3)
     )
     results = evaluate_magnetic_one_electron_matrices(quadrature, fields)
     giao = pyscf_giao_one_electron_derivatives(reference)
     for name in ("overlap", "kinetic", "nuclear_attraction"):
         calculated = np.asarray(
             [
-                getattr(result, name).first_F
-                if name != "kinetic"
-                else result.kinetic.first
+                getattr(result, name).first_F if name != "kinetic" else result.kinetic.first
                 for result in results
             ]
         )

@@ -23,12 +23,8 @@ pytestmark = pytest.mark.integration
 
 
 def test_provider_identity_is_normalized_hashed_and_validated() -> None:
-    left = LocalPotentialIdentity(
-        "custom_local", "2.1", (("zeta", "last"), ("alpha", "first"))
-    )
-    right = LocalPotentialIdentity(
-        "custom_local", "2.1", (("alpha", "first"), ("zeta", "last"))
-    )
+    left = LocalPotentialIdentity("custom_local", "2.1", (("zeta", "last"), ("alpha", "first")))
+    right = LocalPotentialIdentity("custom_local", "2.1", (("alpha", "first"), ("zeta", "last")))
     assert left == right
     assert left.fingerprint_sha256 == right.fingerprint_sha256
     assert left.provenance == (("alpha", "first"), ("zeta", "last"))
@@ -42,17 +38,13 @@ def test_nuclear_provider_binds_authenticated_matrix_and_pointwise_values() -> N
     reference = prepare_pyscf_reference(molecular_config("lih"))
     backend = NumPyBackend()
     bound = bind_local_potential(NuclearAttractionProvider(), reference, backend)
-    np.testing.assert_array_equal(
-        bound.zero_matrix_au, reference.core_operators.nuclear_attraction
-    )
+    np.testing.assert_array_equal(bound.zero_matrix_au, reference.core_operators.nuclear_attraction)
     points = np.array([[0.2, -0.3, 0.7], [-0.4, 0.5, 1.1]])
     distances = np.linalg.norm(
         points[:, None, :] - reference.core_operators.nuclei.coordinates_au[None, :, :],
         axis=2,
     )
-    expected = -np.sum(
-        reference.core_operators.nuclei.charges[None, :] / distances, axis=1
-    )
+    expected = -np.sum(reference.core_operators.nuclei.charges[None, :] / distances, axis=1)
     np.testing.assert_allclose(bound.values_au(points), expected, atol=0.0, rtol=0.0)
     with pytest.raises(UnsupportedConfigurationError, match="preassembled"):
         bind_local_potential(  # type: ignore[arg-type]
@@ -122,9 +114,9 @@ def test_scaled_provider_scales_every_component_and_preserves_field_reversal() -
         np.testing.assert_allclose(scaled_matrix, -0.375 * base_matrix, atol=2.0e-14)
         np.testing.assert_allclose(
             getattr(base_negative.hierarchy, name),
-            base_matrix.conj() if name in {"exact", "exact_grid"} else (
-                -base_matrix if name == "first_F" else base_matrix
-            ),
+            base_matrix.conj()
+            if name in {"exact", "exact_grid"}
+            else (-base_matrix if name == "first_F" else base_matrix),
             atol=2.0e-12,
         )
         np.testing.assert_allclose(

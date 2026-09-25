@@ -18,9 +18,7 @@ from aion.errors import ConfigurationError
 
 pytestmark = pytest.mark.integration
 
-_FIXTURE_PATH = (
-    Path(__file__).parent / "fixtures" / "exact_one_electron" / "hh_sto3g.fixture.json"
-)
+_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "exact_one_electron" / "hh_sto3g.fixture.json"
 
 
 def _config() -> OneElectronReferenceConfig:
@@ -48,9 +46,7 @@ def test_g0_fixture_reconstructs_without_scf(monkeypatch: pytest.MonkeyPatch) ->
     assert fixture["status"] == "immutable_input_no_numerical_claim"
     assert reference.config.scientific_id == fixture["config_id"]
     assert reference.fingerprint_sha256 == fixture["reference_fingerprint_sha256"]
-    assert reference.basis_metadata.ao_labels == tuple(
-        fixture["basis_metadata"]["ao_labels"]
-    )
+    assert reference.basis_metadata.ao_labels == tuple(fixture["basis_metadata"]["ao_labels"])
     np.testing.assert_array_equal(reference.anchor_topology.ao_to_atom, fixture["ao_to_atom"])
     for name in ("overlap", "kinetic", "nuclear_attraction", "position"):
         np.testing.assert_array_equal(
@@ -90,17 +86,16 @@ def test_wp1_hh_overlap_and_kinetic_converge_to_analytic_matrices() -> None:
         )
         for level in (0, 2, 4)
     )
-    overlap_residuals = np.asarray(
-        [value.overlap.relative_frobenius_residual for value in results]
-    )
-    kinetic_residuals = np.asarray(
-        [value.kinetic.relative_frobenius_residual for value in results]
-    )
+    overlap_residuals = np.asarray([value.overlap.relative_frobenius_residual for value in results])
+    kinetic_residuals = np.asarray([value.kinetic.relative_frobenius_residual for value in results])
     assert np.all(np.diff(overlap_residuals) < 0.0)
     assert np.all(np.diff(kinetic_residuals) < 0.0)
     assert overlap_residuals[-1] < 2.0e-11
     assert kinetic_residuals[-1] < 3.0e-10
-    assert max(
-        results[-1].overlap.hermiticity_residual,
-        results[-1].kinetic.hermiticity_residual,
-    ) < 2.0e-16
+    assert (
+        max(
+            results[-1].overlap.hermiticity_residual,
+            results[-1].kinetic.hermiticity_residual,
+        )
+        < 2.0e-16
+    )

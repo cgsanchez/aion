@@ -245,29 +245,17 @@ def evaluate_exact_uniform_magnetic_wilson_density(
             values,
             optimize=True,
         )
-        direct_integral += xp.einsum(
-            "p,p->", block.weights_au, direct_block, optimize=True
-        )
-        factorized_integral += xp.einsum(
-            "p,p->", block.weights_au, factorized_block, optimize=True
-        )
+        direct_integral += xp.einsum("p,p->", block.weights_au, direct_block, optimize=True)
+        factorized_integral += xp.einsum("p,p->", block.weights_au, factorized_block, optimize=True)
 
-    direct_metric_number = xp.einsum(
-        "mn,nm->", density, direct_overlap, optimize=True
-    )
-    factorized_metric_number = xp.einsum(
-        "mn,nm->", density, factorized_overlap, optimize=True
-    )
+    direct_metric_number = xp.einsum("mn,nm->", density, direct_overlap, optimize=True)
+    factorized_metric_number = xp.einsum("mn,nm->", density, factorized_overlap, optimize=True)
     analytic_bare_overlap = backend.asarray(
         reference.core_operators.overlap,
         dtype=xp.complex128,
     )
-    stable_overlap = factorized_overlap + endpoint * (
-        analytic_bare_overlap - bare_overlap_grid
-    )
-    stable_metric_number = xp.einsum(
-        "mn,nm->", density, stable_overlap, optimize=True
-    )
+    stable_overlap = factorized_overlap + endpoint * (analytic_bare_overlap - bare_overlap_grid)
+    stable_metric_number = xp.einsum("mn,nm->", density, stable_overlap, optimize=True)
     density_residual = _relative_frobenius(
         direct_values - factorized_values,
         factorized_values,
@@ -279,9 +267,7 @@ def evaluate_exact_uniform_magnetic_wilson_density(
         backend,
     )
     direct_imaginary = backend.scalar_to_float(xp.max(xp.abs(xp.imag(direct_values))))
-    factorized_imaginary = backend.scalar_to_float(
-        xp.max(xp.abs(xp.imag(factorized_values)))
-    )
+    factorized_imaginary = backend.scalar_to_float(xp.max(xp.abs(xp.imag(factorized_values))))
     direct_minimum = backend.scalar_to_float(xp.min(xp.real(direct_values)))
     factorized_minimum = backend.scalar_to_float(xp.min(xp.real(factorized_values)))
     backend.synchronize()
@@ -337,8 +323,7 @@ def contract_wilson_density_block(
     dimension = frame.shape[1]
     if density.shape != (dimension, dimension):
         raise ConfigurationError(
-            f"coefficient_density has shape {density.shape}; expected "
-            f"{(dimension, dimension)}"
+            f"coefficient_density has shape {density.shape}; expected {(dimension, dimension)}"
         )
     if not _control_bool(xp.all(xp.isfinite(frame)), backend) or not _control_bool(
         xp.all(xp.isfinite(density)), backend
@@ -471,9 +456,7 @@ def evaluate_exact_uniform_magnetic_wilson_density_matter_direction(
         reference.core_operators.overlap,
         dtype=xp.complex128,
     )
-    stable_overlap = overlap_grid + endpoint * (
-        analytic_bare_overlap - bare_overlap_grid
-    )
+    stable_overlap = overlap_grid + endpoint * (analytic_bare_overlap - bare_overlap_grid)
     metric_grid = xp.einsum(
         "mn,nm->",
         density_direction,
@@ -654,8 +637,7 @@ def _validated_coefficient_density(
     backend.assert_resident(density, name="contravariant coefficient density")
     if density.shape != (dimension, dimension):
         raise ConfigurationError(
-            f"coefficient_density has shape {density.shape}; expected "
-            f"{(dimension, dimension)}"
+            f"coefficient_density has shape {density.shape}; expected {(dimension, dimension)}"
         )
     if not _control_bool(xp.all(xp.isfinite(density)), backend):
         raise ConfigurationError("coefficient_density contains non-finite values")

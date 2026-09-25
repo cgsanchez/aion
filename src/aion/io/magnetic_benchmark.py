@@ -146,9 +146,7 @@ def load_magnetic_benchmark(path: str | Path) -> MagneticBenchmarkResult:
                 )
             result = MagneticBenchmarkResult(
                 config=config,
-                reference_fingerprint_sha256=read_text(
-                    handle["reference/fingerprint_sha256"]
-                ),
+                reference_fingerprint_sha256=read_text(handle["reference/fingerprint_sha256"]),
                 grid_fingerprint_sha256=read_text(handle["grid/fingerprint_sha256"]),
                 grid_kind=read_text(handle["grid/kind"]),
                 grid_level=int(handle["grid/level"][()]),
@@ -156,9 +154,7 @@ def load_magnetic_benchmark(path: str | Path) -> MagneticBenchmarkResult:
                 grid_npoints=int(handle["grid/npoints"][()]),
                 ao_provenance_json=read_text(handle["meta/ao_provenance_json"]),
                 matrices=_read_matrix_records(_group(handle, "fields")),
-                diagnostics=_diagnostics_from_json(
-                    read_text(handle["diagnostics/values_json"])
-                ),
+                diagnostics=_diagnostics_from_json(read_text(handle["diagnostics/values_json"])),
             )
             stored_result_id = read_text(handle["meta/result_id"])
     except (KeyError, TypeError, ValueError) as exc:
@@ -175,15 +171,11 @@ def load_magnetic_benchmark(path: str | Path) -> MagneticBenchmarkResult:
 def _config_from_json(text: str) -> MagneticBenchmarkConfig:
     try:
         data = json.loads(text)
-        if not isinstance(data, dict) or data.get("schema") != (
-            "aion.magnetic-benchmark-config"
-        ):
+        if not isinstance(data, dict) or data.get("schema") != ("aion.magnetic-benchmark-config"):
             raise MagneticBenchmarkError("expected magnetic benchmark configuration")
         if data.get("version") != "1.0.0":
             raise MagneticBenchmarkError("unsupported magnetic benchmark configuration version")
-        fields = tuple(
-            UniformMagneticField(tuple(value)) for value in data["magnetic_fields_au"]
-        )
+        fields = tuple(UniformMagneticField(tuple(value)) for value in data["magnetic_fields_au"])
         gauge_data = data["gauges"]
         if not isinstance(gauge_data, list) or len(gauge_data) != len(fields):
             raise MagneticBenchmarkError("stored fields and gauges do not match")
@@ -192,11 +184,7 @@ def _config_from_json(text: str) -> MagneticBenchmarkConfig:
                 field=magnetic_field,
                 kind=MagneticGaugeKind(value["kind"]),
                 origin_au=tuple(value["origin_au"]),
-                landau_axis=(
-                    None
-                    if value["landau_axis"] is None
-                    else tuple(value["landau_axis"])
-                ),
+                landau_axis=(None if value["landau_axis"] is None else tuple(value["landau_axis"])),
             )
             for magnetic_field, value in zip(fields, gauge_data, strict=True)
         )

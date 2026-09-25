@@ -266,6 +266,8 @@ def test_wilson_density_physical_and_pure_gauge_source_directions() -> None:
             rtol=2.0e-13,
         )
         assert analytic.density_direction_imaginary_max_abs < 2.0e-15
+
+
 def test_exact_wilson_density_is_invariant_between_affine_gauge_representatives() -> None:
     reference, quadrature = _prepared_h2()
     field = UniformMagneticField((0.013, -0.009, 0.017))
@@ -277,9 +279,7 @@ def test_exact_wilson_density_is_invariant_between_affine_gauge_representatives(
         landau_axis=(field.magnetic_field_au[1], -field.magnetic_field_au[0], 0.0),
     )
     coefficient_density = reference.ground_state.density.astype(np.complex128)
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     gauge_function_at_anchors = affine_gauge_difference_potential(
         landau,
         symmetric,
@@ -288,9 +288,7 @@ def test_exact_wilson_density_is_invariant_between_affine_gauge_representatives(
     )
     coefficient_unitary = np.exp(-1j * gauge_function_at_anchors)
     transformed_density = (
-        coefficient_unitary[:, None]
-        * coefficient_density
-        * coefficient_unitary.conj()[None, :]
+        coefficient_unitary[:, None] * coefficient_density * coefficient_unitary.conj()[None, :]
     )
 
     symmetric_result = evaluate_exact_uniform_magnetic_wilson_density(

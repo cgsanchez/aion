@@ -65,8 +65,7 @@ def _build_molecule(config: OneElectronReferenceConfig) -> Any:
 
     molecule = gto.Mole()
     molecule.atom = [
-        (atom.symbol, tuple(float(value) for value in atom.position_au))
-        for atom in config.atoms
+        (atom.symbol, tuple(float(value) for value in atom.position_au)) for atom in config.atoms
     ]
     molecule.unit = "Bohr"
     molecule.basis = config.basis
@@ -116,14 +115,10 @@ def _validate_runtime(expected: DependencyVersions) -> None:
     actual = DependencyVersions.current()
     expected_mapping = expected.as_mapping()
     actual_mapping = actual.as_mapping()
-    mismatched = [
-        name for name, value in expected_mapping.items() if value != actual_mapping[name]
-    ]
+    mismatched = [name for name, value in expected_mapping.items() if value != actual_mapping[name]]
     if mismatched:
         details = ", ".join(
             f"{name}={expected_mapping[name]!r} (current {actual_mapping[name]!r})"
             for name in mismatched
         )
-        raise ReferencePreparationError(
-            f"one-electron AO reference dependency mismatch: {details}"
-        )
+        raise ReferencePreparationError(f"one-electron AO reference dependency mismatch: {details}")

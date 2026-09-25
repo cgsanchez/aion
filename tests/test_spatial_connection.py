@@ -71,9 +71,7 @@ def test_momentum_and_E1_closures_reach_the_unpruned_grid_floor() -> None:
         include_direct_oracle=False,
     )[0]
     hierarchy = result.spatial_connection
-    np.testing.assert_array_equal(
-        hierarchy.zero, 1j * reference.core_operators.canonical_momentum
-    )
+    np.testing.assert_array_equal(hierarchy.zero, 1j * reference.core_operators.canonical_momentum)
     assert np.linalg.norm(hierarchy.quadrature_zero - hierarchy.zero) < 1.0e-8
     assert np.linalg.norm(hierarchy.first_C - result.e1_first_C_closure) < 2.0e-9
 
@@ -97,9 +95,7 @@ def test_reversal_finite_differences_and_truncation_orders() -> None:
             UniformMagneticField((0.0, 0.0, 0.0)),
         )
     )
-    results = evaluate_magnetic_spatial_connections(
-        quadrature, fields, include_direct_oracle=False
-    )
+    results = evaluate_magnetic_spatial_connections(quadrature, fields, include_direct_oracle=False)
     scaled, unit, negative, zero = results[:4], results[4], results[5], results[6]
     positive = scaled[1]
     np.testing.assert_allclose(
@@ -107,20 +103,14 @@ def test_reversal_finite_differences_and_truncation_orders() -> None:
         positive.spatial_connection.exact.conj(),
         atol=2.0e-12,
     )
-    first_fd = (
-        positive.spatial_connection.exact - negative.spatial_connection.exact
-    ) / 2.0e-3
+    first_fd = (positive.spatial_connection.exact - negative.spatial_connection.exact) / 2.0e-3
     second_fd = (
         positive.spatial_connection.exact
         + negative.spatial_connection.exact
         - 2.0 * zero.spatial_connection.exact
     ) / 2.0e-6
-    np.testing.assert_allclose(
-        first_fd, unit.spatial_connection.first, atol=5.0e-7, rtol=5.0e-7
-    )
-    np.testing.assert_allclose(
-        second_fd, unit.spatial_connection.second, atol=5.0e-7, rtol=5.0e-7
-    )
+    np.testing.assert_allclose(first_fd, unit.spatial_connection.first, atol=5.0e-7, rtol=5.0e-7)
+    np.testing.assert_allclose(second_fd, unit.spatial_connection.second, atol=5.0e-7, rtol=5.0e-7)
     b1_errors = np.asarray(
         [
             np.linalg.norm(result.spatial_connection.exact - result.spatial_connection.b1)

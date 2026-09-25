@@ -114,6 +114,4 @@ def test_dynamic_sample_and_nonlinear_power_identity() -> None:
     )
     assert trajectory.metric_correction_applied is False
     assert trajectory.density_update == "coefficient_congruence"
-    assert max(
-        item.contravariant_hermiticity_residual for item in trajectory.diagnostics
-    ) < 2.0e-15
+    assert max(item.contravariant_hermiticity_residual for item in trajectory.diagnostics) < 2.0e-15

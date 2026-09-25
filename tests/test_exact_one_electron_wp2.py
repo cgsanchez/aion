@@ -37,26 +37,19 @@ _MATRIX_NAMES = ("overlap", "kinetic", "nuclear_attraction")
 
 def _config(name: str) -> OneElectronReferenceConfig:
     fixture = json.loads(
-        (_FIXTURE_DIRECTORY / f"{name}_sto3g.fixture.json").read_text(
-            encoding="utf-8"
-        )
+        (_FIXTURE_DIRECTORY / f"{name}_sto3g.fixture.json").read_text(encoding="utf-8")
     )
     values = fixture["config"]
     return OneElectronReferenceConfig(
         atoms=tuple(
-            AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-            for atom in values["atoms"]
+            AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
         ),
         basis=values["basis"],
-        electromagnetic_origin=ElectromagneticOrigin(
-            tuple(values["electromagnetic_origin_au"])
-        ),
+        electromagnetic_origin=ElectromagneticOrigin(tuple(values["electromagnetic_origin_au"])),
     )
 
 
-def _quadrature(
-    name: str, level: int = 3, block_size: int = 1024
-) -> tuple[object, object]:
+def _quadrature(name: str, level: int = 3, block_size: int = 1024) -> tuple[object, object]:
     reference = prepare_one_electron_ao_reference(_config(name))
     quadrature = prepare_ao_quadrature(
         reference,
@@ -86,9 +79,7 @@ def test_wp2_zero_field_reduces_exactly_to_wp1_analytic_matrices() -> None:
     np.testing.assert_array_equal(result.endpoint_link, np.ones((2, 2)))
     np.testing.assert_array_equal(result.lower_exact.overlap, core.overlap)
     np.testing.assert_array_equal(result.lower_exact.kinetic, core.kinetic)
-    np.testing.assert_array_equal(
-        result.lower_exact.nuclear_attraction, core.nuclear_attraction
-    )
+    np.testing.assert_array_equal(result.lower_exact.nuclear_attraction, core.nuclear_attraction)
     np.testing.assert_array_equal(
         result.lower_exact.mechanical, core.kinetic + core.nuclear_attraction
     )
@@ -110,15 +101,11 @@ def test_wp2_exact_routes_reversal_sectors_and_metric_positivity() -> None:
         np.array((1.0, 0.0, 0.0)),
         np.array((1.0, 2.0, 3.0)) / np.sqrt(14.0),
     )
-    positive = tuple(
-        UniformMagneticField(tuple(magnitude * direction)) for direction in directions
-    )
+    positive = tuple(UniformMagneticField(tuple(magnitude * direction)) for direction in directions)
     negative = tuple(
         UniformMagneticField(tuple(-magnitude * direction)) for direction in directions
     )
-    results = evaluate_magnetic_one_electron_matrices(
-        quadrature, positive + negative
-    )
+    results = evaluate_magnetic_one_electron_matrices(quadrature, positive + negative)
 
     for plus, minus in zip(results[:3], results[3:], strict=True):
         assert plus.direct_oracle is not None
@@ -141,9 +128,7 @@ def test_wp2_exact_routes_reversal_sectors_and_metric_positivity() -> None:
 
             plus_barred = np.asarray(getattr(plus, name).exact)
             minus_barred = np.asarray(getattr(minus, name).exact)
-            np.testing.assert_allclose(
-                minus_barred, plus_barred.conj(), atol=3.0e-13, rtol=3.0e-13
-            )
+            np.testing.assert_allclose(minus_barred, plus_barred.conj(), atol=3.0e-13, rtol=3.0e-13)
             np.testing.assert_allclose(
                 plus_barred,
                 plus_barred.conj().T,
@@ -184,9 +169,7 @@ def test_wp2_gauge_origin_covariance_and_generalized_spectra() -> None:
         (field,) * len(gauges),
         direct_gauges=gauges,
     )
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     backend = NumPyBackend()
     baseline = results[0]
     baseline_spectrum = _mechanical_spectrum(baseline)
@@ -201,9 +184,7 @@ def test_wp2_gauge_origin_covariance_and_generalized_spectra() -> None:
 
             baseline_lower = np.asarray(getattr(baseline.lower_exact, name))
             expected_lower = (
-                coefficient_phase[:, None]
-                * baseline_lower
-                * coefficient_phase[None, :].conj()
+                coefficient_phase[:, None] * baseline_lower * coefficient_phase[None, :].conj()
             )
             np.testing.assert_allclose(
                 getattr(result.lower_exact, name),
@@ -225,9 +206,7 @@ def test_wp2_gauge_origin_covariance_and_generalized_spectra() -> None:
 
 def test_wp2_authenticated_oblique_reference_output_is_reproduced() -> None:
     fixture = json.loads(
-        (_FIXTURE_DIRECTORY / "wp2_hh_oblique_reference.json").read_text(
-            encoding="utf-8"
-        )
+        (_FIXTURE_DIRECTORY / "wp2_hh_oblique_reference.json").read_text(encoding="utf-8")
     )
     reference, quadrature = _quadrature(
         "hh",
@@ -235,17 +214,12 @@ def test_wp2_authenticated_oblique_reference_output_is_reproduced() -> None:
         block_size=fixture["quadrature"]["block_size"],
     )
     direction = np.asarray(fixture["field"]["direction"])
-    field = UniformMagneticField(
-        tuple(fixture["field"]["magnitude_au"] * direction)
-    )
+    field = UniformMagneticField(tuple(fixture["field"]["magnitude_au"] * direction))
     result = evaluate_magnetic_one_electron_matrices(quadrature, (field,))[0]
 
     assert fixture["status"] == "executed_unreviewed_reference_output"
     assert reference.fingerprint_sha256 == fixture["reference_fingerprint_sha256"]
-    assert (
-        quadrature.grid.fingerprint_sha256
-        == fixture["quadrature"]["fingerprint_sha256"]
-    )
+    assert quadrature.grid.fingerprint_sha256 == fixture["quadrature"]["fingerprint_sha256"]
     sectors = result.kinetic.exact_sectors
     arrays = {
         "lower_exact_overlap": result.lower_exact.overlap,
@@ -257,9 +231,9 @@ def test_wp2_authenticated_oblique_reference_output_is_reproduced() -> None:
         "kinetic_T_Cp_F": sectors.Cp,
         "kinetic_T_CC_F": sectors.C2,
     }
-    assert {
-        name: canonical_sha256(np.asarray(value)) for name, value in arrays.items()
-    } == fixture["semantic_array_sha256"]
+    assert {name: canonical_sha256(np.asarray(value)) for name, value in arrays.items()} == fixture[
+        "semantic_array_sha256"
+    ]
 
 
 def _rotation_matrix() -> np.ndarray:

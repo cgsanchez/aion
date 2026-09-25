@@ -52,9 +52,7 @@ def test_fourier_overlap_is_grid_independent_gauge_independent_and_exact_at_zero
     analytic_landau = analytic_uniform_magnetic_overlap(reference, landau)
     negative = analytic_uniform_magnetic_overlap(
         reference,
-        AffineMagneticGauge(
-            UniformMagneticField(tuple(-np.asarray(field.magnetic_field_au)))
-        ),
+        AffineMagneticGauge(UniformMagneticField(tuple(-np.asarray(field.magnetic_field_au)))),
     )
     zero = analytic_uniform_magnetic_overlap(
         reference,
@@ -174,16 +172,10 @@ def test_consecutive_unpruned_grids_resolve_every_core_matrix_family() -> None:
             )
         )
     level_23 = np.asarray(
-        [
-            np.linalg.norm(right - left)
-            for left, right in zip(levels[0], levels[1], strict=True)
-        ]
+        [np.linalg.norm(right - left) for left, right in zip(levels[0], levels[1], strict=True)]
     )
     level_34 = np.asarray(
-        [
-            np.linalg.norm(right - left)
-            for left, right in zip(levels[1], levels[2], strict=True)
-        ]
+        [np.linalg.norm(right - left) for left, right in zip(levels[1], levels[2], strict=True)]
     )
     assert np.all(level_34 < level_23)
     assert np.all(level_34 < np.array((1.0e-11, 1.0e-10, 1.0e-11, 1.0e-9)))

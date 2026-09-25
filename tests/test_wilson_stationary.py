@@ -112,9 +112,7 @@ def test_gauge_related_stationary_solutions_have_equal_energy_and_density() -> N
     symmetric_state = symmetric_model.solve()
 
     reference = quadrature.reference
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     chi = affine_gauge_difference_potential(
         landau,
         symmetric,
@@ -122,9 +120,7 @@ def test_gauge_related_stationary_solutions_have_equal_energy_and_density() -> N
         NumPyBackend(),
     )
     coefficient_phase = np.exp(-1j * np.asarray(chi))
-    transformed_coefficients = coefficient_phase[:, None] * np.asarray(
-        symmetric_state.coefficients
-    )
+    transformed_coefficients = coefficient_phase[:, None] * np.asarray(symmetric_state.coefficients)
     landau_model = prepare_exact_wilson_stationary_model(
         quadrature,
         landau,
@@ -162,10 +158,13 @@ def test_zero_field_stationary_states_recover_independent_references() -> None:
         auxiliary_basis="weigend",
     )
     ks_state = ks_model.solve()
-    assert abs(
-        float(ks_state.action.energy_molecular_total_au)
-        - quadrature.reference.ground_state.energy_total_au
-    ) < 5.0e-8
+    assert (
+        abs(
+            float(ks_state.action.energy_molecular_total_au)
+            - quadrature.reference.ground_state.energy_total_au
+        )
+        < 5.0e-8
+    )
     from pyscf import scf
 
     class RestrictedHartree(scf.hf.RHF):
@@ -197,10 +196,12 @@ def test_zero_field_stationary_states_recover_independent_references() -> None:
         auxiliary_basis="weigend",
     )
     hartree_state = hartree_model.solve()
-    assert abs(
-        float(hartree_state.action.energy_molecular_total_au)
-        - float(hartree_reference.e_tot)
-    ) < 5.0e-8
+    assert (
+        abs(float(hartree_state.action.energy_molecular_total_au) - float(hartree_reference.e_tot))
+        < 5.0e-8
+    )
+
+
 @pytest.mark.parametrize("imaginary", (False, True))
 def test_stationary_energy_is_flat_in_unrestricted_retracted_directions(
     imaginary: bool,
@@ -227,9 +228,7 @@ def test_stationary_energy_is_flat_in_unrestricted_retracted_directions(
             displaced = coefficients + sign * step * direction
             gram = displaced.conj().T @ overlap @ displaced
             values, vectors = np.linalg.eigh(gram)
-            retracted = displaced @ (
-                (vectors / np.sqrt(values)[None, :]) @ vectors.conj().T
-            )
+            retracted = displaced @ ((vectors / np.sqrt(values)[None, :]) @ vectors.conj().T)
             density = np.einsum(
                 "mi,i,ni->mn",
                 retracted,

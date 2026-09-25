@@ -236,17 +236,13 @@ def evaluate_magnetic_spatial_connections(
                 line_gradients = gauge.anchor_to_point_line_integral_gradients(
                     geometry.ao_anchor_coordinates_au, block.coordinates_au, backend
                 )
-                point_vector_potential = gauge.vector_potential(
-                    block.coordinates_au, backend
-                )
+                point_vector_potential = gauge.vector_potential(block.coordinates_au, backend)
                 residual = line_gradients - point_vector_potential[:, None, :]
                 wilson = xp.exp((1j * checked_charge / checked_hbar) * line_integrals)
                 dressed_values = wilson * block.values
                 covariant_gradients = wilson[:, :, None] * (
                     gradients
-                    + (1j * checked_charge / checked_hbar)
-                    * residual
-                    * block.values[:, :, None]
+                    + (1j * checked_charge / checked_hbar) * residual * block.values[:, :, None]
                 )
                 accumulator.direct += _ordinary_derivative_pair(
                     dressed_values,
@@ -323,15 +319,9 @@ def _new_accumulators(nao: int, backend: Any) -> _SpatialAccumulators:
     return _SpatialAccumulators(*(zero() for _ in range(7)))
 
 
-def _ordinary_derivative_pair(
-    values: Any, gradients: Any, weights: Any, xp: Any
-) -> Any:
-    right = xp.einsum(
-        "p,pm,pnx->xmn", weights, values.conj(), gradients, optimize=True
-    )
-    left = xp.einsum(
-        "p,pmx,pn->xmn", weights, gradients.conj(), values, optimize=True
-    )
+def _ordinary_derivative_pair(values: Any, gradients: Any, weights: Any, xp: Any) -> Any:
+    right = xp.einsum("p,pm,pnx->xmn", weights, values.conj(), gradients, optimize=True)
+    left = xp.einsum("p,pmx,pn->xmn", weights, gradients.conj(), values, optimize=True)
     return 0.5 * (right - left)
 
 

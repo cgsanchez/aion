@@ -185,9 +185,7 @@ class AffineMagneticGauge:
             ao_anchor_coordinates_au, backend, name="ao_anchor_coordinates_au"
         )
         points = _cartesian_rows(points_au, backend, name="points_au")
-        return self.straight_line_integrals(
-            anchors[None, :, :], points[:, None, :], backend
-        )
+        return self.straight_line_integrals(anchors[None, :, :], points[:, None, :], backend)
 
     def anchor_to_point_line_integral_gradients(
         self,
@@ -417,9 +415,7 @@ def endpoint_line_integrals(
 
     anchors = pair_geometry.ao_anchor_coordinates_au
     _require_resident_pair_geometry(pair_geometry, backend)
-    return gauge.straight_line_integrals(
-        anchors[None, :, :], anchors[:, None, :], backend
-    )
+    return gauge.straight_line_integrals(anchors[None, :, :], anchors[:, None, :], backend)
 
 
 def endpoint_links(
@@ -463,14 +459,10 @@ def center_loop_holonomy(
     xp = backend.namespace
     following = xp.roll(vertices, -1, axis=0)
     area_vector = 0.5 * xp.sum(xp.cross(vertices, following), axis=0)
-    magnetic_field = backend.asarray(
-        gauge.field.magnetic_field_au, dtype=xp.float64
-    )
+    magnetic_field = backend.asarray(gauge.field.magnetic_field_au, dtype=xp.float64)
     flux = xp.einsum("x,x->", magnetic_field, area_vector, optimize=True)
     line_integrals = gauge.straight_line_integrals(vertices, following, backend)
-    endpoint_product = xp.exp(
-        (1j * checked_charge / checked_hbar) * xp.sum(line_integrals)
-    )
+    endpoint_product = xp.exp((1j * checked_charge / checked_hbar) * xp.sum(line_integrals))
     expected = xp.exp((1j * checked_charge / checked_hbar) * flux)
     return CenterLoopHolonomy(
         oriented_area_vector_au2=area_vector,
@@ -529,9 +521,7 @@ def triangle_factors(
     """Return exact and first two Taylor factors at bookkeeping amplitude one."""
 
     xp = backend.namespace
-    phase = triangle_phases(
-        points_au, pair_geometry, field, backend, charge=charge, hbar=hbar
-    )
+    phase = triangle_phases(points_au, pair_geometry, field, backend, charge=charge, hbar=hbar)
     return TriangleFactors(
         exact=xp.exp(1j * phase),
         first=1j * phase,
@@ -549,9 +539,7 @@ def anchored_vectors(
 
     points = _cartesian_rows(points_au, backend, name="points_au")
     _require_resident_pair_geometry(pair_geometry, backend)
-    magnetic_field = backend.asarray(
-        field.magnetic_field_au, dtype=backend.namespace.float64
-    )
+    magnetic_field = backend.asarray(field.magnetic_field_au, dtype=backend.namespace.float64)
     return 0.5 * backend.namespace.cross(
         points[:, None, :] - pair_geometry.ao_anchor_coordinates_au[None, :, :],
         magnetic_field,
@@ -576,9 +564,7 @@ def uniform_magnetic_first_derivatives(
 
     xp = backend.namespace
     fields = tuple(
-        UniformMagneticField(
-            (float(direction[0]), float(direction[1]), float(direction[2]))
-        )
+        UniformMagneticField((float(direction[0]), float(direction[1]), float(direction[2])))
         for direction in np.eye(3)
     )
     phases = xp.stack(
@@ -629,9 +615,7 @@ def affine_gauge_difference_potential(
     target_origin = backend.asarray(target.origin_au, dtype=xp.float64)
     reference_origin = backend.asarray(reference.origin_au, dtype=xp.float64)
     constant = -target_matrix @ target_origin + reference_matrix @ reference_origin
-    quadratic = 0.5 * xp.einsum(
-        "...x,xy,...y->...", points, difference, points, optimize=True
-    )
+    quadratic = 0.5 * xp.einsum("...x,xy,...y->...", points, difference, points, optimize=True)
     return quadratic + xp.einsum("...x,x->...", points, constant, optimize=True)
 
 

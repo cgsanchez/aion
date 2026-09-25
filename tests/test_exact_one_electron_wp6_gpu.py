@@ -33,8 +33,7 @@ def _reference() -> object:
     return prepare_one_electron_ao_reference(
         OneElectronReferenceConfig(
             atoms=tuple(
-                AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-                for atom in values["atoms"]
+                AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
             ),
             basis=values["basis"],
             electromagnetic_origin=ElectromagneticOrigin(
@@ -93,9 +92,7 @@ def test_wp6_exact_time_triple_and_linear_propagation_cpu_gpu_parity() -> None:
     cpu_static = evaluate_exact_wilson_one_electron_sample(cpu_quadrature, static_source)
     gpu_static = evaluate_exact_wilson_one_electron_sample(gpu_quadrature, static_source)
     initial_host = np.asarray(((1.0,), (0.31 + 0.17j,)), dtype=np.complex128)
-    initial_host /= np.sqrt(
-        (initial_host.conj().T @ cpu_static.metric @ initial_host).real.item()
-    )
+    initial_host /= np.sqrt((initial_host.conj().T @ cpu_static.metric @ initial_host).real.item())
     cpu_triple = exact_wilson_one_electron_triple(cpu_static)
     gpu_triple = exact_wilson_one_electron_triple(gpu_static)
     cpu_history = LinearMatrixHistory(

@@ -35,9 +35,7 @@ def _fixture() -> tuple[NumPyBackend, object, np.ndarray]:
 def test_magnetic_units_and_explicit_tesla_conversion() -> None:
     assert PhysicalDimension.MAGNETIC_FIELD.value == "magnetic_field"
     assert AtomicUnit.MAGNETIC_FIELD.value == "atomic_unit_of_magnetic_field"
-    field = UniformMagneticField.from_tesla(
-        (TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD, 0.0, 0.0)
-    )
+    field = UniformMagneticField.from_tesla((TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD, 0.0, 0.0))
     assert field.magnetic_field_au == (1.0, 0.0, 0.0)
     assert field.magnetic_field_tesla[0] == TESLA_PER_ATOMIC_UNIT_MAGNETIC_FIELD
     assert field.magnitude_au == 1.0
@@ -49,9 +47,7 @@ def test_oriented_fixture_fixes_phase_vector_and_endpoint_signs() -> None:
     gauge = AffineMagneticGauge(field)
 
     flux = triangle_fluxes(points[:1], geometry, field, backend)
-    phase = triangle_phases(
-        points[:1], geometry, field, backend, charge=-1.0, hbar=2.0
-    )
+    phase = triangle_phases(points[:1], geometry, field, backend, charge=-1.0, hbar=2.0)
     vectors = anchored_vectors(points[:1], geometry, field, backend)
     np.testing.assert_allclose(flux[0, 0, 1], -12.0)
     np.testing.assert_allclose(phase[0, 0, 1], 6.0)
@@ -70,9 +66,9 @@ def test_oriented_fixture_fixes_phase_vector_and_endpoint_signs() -> None:
     np.testing.assert_allclose(gradients[0] - point_a, vectors[0])
 
     direct_factor = np.exp(1j * (-1.0 / 2.0) * (integrals[:, 1] - integrals[:, 0]))
-    factorized = endpoint_links(
-        gauge, geometry, backend, charge=-1.0, hbar=2.0
-    )[0, 1] * np.exp(1j * phase[:, 0, 1])
+    factorized = endpoint_links(gauge, geometry, backend, charge=-1.0, hbar=2.0)[0, 1] * np.exp(
+        1j * phase[:, 0, 1]
+    )
     np.testing.assert_allclose(direct_factor, factorized, atol=2.0e-15)
 
 
@@ -134,9 +130,7 @@ def test_uniform_magnetic_internal_derivatives_match_centered_differences() -> N
                 anchored_vectors(points, geometry, plus_field, backend)
                 - anchored_vectors(points, geometry, minus_field, backend)
             ) / (2.0 * step)
-            factor_errors.append(
-                np.linalg.norm(factor_fd - derivatives.triangle_factor[axis])
-            )
+            factor_errors.append(np.linalg.norm(factor_fd - derivatives.triangle_factor[axis]))
             np.testing.assert_allclose(
                 vector_fd,
                 derivatives.anchored_vector[axis],
@@ -162,9 +156,7 @@ def test_symmetric_and_landau_gauges_differ_by_analytic_gradient() -> None:
     backend, geometry, points = _fixture()
     field = UniformMagneticField((0.3, -0.4, 0.2))
     axis = np.array((field.magnetic_field_au[1], -field.magnetic_field_au[0], 0.0))
-    symmetric = AffineMagneticGauge(
-        field, origin_au=(0.17, -0.31, 0.23)
-    )
+    symmetric = AffineMagneticGauge(field, origin_au=(0.17, -0.31, 0.23))
     landau = AffineMagneticGauge(
         field,
         kind=MagneticGaugeKind.LANDAU,
@@ -209,9 +201,7 @@ def test_rigid_rotation_covariance() -> None:
     points = np.array([[0.6, 0.2, 0.8], [-0.3, 0.9, -0.2]])
     field_vector = np.array([0.13, -0.09, 0.17])
     geometry = build_magnetic_pair_geometry(atoms, np.array([0, 1]), backend)
-    rotated_geometry = build_magnetic_pair_geometry(
-        atoms @ rotation.T, np.array([0, 1]), backend
-    )
+    rotated_geometry = build_magnetic_pair_geometry(atoms @ rotation.T, np.array([0, 1]), backend)
     field = UniformMagneticField(tuple(field_vector))
     rotated_field = UniformMagneticField(tuple(field_vector @ rotation.T))
     np.testing.assert_allclose(

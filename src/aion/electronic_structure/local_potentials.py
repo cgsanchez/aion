@@ -243,7 +243,5 @@ def bind_local_potential(
     backend.assert_resident(bound.zero_matrix_au, name="local-potential zero matrix")
     expected_shape = reference.core_operators.overlap.shape
     if bound.zero_matrix_au.shape != expected_shape:
-        raise ConfigurationError(
-            f"local-potential zero matrix must have shape {expected_shape}"
-        )
+        raise ConfigurationError(f"local-potential zero matrix must have shape {expected_shape}")
     return bound

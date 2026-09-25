@@ -67,9 +67,7 @@ def test_magnetic_geometry_is_gpu_resident_and_matches_numpy() -> None:
         gpu.assert_resident(actual)
         np.testing.assert_allclose(gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15)
 
-    vertices = np.array(
-        [[-0.7, -0.2, 0.0], [0.7, -0.2, 0.0], [0.1, 0.9, 0.0]]
-    )
+    vertices = np.array([[-0.7, -0.2, 0.0], [0.7, -0.2, 0.0], [0.1, 0.9, 0.0]])
     cpu_loop = center_loop_holonomy(vertices, gauge, cpu)
     gpu_loop = center_loop_holonomy(vertices, gauge, gpu)
     for name in (
@@ -81,6 +79,4 @@ def test_magnetic_geometry_is_gpu_resident_and_matches_numpy() -> None:
         expected = getattr(cpu_loop, name)
         actual = getattr(gpu_loop, name)
         gpu.assert_resident(actual)
-        np.testing.assert_allclose(
-            gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15
-        )
+        np.testing.assert_allclose(gpu.to_host(actual), expected, atol=5.0e-15, rtol=5.0e-15)

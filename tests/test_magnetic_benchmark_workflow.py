@@ -142,9 +142,7 @@ def test_local_provider_family_and_controlled_failure_are_explicit(
     assert any(value.path.startswith("0000/local/") for value in local.matrices)
     assert any(value.path.startswith("0002/local/") for value in local.matrices)
     reversal = next(
-        value
-        for value in local.diagnostics
-        if value.name.startswith("field_reversal/0000_0001/")
+        value for value in local.diagnostics if value.name.startswith("field_reversal/0000_0001/")
     )
     assert reversal.passed is True
     norm = next(
@@ -157,9 +155,7 @@ def test_local_provider_family_and_controlled_failure_are_explicit(
     assert all(value.passed is not False for value in local.diagnostics)
 
     failure_path = tmp_path / "must-not-exist.h5"
-    failing = _config(
-        validation=MagneticValidationPolicy(direct_oracle_tolerance=1.0e-30)
-    )
+    failing = _config(validation=MagneticValidationPolicy(direct_oracle_tolerance=1.0e-30))
     with pytest.raises(MagneticBenchmarkError, match="validation failed"):
         run_magnetic_benchmark(  # type: ignore[arg-type]
             h2_reference,

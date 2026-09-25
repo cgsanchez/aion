@@ -47,8 +47,7 @@ def _quadrature() -> object:
     reference = prepare_one_electron_ao_reference(
         OneElectronReferenceConfig(
             atoms=tuple(
-                AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-                for atom in values["atoms"]
+                AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
             ),
             basis=values["basis"],
             electromagnetic_origin=ElectromagneticOrigin(
@@ -70,9 +69,7 @@ def _relative(value: np.ndarray, reference: np.ndarray) -> float:
 
 def test_wp6_source_includes_induction_field_in_every_affine_gauge() -> None:
     backend = NumPyBackend()
-    points = np.asarray(
-        ((0.17, -0.31, 0.23), (-0.41, 0.29, 0.37), (0.61, 0.13, -0.27))
-    )
+    points = np.asarray(((0.17, -0.31, 0.23), (-0.41, 0.29, 0.37), (0.61, 0.13, -0.27)))
     field = np.asarray((0.0, 0.0, 0.07))
     field_dot = np.asarray((0.0, 0.0, -0.013))
     electric = np.asarray((0.011, -0.017, 0.019))
@@ -134,9 +131,7 @@ def test_wp6_exact_time_connection_routes_metric_rate_and_compatibility() -> Non
         ),
         include_direct_oracle=False,
     )
-    finite_difference = (plus.lower_exact.overlap - minus.lower_exact.overlap) / (
-        2.0 * step
-    )
+    finite_difference = (plus.lower_exact.overlap - minus.lower_exact.overlap) / (2.0 * step)
     np.testing.assert_allclose(
         time.metric_dot,
         finite_difference,
@@ -213,14 +208,15 @@ def test_wp6_exact_triple_obeys_affine_gauge_covariance() -> None:
         atol=3.0e-13,
     )
     expected_connection = transform(symmetric.connection.connection) + (
-        diagonal[:, None]
-        * symmetric.metric
-        * diagonal_dot.conj()[None, :]
+        diagonal[:, None] * symmetric.metric * diagonal_dot.conj()[None, :]
     )
-    assert _relative(
-        landau.connection.connection - expected_connection,
-        expected_connection,
-    ) < 2.0e-10
+    assert (
+        _relative(
+            landau.connection.connection - expected_connection,
+            expected_connection,
+        )
+        < 2.0e-10
+    )
 
 
 def test_wp6_static_linear_propagation_matches_generalized_spectral_solution() -> None:
@@ -256,9 +252,10 @@ def test_wp6_static_linear_propagation_matches_generalized_spectral_solution() -
             quadrature.backend,
         )[0]
         errors.append(np.linalg.norm(propagated.coefficients[-1] - spectral))
-        assert max(
-            diagnostic.output_metric_residual for diagnostic in propagated.diagnostics
-        ) < 2.0e-15
+        assert (
+            max(diagnostic.output_metric_residual for diagnostic in propagated.diagnostics)
+            < 2.0e-15
+        )
     assert errors[0] / errors[1] > 14.0
     assert errors[1] / errors[2] > 14.0
 

@@ -41,6 +41,7 @@ def test_metric_spectrum_reports_indefiniteness_without_regularization() -> None
     assert indefinite.minimum_eigenvalue == pytest.approx(-0.125)
     np.testing.assert_array_equal(indefinite.eigenvalues, [-0.125, 1.0])
 
+
 pytestmark = pytest.mark.integration
 
 _FIXTURE = Path(__file__).parent / "fixtures/exact_one_electron/hh_sto3g.fixture.json"
@@ -51,13 +52,10 @@ def _quadrature() -> object:
     values = json.loads(_FIXTURE.read_text(encoding="utf-8"))["config"]
     config = OneElectronReferenceConfig(
         atoms=tuple(
-            AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-            for atom in values["atoms"]
+            AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
         ),
         basis=values["basis"],
-        electromagnetic_origin=ElectromagneticOrigin(
-            tuple(values["electromagnetic_origin_au"])
-        ),
+        electromagnetic_origin=ElectromagneticOrigin(tuple(values["electromagnetic_origin_au"])),
     )
     reference = prepare_one_electron_ao_reference(config)
     return prepare_ao_quadrature(
@@ -76,23 +74,17 @@ def test_wp3_phase_spread_is_stable_and_isolates_parallel_geometry() -> None:
         UniformMagneticField((0.08, 0.0, 0.0)),
         UniformMagneticField((-0.08, 0.0, 0.0)),
     )
-    zero, parallel, perpendicular, reversed_field = (
-        evaluate_magnetic_one_electron_matrices(
-            quadrature,
-            fields,
-            include_direct_oracle=False,
-        )
+    zero, parallel, perpendicular, reversed_field = evaluate_magnetic_one_electron_matrices(
+        quadrature,
+        fields,
+        include_direct_oracle=False,
     )
 
     assert np.all(zero.phase_spread.absolute_product_integral > 0.0)
     np.testing.assert_array_equal(zero.phase_spread.rms, np.zeros((2, 2)))
     np.testing.assert_array_equal(parallel.phase_spread.rms, np.zeros((2, 2)))
-    np.testing.assert_array_equal(
-        perpendicular.phase_spread.rms, reversed_field.phase_spread.rms
-    )
-    np.testing.assert_array_equal(
-        np.diag(perpendicular.phase_spread.rms), np.zeros(2)
-    )
+    np.testing.assert_array_equal(perpendicular.phase_spread.rms, reversed_field.phase_spread.rms)
+    np.testing.assert_array_equal(np.diag(perpendicular.phase_spread.rms), np.zeros(2))
     assert perpendicular.phase_spread.rms[0, 1] > 1.0e-3
     np.testing.assert_allclose(
         perpendicular.phase_spread.rms,

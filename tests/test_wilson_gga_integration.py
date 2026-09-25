@@ -95,10 +95,13 @@ def test_pure_gga_stationary_state_and_short_propagation(gga_factory: object) ->
     assert state.density_fixed_point_residual < 2.0e-9
     assert state.commutator_residual < 2.0e-9
     assert state.double_counting_residual_au < 2.0e-11
-    assert abs(
-        float(state.action.energy_molecular_total_au)
-        - factory.quadrature.reference.ground_state.energy_total_au
-    ) < 5.0e-8
+    assert (
+        abs(
+            float(state.action.energy_molecular_total_au)
+            - factory.quadrature.reference.ground_state.energy_total_au
+        )
+        < 5.0e-8
+    )
     assert state.action.exchange_correlation is not None
     assert state.action.exchange_correlation.realization == "quadrature--Wilson GGA"
 
@@ -141,9 +144,7 @@ def test_pure_gga_stationary_state_and_short_propagation(gga_factory: object) ->
         policy=NonlinearGaussMagnusPolicy(tolerance=1.0e-10),
     )
     assert trajectory.metric_correction_applied is False
-    assert max(
-        item.contravariant_hermiticity_residual for item in trajectory.diagnostics
-    ) < 2.0e-15
+    assert max(item.contravariant_hermiticity_residual for item in trajectory.diagnostics) < 2.0e-15
 
 
 def test_pure_gga_source_difference_and_weak_continuity(gga_factory: object) -> None:
@@ -164,9 +165,7 @@ def test_pure_gga_source_difference_and_weak_continuity(gga_factory: object) -> 
     )
     triple = EOMTriple(grid.overlap, grid.mechanical, np.zeros_like(grid.overlap))
     density = _normalized_density(np.asarray(grid.overlap))
-    velocity = np.asarray(
-        ((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j))
-    )
+    velocity = np.asarray(((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j)))
     variation = GaussianVectorPotentialVariation(
         amplitude_au=(0.19, -0.13, 0.07),
         center_au=(0.23, -0.17, 0.11),
@@ -194,9 +193,7 @@ def test_pure_gga_source_difference_and_weak_continuity(gga_factory: object) -> 
             )
             for sign in (1.0, -1.0)
         ]
-        errors.append(
-            abs((values[0] - values[1]) / (2.0 * step) - float(analytic.total_pairing))
-        )
+        errors.append(abs((values[0] - values[1]) / (2.0 * step) - float(analytic.total_pairing)))
     assert errors[-1] < 3.0e-7
     assert min(errors) < 2.0e-8
 

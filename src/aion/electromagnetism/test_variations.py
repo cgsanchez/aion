@@ -291,8 +291,7 @@ class PerturbedVectorPotential:
         backend: ArrayBackend,
     ) -> Any:
         return self.base.straight_line_integrals(starts_au, ends_au, backend) + (
-            self.amplitude
-            * self.direction.straight_line_integrals(starts_au, ends_au, backend)
+            self.amplitude * self.direction.straight_line_integrals(starts_au, ends_au, backend)
         )
 
     def straight_line_integral_gradients(
@@ -331,8 +330,7 @@ class AffineVectorFieldVariation:
         object.__setattr__(self, "offset_au", vector3(self.offset_au, "offset_au"))
         object.__setattr__(self, "origin_au", vector3(self.origin_au, "origin_au"))
         rows = tuple(
-            vector3(row, f"matrix_au[{index}]")
-            for index, row in enumerate(self.matrix_au)
+            vector3(row, f"matrix_au[{index}]") for index, row in enumerate(self.matrix_au)
         )
         if len(rows) != 3:
             raise ConfigurationError("matrix_au must contain three Cartesian rows")
@@ -404,6 +402,7 @@ class AffineVectorFieldVariation:
             matrix_au=matrix,
             origin_au=vector3(origin_au, "origin_au"),
         )
+
 
 def _cartesian_array(value: object, backend: ArrayBackend, name: str) -> Any:
     xp = backend.namespace

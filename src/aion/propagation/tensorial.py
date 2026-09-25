@@ -257,9 +257,10 @@ def partial_fourth_order_gauss_magnus_link(
     slope = math.sqrt(3.0) * (gauss_plus_generator - gauss_minus_generator)
     intercept = gauss_minus_generator - (0.5 - math.sqrt(3.0) / 6.0) * slope
     commutator = intercept @ slope - slope @ intercept
-    omega = interval * (
-        coordinate * intercept + 0.5 * coordinate * coordinate * slope
-    ) - (interval * interval * coordinate**3 / 12.0) * commutator
+    omega = (
+        interval * (coordinate * intercept + 0.5 * coordinate * coordinate * slope)
+        - (interval * interval * coordinate**3 / 12.0) * commutator
+    )
     return rational_map(
         omega,
         1.0,
@@ -577,13 +578,17 @@ def propagate_nonlinear_mixed_density(
         trace_scale = xp.maximum(xp.asarray(1.0), xp.abs(input_trace))
         spectrum = xp.linalg.eigvals(current)
         spectrum_scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(initial_spectrum))
-        real_spectrum_drift = xp.linalg.norm(
-            xp.sort(xp.real(spectrum)) - xp.sort(xp.real(initial_spectrum))
-        ) / spectrum_scale
-        imaginary_spectrum_drift = xp.maximum(
-            xp.max(xp.abs(xp.imag(spectrum))),
-            xp.max(xp.abs(xp.imag(initial_spectrum))),
-        ) / spectrum_scale
+        real_spectrum_drift = (
+            xp.linalg.norm(xp.sort(xp.real(spectrum)) - xp.sort(xp.real(initial_spectrum)))
+            / spectrum_scale
+        )
+        imaginary_spectrum_drift = (
+            xp.maximum(
+                xp.max(xp.abs(xp.imag(spectrum))),
+                xp.max(xp.abs(xp.imag(initial_spectrum))),
+            )
+            / spectrum_scale
+        )
         spectrum_drift = backend.scalar_to_float(
             xp.maximum(real_spectrum_drift, imaginary_spectrum_drift)
         )
@@ -617,9 +622,7 @@ def propagate_nonlinear_mixed_density(
             )
         )
         mixed.append(xp.array(current, dtype=xp.complex128, copy=True))
-        contravariant_values.append(
-            xp.array(contravariant, dtype=xp.complex128, copy=True)
-        )
+        contravariant_values.append(xp.array(contravariant, dtype=xp.complex128, copy=True))
         minus_nodes.append(xp.array(guess_minus, dtype=xp.complex128, copy=True))
         plus_nodes.append(xp.array(guess_plus, dtype=xp.complex128, copy=True))
         links.append(xp.array(link, dtype=xp.complex128, copy=True))
@@ -803,13 +806,17 @@ def propagate_nonlinear_contravariant_density(
         trace_scale = xp.maximum(xp.asarray(1.0), xp.abs(input_trace))
         spectrum = xp.linalg.eigvals(mixed)
         spectrum_scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(initial_spectrum))
-        real_spectrum_drift = xp.linalg.norm(
-            xp.sort(xp.real(spectrum)) - xp.sort(xp.real(initial_spectrum))
-        ) / spectrum_scale
-        imaginary_spectrum_drift = xp.maximum(
-            xp.max(xp.abs(xp.imag(spectrum))),
-            xp.max(xp.abs(xp.imag(initial_spectrum))),
-        ) / spectrum_scale
+        real_spectrum_drift = (
+            xp.linalg.norm(xp.sort(xp.real(spectrum)) - xp.sort(xp.real(initial_spectrum)))
+            / spectrum_scale
+        )
+        imaginary_spectrum_drift = (
+            xp.maximum(
+                xp.max(xp.abs(xp.imag(spectrum))),
+                xp.max(xp.abs(xp.imag(initial_spectrum))),
+            )
+            / spectrum_scale
+        )
         diagnostics.append(
             NonlinearMixedDensityStepDiagnostics(
                 start_time_au=left_time,

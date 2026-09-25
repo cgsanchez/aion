@@ -151,9 +151,7 @@ class WilsonLDAEvaluator:
                 pointwise_engine="pyscf.dft.numint.NumInt.eval_xc_eff",
                 libxc_version=str(libxc.libxc_version()),
                 pointwise_engine_backend="cpu",
-                reference_fingerprint_sha256=(
-                    self.quadrature.reference.fingerprint_sha256
-                ),
+                reference_fingerprint_sha256=(self.quadrature.reference.fingerprint_sha256),
                 grid_fingerprint_sha256=self.quadrature.grid.fingerprint_sha256,
             ),
         )
@@ -204,18 +202,12 @@ class WilsonLDAEvaluator:
         energy_per_particle = backend.zeros((npoint,), dtype=xp.float64)
         density_derivative = backend.zeros((npoint,), dtype=xp.float64)
         source_density = (
-            None
-            if source_direction is None
-            else backend.zeros((npoint,), dtype=xp.float64)
+            None if source_direction is None else backend.zeros((npoint,), dtype=xp.float64)
         )
         lower = backend.zeros((nao, nao), dtype=xp.complex128)
         energy = backend.asarray(0.0, dtype=xp.float64)
         particle_number = backend.asarray(0.0, dtype=xp.float64)
-        source_energy = (
-            None
-            if source_direction is None
-            else backend.asarray(0.0, dtype=xp.float64)
-        )
+        source_energy = None if source_direction is None else backend.asarray(0.0, dtype=xp.float64)
 
         geometry = build_magnetic_pair_geometry(
             reference.core_operators.nuclei.coordinates_au,
@@ -245,16 +237,13 @@ class WilsonLDAEvaluator:
                 optimize=True,
             )
             real_density = xp.real(complex_density)
-            block_imaginary = backend.scalar_to_float(
-                xp.max(xp.abs(xp.imag(complex_density)))
-            )
+            block_imaginary = backend.scalar_to_float(xp.max(xp.abs(xp.imag(complex_density))))
             block_real_scale = backend.scalar_to_float(
                 xp.maximum(xp.asarray(1.0), xp.max(xp.abs(real_density)))
             )
             if block_imaginary > self.imaginary_relative_tolerance * block_real_scale:
                 raise FormulationError(
-                    "Wilson density has an unresolved imaginary component "
-                    f"{block_imaginary:.3e}"
+                    f"Wilson density has an unresolved imaginary component {block_imaginary:.3e}"
                 )
             block_minimum = backend.scalar_to_float(xp.min(real_density))
             if block_minimum < -self.negative_density_relative_tolerance * block_real_scale:
@@ -265,9 +254,7 @@ class WilsonLDAEvaluator:
             density_imaginary_maximum = max(density_imaginary_maximum, block_imaginary)
             density_minimum = min(density_minimum, block_minimum)
 
-            exc_host, potential_host = self._evaluate_pointwise(
-                backend.to_host(real_density)
-            )
+            exc_host, potential_host = self._evaluate_pointwise(backend.to_host(real_density))
             exc = backend.asarray(exc_host, dtype=xp.float64)
             potential = backend.asarray(potential_host, dtype=xp.float64)
             backend.assert_resident(exc, name="LDA energy per particle")
@@ -304,8 +291,8 @@ class WilsonLDAEvaluator:
                     block.coordinates_au[:, None, :],
                     backend,
                 )
-                frame_direction = prefactor * direction_line * (
-                    xp.exp(prefactor * line) * block.values
+                frame_direction = (
+                    prefactor * direction_line * (xp.exp(prefactor * line) * block.values)
                 )
                 if frame_change is not None:
                     frame_direction = frame_direction @ frame_change
@@ -329,10 +316,7 @@ class WilsonLDAEvaluator:
                 direction_scale = backend.scalar_to_float(
                     xp.maximum(xp.asarray(1.0), xp.max(xp.abs(real_direction)))
                 )
-                if (
-                    block_source_imaginary
-                    > self.imaginary_relative_tolerance * direction_scale
-                ):
+                if block_source_imaginary > self.imaginary_relative_tolerance * direction_scale:
                     raise FormulationError(
                         "Wilson source-density direction has an unresolved imaginary "
                         f"component {block_source_imaginary:.3e}"
@@ -457,15 +441,12 @@ class WilsonLDAEvaluator:
         self.backend.assert_resident(density, name="contravariant coefficient density")
         if density.shape != (dimension, dimension):
             raise ConfigurationError(
-                f"coefficient_density has shape {density.shape}; expected "
-                f"{(dimension, dimension)}"
+                f"coefficient_density has shape {density.shape}; expected {(dimension, dimension)}"
             )
         if not _control_bool(xp.all(xp.isfinite(density)), self.backend):
             raise ConfigurationError("coefficient_density contains non-finite values")
         scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(density))
-        residual = self.backend.scalar_to_float(
-            xp.linalg.norm(density - density.conj().T) / scale
-        )
+        residual = self.backend.scalar_to_float(xp.linalg.norm(density - density.conj().T) / scale)
         if residual > 1.0e-11:
             raise ConfigurationError("coefficient_density must be Hermitian")
         return density
@@ -479,8 +460,7 @@ class WilsonLDAEvaluator:
         self.backend.assert_resident(frame, name="coefficient frame change")
         if frame.shape != (dimension, dimension):
             raise ConfigurationError(
-                f"coefficient_frame has shape {frame.shape}; expected "
-                f"{(dimension, dimension)}"
+                f"coefficient_frame has shape {frame.shape}; expected {(dimension, dimension)}"
             )
         if not _control_bool(xp.all(xp.isfinite(frame)), self.backend):
             raise ConfigurationError("coefficient_frame contains non-finite values")

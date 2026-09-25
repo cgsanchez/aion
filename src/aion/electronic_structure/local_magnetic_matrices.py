@@ -82,8 +82,7 @@ def evaluate_local_potential_magnetic_matrices(
     reference = quadrature.reference
     if not isinstance(reference, PreparedReference):
         raise TypeError(
-            "the generic local-potential magnetic evaluator currently requires "
-            "PreparedReference"
+            "the generic local-potential magnetic evaluator currently requires PreparedReference"
         )
     fields = tuple(magnetic_fields)
     provider_values = tuple(providers)
@@ -114,8 +113,7 @@ def evaluate_local_potential_magnetic_matrices(
     backend = quadrature.backend
     xp = backend.namespace
     bound = tuple(
-        bind_local_potential(provider, reference, backend)
-        for provider in provider_values
+        bind_local_potential(provider, reference, backend) for provider in provider_values
     )
     fingerprints = tuple(provider.identity.fingerprint_sha256 for provider in bound)
     if len(set(fingerprints)) != len(fingerprints):
@@ -138,9 +136,7 @@ def evaluate_local_potential_magnetic_matrices(
         backend,
     )
     nao = reference.core_operators.nao
-    accumulators = tuple(
-        tuple(_new_accumulator(nao, backend) for _ in bound) for _ in fields
-    )
+    accumulators = tuple(tuple(_new_accumulator(nao, backend) for _ in bound) for _ in fields)
     total_blocks = (quadrature.grid.npoints + quadrature.block_size - 1) // quadrature.block_size
     for block in quadrature.blocks():
         potentials = tuple(provider.values_au(block.coordinates_au) for provider in bound)
@@ -150,9 +146,7 @@ def evaluate_local_potential_magnetic_matrices(
                 raise ConfigurationError(
                     "pointwise local-potential values must have shape (nblock,)"
                 )
-        for field, gauge, field_accumulators in zip(
-            fields, gauges, accumulators, strict=True
-        ):
+        for field, gauge, field_accumulators in zip(fields, gauges, accumulators, strict=True):
             phase = triangle_phases(
                 block.coordinates_au,
                 geometry,
@@ -170,9 +164,7 @@ def evaluate_local_potential_magnetic_matrices(
                 )
                 wilson = xp.exp((1j * checked_charge / checked_hbar) * line_integrals)
                 dressed_values = wilson * block.values
-            for potential, accumulator in zip(
-                potentials, field_accumulators, strict=True
-            ):
+            for potential, accumulator in zip(potentials, field_accumulators, strict=True):
                 weights = block.weights_au * potential
                 accumulator.quadrature_zero += _ordinary_pair(
                     block.values, block.values, weights, xp
@@ -213,9 +205,7 @@ def evaluate_local_potential_magnetic_matrices(
                     field=field,
                     endpoint_link=endpoint,
                     hierarchy=hierarchy,
-                    direct_lower_grid=(
-                        accumulator.direct if include_direct_oracle else None
-                    ),
+                    direct_lower_grid=(accumulator.direct if include_direct_oracle else None),
                     reference_fingerprint_sha256=quadrature.reference.fingerprint_sha256,
                     grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
                     backend=quadrature.backend_config.kind.value,
@@ -239,12 +229,8 @@ def _ordinary_pair(left: Any, right: Any, weights: Any, xp: Any) -> Any:
     return xp.einsum("p,pm,pn->mn", weights, left.conj(), right, optimize=True)
 
 
-def _factorized_pair(
-    left: Any, right: Any, weights: Any, factor: Any, xp: Any
-) -> Any:
-    return xp.einsum(
-        "p,pm,pn,pmn->mn", weights, left.conj(), right, factor, optimize=True
-    )
+def _factorized_pair(left: Any, right: Any, weights: Any, factor: Any, xp: Any) -> Any:
+    return xp.einsum("p,pm,pn,pmn->mn", weights, left.conj(), right, factor, optimize=True)
 
 
 def _finite_parameter(value: float, name: str) -> float:

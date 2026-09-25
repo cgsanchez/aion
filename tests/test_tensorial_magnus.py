@@ -260,24 +260,17 @@ def test_nonlinear_congruence_preserves_density_domain_and_fourth_order() -> Non
             backend=backend,
             policy=NonlinearGaussMagnusPolicy(tolerance=2.0e-13),
         )
-        errors.append(
-            _relative(trajectory.contravariant_densities[-1] - exact, exact)
-        )
-        occupation_drifts.append(
-            trajectory.diagnostics[-1].occupation_spectrum_drift
-        )
+        errors.append(_relative(trajectory.contravariant_densities[-1] - exact, exact))
+        occupation_drifts.append(trajectory.diagnostics[-1].occupation_spectrum_drift)
         assert trajectory.density_update == "coefficient_congruence"
         assert trajectory.metric_correction_applied is False
-        assert max(
-            item.contravariant_hermiticity_residual
-            for item in trajectory.diagnostics
-        ) < 2.0e-15
+        assert (
+            max(item.contravariant_hermiticity_residual for item in trajectory.diagnostics)
+            < 2.0e-15
+        )
 
     assert min(errors[index] / errors[index + 1] for index in range(3)) > 13.0
-    assert min(
-        occupation_drifts[index] / occupation_drifts[index + 1]
-        for index in range(3)
-    ) > 13.0
+    assert min(occupation_drifts[index] / occupation_drifts[index + 1] for index in range(3)) > 13.0
 
 
 def test_nonlinear_congruence_self_consistent_fixed_metric_converges() -> None:
@@ -298,8 +291,6 @@ def test_nonlinear_congruence_self_consistent_fixed_metric_converges() -> None:
                 maximum_iterations=80,
             ),
         )
-        errors.append(
-            _relative(trajectory.contravariant_densities[-1] - exact, exact)
-        )
+        errors.append(_relative(trajectory.contravariant_densities[-1] - exact, exact))
         assert max(item.nonlinear_residual for item in trajectory.diagnostics) < 2.0e-13
     assert min(errors[index] / errors[index + 1] for index in range(3)) > 10.0

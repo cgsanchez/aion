@@ -128,12 +128,8 @@ def test_wp4_first_derivative_and_e1_tensors_are_gpu_resident_and_match_cpu() ->
         )
 
     fields = ((0.01, -0.02, 0.03), (-0.01, 0.02, -0.03))
-    cpu_connections = evaluate_exact_uniform_electric_internal_connections(
-        cpu_quadrature, fields
-    )
-    gpu_connections = evaluate_exact_uniform_electric_internal_connections(
-        gpu_quadrature, fields
-    )
+    cpu_connections = evaluate_exact_uniform_electric_internal_connections(cpu_quadrature, fields)
+    gpu_connections = evaluate_exact_uniform_electric_internal_connections(gpu_quadrature, fields)
     for expected, actual in zip(cpu_connections, gpu_connections, strict=True):
         gpu_quadrature.backend.assert_resident(actual)
         np.testing.assert_allclose(

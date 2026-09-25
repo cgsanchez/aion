@@ -705,9 +705,7 @@ def evaluate_exact_static_wilson_grid_one_electron_action(
             block.weights_au,
             xp,
         )
-        nuclear_weights = block.weights_au * nuclear_provider.values_au(
-            block.coordinates_au
-        )
+        nuclear_weights = block.weights_au * nuclear_provider.values_au(block.coordinates_au)
         nuclear += _ordinary_pair(
             dressed_values,
             dressed_values,
@@ -820,14 +818,10 @@ def evaluate_exact_weak_vector_potential_source_direction(
         dressed_values_direction = prefactor * direction_line * dressed_values
         dressed_momentum_embedding = wilson[:, :, None] * (
             prefactor * direction_line[:, :, None] * reduced_momentum
-            + sample.static_result.charge
-            * direction_line_gradient
-            * values[:, :, None]
+            + sample.static_result.charge * direction_line_gradient * values[:, :, None]
         )
         dressed_momentum_explicit = wilson[:, :, None] * (
-            -sample.static_result.charge
-            * direction_vector[:, None, :]
-            * values[:, :, None]
+            -sample.static_result.charge * direction_vector[:, None, :] * values[:, :, None]
         )
         base_line_rate = sample.source.gauge_rate.anchor_to_point_line_integrals(
             anchors,

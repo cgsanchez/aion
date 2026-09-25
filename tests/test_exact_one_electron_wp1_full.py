@@ -33,13 +33,10 @@ def _config(name: str) -> OneElectronReferenceConfig:
     values = fixture["config"]
     return OneElectronReferenceConfig(
         atoms=tuple(
-            AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-            for atom in values["atoms"]
+            AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
         ),
         basis=values["basis"],
-        electromagnetic_origin=ElectromagneticOrigin(
-            tuple(values["electromagnetic_origin_au"])
-        ),
+        electromagnetic_origin=ElectromagneticOrigin(tuple(values["electromagnetic_origin_au"])),
     )
 
 
@@ -59,23 +56,14 @@ def _evaluate(
 
 
 def test_oh_fixture_reconstructs_deterministically() -> None:
-    fixture = json.loads(
-        (_FIXTURE_DIRECTORY / "oh_sto3g.fixture.json").read_text(encoding="utf-8")
-    )
+    fixture = json.loads((_FIXTURE_DIRECTORY / "oh_sto3g.fixture.json").read_text(encoding="utf-8"))
     reference = prepare_one_electron_ao_reference(_config("oh"))
     assert fixture["status"] == "immutable_input_no_numerical_claim"
     assert reference.config.scientific_id == fixture["config_id"]
     assert reference.fingerprint_sha256 == fixture["reference_fingerprint_sha256"]
-    assert list(reference.basis_metadata.ao_labels) == fixture["basis_metadata"][
-        "ao_labels"
-    ]
-    np.testing.assert_array_equal(
-        reference.anchor_topology.ao_to_atom, fixture["ao_to_atom"]
-    )
-    assert (
-        reference.core_operators.fingerprint_sha256
-        == fixture["fingerprints"]["core_operators"]
-    )
+    assert list(reference.basis_metadata.ao_labels) == fixture["basis_metadata"]["ao_labels"]
+    np.testing.assert_array_equal(reference.anchor_topology.ao_to_atom, fixture["ao_to_atom"])
+    assert reference.core_operators.fingerprint_sha256 == fixture["fingerprints"]["core_operators"]
 
 
 def test_complete_hh_zero_field_contraction_and_atom_pair_floors() -> None:
@@ -141,24 +129,30 @@ def test_oh_all_wp1_matrix_families_converge_and_momentum_sign_is_resolved() -> 
     assert np.all(np.diff(momentum) < 0.0)
 
     finest = evaluated[-1]
-    assert max(
-        finest.overlap.relative_frobenius_residual,
-        finest.kinetic.relative_frobenius_residual,
-        finest.nuclear_attraction.relative_frobenius_residual,
-        finest.mechanical.relative_frobenius_residual,
-        finest.canonical_momentum.relative_frobenius_residual,
-    ) < 3.0e-8
+    assert (
+        max(
+            finest.overlap.relative_frobenius_residual,
+            finest.kinetic.relative_frobenius_residual,
+            finest.nuclear_attraction.relative_frobenius_residual,
+            finest.mechanical.relative_frobenius_residual,
+            finest.canonical_momentum.relative_frobenius_residual,
+        )
+        < 3.0e-8
+    )
     assert finest.opposite_momentum_sign_relative_residual > 1.9
     assert (
         finest.opposite_momentum_sign_relative_residual
         > 1.0e6 * finest.canonical_momentum.relative_frobenius_residual
     )
-    assert max(
-        finest.overlap.hermiticity_residual,
-        finest.kinetic.hermiticity_residual,
-        finest.nuclear_attraction.hermiticity_residual,
-        finest.mechanical.hermiticity_residual,
-    ) < 3.0e-16
+    assert (
+        max(
+            finest.overlap.hermiticity_residual,
+            finest.kinetic.hermiticity_residual,
+            finest.nuclear_attraction.hermiticity_residual,
+            finest.mechanical.hermiticity_residual,
+        )
+        < 3.0e-16
+    )
     assert (
         finest.canonical_momentum.hermiticity_residual
         < 4.0 * finest.canonical_momentum.relative_frobenius_residual

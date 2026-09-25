@@ -168,9 +168,7 @@ def evaluate_exact_wilson_charge(
     xp = model.namespace
     particle_density = xp.real(result.density_direct)
     charge = model.hartree_action.charge
-    metric_number = xp.real(
-        xp.einsum("ij,ji->", density, model.overlap, optimize=True)
-    )
+    metric_number = xp.real(xp.einsum("ij,ji->", density, model.overlap, optimize=True))
     return ExactWilsonChargeObservation(
         particle_density=particle_density,
         signed_charge_density=charge * particle_density,
@@ -234,9 +232,7 @@ def evaluate_static_nonlinear_wilson_grid_action(
             hbar=model.hartree_action.hbar,
         )
     )
-    closure = hartree.energy + (
-        backend.asarray(0.0, dtype=xp.float64) if xc is None else xc.energy
-    )
+    closure = hartree.energy + (backend.asarray(0.0, dtype=xp.float64) if xc is None else xc.energy)
     return StaticNonlinearWilsonGridAction(
         one_electron_matrices=one_electron,
         one_electron_action=one_action,
@@ -316,14 +312,11 @@ def evaluate_nonlinear_weak_current_pairing(
         frame_connection = xp.linalg.solve(base.metric, one.response.frame_overlap)
         frame_connection_rate = xp.linalg.solve(
             base.metric,
-            one.response.frame_overlap_rate
-            - sample.connection.metric_dot @ frame_connection,
+            one.response.frame_overlap_rate - sample.connection.metric_dot @ frame_connection,
         )
     except Exception as exc:
         raise FormulationError("weak frame-connection or rate solve failed") from exc
-    density_direction = (
-        frame_connection @ density + density @ frame_connection.conj().T
-    )
+    density_direction = frame_connection @ density + density @ frame_connection.conj().T
     velocity_direction = (
         frame_connection_rate @ density
         + frame_connection @ velocity
@@ -462,9 +455,7 @@ def evaluate_nonlinear_pure_gauge_ward(
         xp.asarray(1.0),
         xp.linalg.norm(full_action.lower_mechanical_matrix @ coefficient_array),
     )
-    relative_residual = backend.scalar_to_float(
-        xp.linalg.norm(lower_residual) / residual_scale
-    )
+    relative_residual = backend.scalar_to_float(xp.linalg.norm(lower_residual) / residual_scale)
     return NonlinearPureGaugeWardResult(
         source_pairing=source,
         matter_pairing=matter,
@@ -563,9 +554,7 @@ def evaluate_nonlinear_density_pure_gauge_ward(
         xp.asarray(1.0),
         xp.linalg.norm(full_action.lower_mechanical_matrix @ density),
     )
-    relative_residual = backend.scalar_to_float(
-        xp.linalg.norm(shell_residual) / residual_scale
-    )
+    relative_residual = backend.scalar_to_float(xp.linalg.norm(shell_residual) / residual_scale)
     return NonlinearDensityPureGaugeWardResult(
         source_pairing=source,
         matter_pairing=matter,
@@ -603,9 +592,7 @@ def evaluate_nonlinear_weak_continuity(
         if one_electron_triple is None
         else one_electron_triple
     )
-    closure_lower = (
-        action.lower_mechanical_matrix - action.one_electron_matrix
-    )
+    closure_lower = action.lower_mechanical_matrix - action.one_electron_matrix
     full_triple = EOMTriple(
         metric=base.metric,
         hamiltonian_eom=base.hamiltonian_eom + closure_lower,
@@ -634,15 +621,13 @@ def evaluate_nonlinear_weak_continuity(
         charge=model.hartree_action.charge,
         hbar=model.hartree_action.hbar,
     )
-    density_source_dot_grid = (
-        evaluate_exact_uniform_magnetic_wilson_density_source_direction(
-            model.quadrature,
-            density,
-            model.gauge,
-            sample.source.gauge_rate,
-            charge=model.hartree_action.charge,
-            hbar=model.hartree_action.hbar,
-        )
+    density_source_dot_grid = evaluate_exact_uniform_magnetic_wilson_density_source_direction(
+        model.quadrature,
+        density,
+        model.gauge,
+        sample.source.gauge_rate,
+        charge=model.hartree_action.charge,
+        hbar=model.hartree_action.hbar,
     )
     weights = backend.asarray(model.quadrature.grid.weights_au, dtype=xp.float64)
     coordinates = backend.asarray(
@@ -662,8 +647,7 @@ def evaluate_nonlinear_weak_continuity(
             "p,p,p->",
             weights,
             test_values,
-            density_dot_grid.density_direct
-            + density_source_dot_grid.density_direction,
+            density_dot_grid.density_direct + density_source_dot_grid.density_direction,
             optimize=True,
         )
     )

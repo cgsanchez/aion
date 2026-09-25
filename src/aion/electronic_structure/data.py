@@ -478,12 +478,8 @@ class OneElectronAOReference:
                     "config": self.config.scientific_mapping(),
                     "dependencies": self.dependencies.as_mapping(),
                     "core_operator_fingerprint_sha256": self.core_operators.fingerprint_sha256,
-                    "anchor_topology_fingerprint_sha256": (
-                        self.anchor_topology.fingerprint_sha256
-                    ),
-                    "basis_metadata_fingerprint_sha256": (
-                        self.basis_metadata.fingerprint_sha256
-                    ),
+                    "anchor_topology_fingerprint_sha256": (self.anchor_topology.fingerprint_sha256),
+                    "basis_metadata_fingerprint_sha256": (self.basis_metadata.fingerprint_sha256),
                 }
             ),
         )

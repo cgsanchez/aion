@@ -314,9 +314,7 @@ class ExactWilsonStationaryModel:
             energy_molecular_total_au=molecular,
             xc_potential_contraction_au=xc_contraction,
             branch=self.branch,
-            reference_fingerprint_sha256=(
-                self.quadrature.reference.fingerprint_sha256
-            ),
+            reference_fingerprint_sha256=(self.quadrature.reference.fingerprint_sha256),
             grid_fingerprint_sha256=self.quadrature.grid.fingerprint_sha256,
             backend=self.quadrature.backend_config.kind.value,
             device_index=self.quadrature.backend_config.device_index,
@@ -412,9 +410,7 @@ def solve_wilson_stationary_model[ActionT: WilsonStationaryActionProtocol](
         coefficients = np.asarray(initial_coefficients, dtype=np.complex128)
     expected = (overlap.shape[0], occupied.size)
     if coefficients.shape != expected or not np.all(np.isfinite(coefficients)):
-        raise ConfigurationError(
-            f"initial_coefficients must be finite with shape {expected}"
-        )
+        raise ConfigurationError(f"initial_coefficients must be finite with shape {expected}")
     coefficients = _metric_orthonormalize(coefficients, overlap)
     density = _coefficient_density(coefficients, occupations)
     diis = _PulayHistory(selected_policy.diis_space)
@@ -474,9 +470,7 @@ def solve_wilson_stationary_model[ActionT: WilsonStationaryActionProtocol](
             candidate,
             overlap,
         )
-        candidate_energy_change = abs(
-            float(candidate_action.energy_molecular_total_au) - energy
-        )
+        candidate_energy_change = abs(float(candidate_action.energy_molecular_total_au) - energy)
         if (
             candidate_density_residual <= selected_policy.density_tolerance
             and candidate_orbital_residual <= selected_policy.orbital_tolerance
@@ -501,9 +495,7 @@ def solve_wilson_stationary_model[ActionT: WilsonStationaryActionProtocol](
             occupations,
         )
         mixing = 1.0 if use_diis else selected_policy.damping
-        density = hermitian_part(
-            (1.0 - mixing) * density + mixing * step_density
-        )
+        density = hermitian_part((1.0 - mixing) * density + mixing * step_density)
         previous_energy = energy
 
     raise FormulationError(
@@ -554,20 +546,10 @@ class ExactWilsonStationaryFactory:
             charge=self.charge,
             hbar=self.hbar,
         )
-        if (
-            selected_branch is WilsonStationaryBranch.KOHN_SHAM_LDA
-            and self.lda_evaluator is None
-        ):
-            raise UnsupportedConfigurationError(
-                "the factory functional is not a pure LDA"
-            )
-        if (
-            selected_branch is WilsonStationaryBranch.KOHN_SHAM_GGA
-            and self.gga_evaluator is None
-        ):
-            raise UnsupportedConfigurationError(
-                "the factory functional is not a pure GGA"
-            )
+        if selected_branch is WilsonStationaryBranch.KOHN_SHAM_LDA and self.lda_evaluator is None:
+            raise UnsupportedConfigurationError("the factory functional is not a pure LDA")
+        if selected_branch is WilsonStationaryBranch.KOHN_SHAM_GGA and self.gga_evaluator is None:
+            raise UnsupportedConfigurationError("the factory functional is not a pure GGA")
         return ExactWilsonStationaryModel(
             quadrature=self.quadrature,
             gauge=gauge,
@@ -705,8 +687,7 @@ class _PulayHistory:
         dimension = self.size
         system = np.empty((dimension + 1, dimension + 1), dtype=np.float64)
         system[:-1, :-1] = [
-            [float(np.vdot(left, right).real) for right in self.errors]
-            for left in self.errors
+            [float(np.vdot(left, right).real) for right in self.errors] for left in self.errors
         ]
         system[-1, :-1] = -1.0
         system[:-1, -1] = -1.0
@@ -720,9 +701,10 @@ class _PulayHistory:
         except np.linalg.LinAlgError:
             return self.matrices[-1]
         result = sum(
-            (coefficient * matrix for coefficient, matrix in zip(
-                coefficients, self.matrices, strict=True
-            )),
+            (
+                coefficient * matrix
+                for coefficient, matrix in zip(coefficients, self.matrices, strict=True)
+            ),
             np.zeros_like(self.matrices[0]),
         )
         return np.asarray(hermitian_part(result), dtype=np.complex128)
@@ -760,8 +742,7 @@ def _build_stationary_state[ActionT: WilsonStationaryActionProtocol](
         / max(1.0, float(np.linalg.norm(expected_spectrum)))
     )
     polynomial = float(
-        np.linalg.norm(mixed @ mixed - 2.0 * mixed)
-        / max(1.0, float(np.linalg.norm(mixed)))
+        np.linalg.norm(mixed @ mixed - 2.0 * mixed) / max(1.0, float(np.linalg.norm(mixed)))
     )
     occupation_matrix = np.diag(occupations)
     frequency_commutator = float(
@@ -775,21 +756,15 @@ def _build_stationary_state[ActionT: WilsonStationaryActionProtocol](
         + float(action.energy_exchange_correlation_au)
         - float(action.xc_potential_contraction_au)
     )
-    reconstructed_molecular = reconstructed_electronic + float(
-        action.energy_nuclear_repulsion_au
-    )
-    double_counting = abs(
-        reconstructed_molecular - float(action.energy_molecular_total_au)
-    )
+    reconstructed_molecular = reconstructed_electronic + float(action.energy_nuclear_repulsion_au)
+    double_counting = abs(reconstructed_molecular - float(action.energy_molecular_total_au))
     metric_eigenvalues = np.linalg.eigvalsh(overlap)
     backend_coefficients = model.backend.asarray(coefficients, dtype=xp.complex128)
     backend_occupations = model.backend.asarray(occupations, dtype=xp.float64)
     backend_density = model.backend.asarray(density, dtype=xp.complex128)
     backend_mixed = model.backend.asarray(mixed, dtype=xp.complex128)
     backend_frequency = model.backend.asarray(frequency, dtype=xp.complex128)
-    backend_active_energies = model.backend.asarray(
-        np.linalg.eigvalsh(frequency), dtype=xp.float64
-    )
+    backend_active_energies = model.backend.asarray(np.linalg.eigvalsh(frequency), dtype=xp.float64)
     backend_complete_spectrum = model.backend.asarray(complete_spectrum, dtype=xp.float64)
     backend_orbital_sum = model.backend.asarray(orbital_sum, dtype=xp.float64)
     backend_reconstructed_electronic = model.backend.asarray(
@@ -822,12 +797,8 @@ def _build_stationary_state[ActionT: WilsonStationaryActionProtocol](
         closed_shell_density_polynomial_residual=polynomial,
         orbital_frequency_occupation_commutator_residual=frequency_commutator,
         orbital_energy_sum_au=backend_orbital_sum,
-        double_counting_reconstructed_electronic_energy_au=(
-            backend_reconstructed_electronic
-        ),
-        double_counting_reconstructed_molecular_energy_au=(
-            backend_reconstructed_molecular
-        ),
+        double_counting_reconstructed_electronic_energy_au=(backend_reconstructed_electronic),
+        double_counting_reconstructed_molecular_energy_au=(backend_reconstructed_molecular),
         double_counting_residual_au=double_counting,
         metric_minimum_eigenvalue=float(metric_eigenvalues[0]),
         metric_condition_number=float(metric_eigenvalues[-1] / metric_eigenvalues[0]),
@@ -870,9 +841,7 @@ def _metric_orthonormalize(coefficients: np.ndarray, overlap: np.ndarray) -> np.
     eigenvalues, eigenvectors = np.linalg.eigh(gram)
     if eigenvalues[0] <= 1.0e-12 * max(1.0, float(eigenvalues[-1])):
         raise ConfigurationError("initial occupied coefficient frame is rank deficient")
-    inverse_square_root = (
-        eigenvectors / np.sqrt(eigenvalues)[None, :]
-    ) @ eigenvectors.conj().T
+    inverse_square_root = (eigenvectors / np.sqrt(eigenvalues)[None, :]) @ eigenvectors.conj().T
     return np.asarray(coefficients @ inverse_square_root, dtype=np.complex128)
 
 
@@ -883,9 +852,7 @@ def _mixed_density_residual(
 ) -> float:
     candidate_mixed = candidate @ overlap
     difference = (candidate - reference) @ overlap
-    return float(
-        np.linalg.norm(difference) / max(1.0, float(np.linalg.norm(candidate_mixed)))
-    )
+    return float(np.linalg.norm(difference) / max(1.0, float(np.linalg.norm(candidate_mixed))))
 
 
 def _commutator_residual(

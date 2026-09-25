@@ -34,8 +34,7 @@ def _quadrature(fixture: Path = _FIXTURE) -> object:
     reference = prepare_one_electron_ao_reference(
         OneElectronReferenceConfig(
             atoms=tuple(
-                AtomConfig(atom["symbol"], tuple(atom["position_au"]))
-                for atom in values["atoms"]
+                AtomConfig(atom["symbol"], tuple(atom["position_au"])) for atom in values["atoms"]
             ),
             basis=values["basis"],
             electromagnetic_origin=ElectromagneticOrigin(
@@ -68,8 +67,7 @@ def test_wp4_uniform_e1_tensor_matches_position_integral_quadrature() -> None:
         rtol=2.0e-9,
     )
     np.testing.assert_allclose(
-        tensor.connection_derivatives
-        + np.swapaxes(tensor.connection_derivatives.conj(), 1, 2),
+        tensor.connection_derivatives + np.swapaxes(tensor.connection_derivatives.conj(), 1, 2),
         0.0,
         atol=2.0e-15,
         rtol=0.0,
@@ -103,15 +101,11 @@ def test_wp4_uniform_e1_and_site_term_reconstruct_charge_position() -> None:
     tensor = evaluate_uniform_electric_e1_tensor(quadrature)
     reference = quadrature.reference
     charge = tensor.charge
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     centers = 0.5 * (anchors[:, None, :] + anchors[None, :, :])
     reconstructed = (
         tensor.central_dipoles
-        + charge
-        * np.moveaxis(centers, -1, 0)
-        * reference.core_operators.overlap[None, :, :]
+        + charge * np.moveaxis(centers, -1, 0) * reference.core_operators.overlap[None, :, :]
     )
     np.testing.assert_allclose(
         reconstructed,
@@ -147,11 +141,8 @@ def test_wp4_magnetic_derivatives_match_exact_parent_and_pair_adjoint() -> None:
             np.einsum("x,xmn->mn", direction, derivatives.kinetic),
         ),
         (
-            (plus.nuclear_attraction.exact - minus.nuclear_attraction.exact)
-            / (2.0 * step),
-            np.einsum(
-                "x,xmn->mn", direction, derivatives.nuclear_attraction_triangle
-            ),
+            (plus.nuclear_attraction.exact - minus.nuclear_attraction.exact) / (2.0 * step),
+            np.einsum("x,xmn->mn", direction, derivatives.nuclear_attraction_triangle),
         ),
     )
     for finite_difference, analytic in comparisons:

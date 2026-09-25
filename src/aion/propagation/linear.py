@@ -106,8 +106,7 @@ def propagate_linear_matrix_history(
         initial_residual = orbital_metric_residual(current, start_metric, backend)
         generator = xp.linalg.solve(
             triple.metric,
-            -triple.connection
-            - (1j / float(history.hbar)) * triple.hamiltonian_eom,
+            -triple.connection - (1j / float(history.hbar)) * triple.hamiltonian_eom,
         )
         raw = rational_map(
             generator,

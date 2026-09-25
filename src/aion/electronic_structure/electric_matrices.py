@@ -56,9 +56,7 @@ def evaluate_uniform_electric_e1_tensor(
     nao = reference.core_operators.nao
     quadrature_dipoles = backend.zeros((3, nao, nao), dtype=xp.complex128)
     anchors = backend.asarray(
-        reference.core_operators.nuclei.coordinates_au[
-            reference.anchor_topology.ao_to_atom
-        ],
+        reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom],
         dtype=xp.float64,
     )
     pair_centers = 0.5 * (anchors[:, None, :] + anchors[None, :, :])
@@ -126,9 +124,7 @@ def evaluate_exact_uniform_electric_internal_connections(
     nao = reference.core_operators.nao
     output = [backend.zeros((nao, nao), dtype=xp.complex128) for _ in fields]
     anchors = backend.asarray(
-        reference.core_operators.nuclei.coordinates_au[
-            reference.anchor_topology.ao_to_atom
-        ],
+        reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom],
         dtype=xp.float64,
     )
     pair_centers = 0.5 * (anchors[:, None, :] + anchors[None, :, :])

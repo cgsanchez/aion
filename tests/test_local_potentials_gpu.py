@@ -27,12 +27,12 @@ def test_local_provider_hierarchies_are_gpu_resident_and_match_cpu() -> None:
         BackendConfig(BackendKind.GPU, device_index=0),
         block_size=4096,
     )
-    cpu_result = evaluate_local_potential_magnetic_matrices(
-        cpu_quadrature, (field,), (provider,)
-    )[0]
-    gpu_result = evaluate_local_potential_magnetic_matrices(
-        gpu_quadrature, (field,), (provider,)
-    )[0]
+    cpu_result = evaluate_local_potential_magnetic_matrices(cpu_quadrature, (field,), (provider,))[
+        0
+    ]
+    gpu_result = evaluate_local_potential_magnetic_matrices(gpu_quadrature, (field,), (provider,))[
+        0
+    ]
     for name in (
         "zero",
         "quadrature_zero",

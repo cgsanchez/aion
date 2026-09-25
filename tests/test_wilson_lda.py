@@ -41,9 +41,7 @@ class _AffineSourceCurve:
     ) -> Any:
         return self.base.straight_line_integrals(
             starts_au, ends_au, backend
-        ) + self.scale * self.direction.straight_line_integrals(
-            starts_au, ends_au, backend
-        )
+        ) + self.scale * self.direction.straight_line_integrals(starts_au, ends_au, backend)
 
 
 def _prepared(level: int = 2) -> tuple[Any, Any, Any]:
@@ -224,9 +222,7 @@ def test_gauge_and_general_coefficient_frame_covariance() -> None:
     )
     np.testing.assert_allclose(
         landau_result.lower_xc_matrix,
-        unitary[:, None]
-        * np.asarray(symmetric_result.lower_xc_matrix)
-        * unitary.conj()[None, :],
+        unitary[:, None] * np.asarray(symmetric_result.lower_xc_matrix) * unitary.conj()[None, :],
         atol=3.0e-12,
         rtol=3.0e-12,
     )

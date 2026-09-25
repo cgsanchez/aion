@@ -136,9 +136,7 @@ def analytic_uniform_magnetic_overlap(
         for atom_nu, center_nu in enumerate(atom_coordinates):
             midpoint = 0.5 * (center_mu + center_nu)
             wavevector = (
-                checked_charge
-                * np.cross(center_mu - center_nu, field)
-                / (2.0 * checked_hbar)
+                checked_charge * np.cross(center_mu - center_nu, field) / (2.0 * checked_hbar)
             )
             wavevectors[atom_mu, atom_nu] = wavevector
             pairs.append((atom_mu, atom_nu, midpoint, wavevector))
@@ -157,9 +155,7 @@ def analytic_uniform_magnetic_overlap(
         rows = np.flatnonzero(mapping == atom_mu)
         columns = np.flatnonzero(mapping == atom_nu)
         midpoint_phase = np.exp(-1j * np.dot(wavevector, midpoint))
-        barred[np.ix_(rows, columns)] = (
-            midpoint_phase * pair_fourier[index][np.ix_(rows, columns)]
-        )
+        barred[np.ix_(rows, columns)] = midpoint_phase * pair_fourier[index][np.ix_(rows, columns)]
 
     return AnalyticMagneticOverlap(
         field=gauge.field,

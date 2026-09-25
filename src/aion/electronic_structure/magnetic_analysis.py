@@ -206,9 +206,7 @@ def static_magnetic_diagnostic_models(
     one. ``exact`` retains both effects.
     """
 
-    if not isinstance(
-        result, MagneticOneElectronResult | ExactStaticMagneticOneElectronResult
-    ):
+    if not isinstance(result, MagneticOneElectronResult | ExactStaticMagneticOneElectronResult):
         raise TypeError("result must be a supported static magnetic result")
     p0 = OneElectronLowerMatrices(
         overlap=result.overlap.zero,
@@ -237,12 +235,7 @@ def static_magnetic_diagnostic_models(
     )
     anchored_vector_only = OneElectronLowerMatrices(
         overlap=result.overlap.zero,
-        kinetic=(
-            result.kinetic.zero
-            + anchored_pC
-            + anchored_Cp
-            + anchored_C2
-        ),
+        kinetic=(result.kinetic.zero + anchored_pC + anchored_Cp + anchored_C2),
         nuclear_attraction=result.nuclear_attraction.zero,
     )
     exact = OneElectronLowerMatrices(

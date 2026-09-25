@@ -76,9 +76,7 @@ def test_nonlinear_weak_sources_cpu_gpu_parity_and_residency(
         (coefficient.conj().T @ np.asarray(cpu_sample.metric) @ coefficient).real.item()
     )
     density = 2.0 * coefficient @ coefficient.conj().T
-    velocity = np.asarray(
-        ((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j))
-    )
+    velocity = np.asarray(((0.13 + 0.29j, -0.17 + 0.07j), (0.11 - 0.19j, -0.23 + 0.31j)))
     variation = GaussianVectorPotentialVariation(
         amplitude_au=(0.19, -0.13, 0.07),
         center_au=(0.23, -0.17, 0.11),

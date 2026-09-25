@@ -34,14 +34,10 @@ class _AffineSourceCurve:
     direction: Any
     scale: float
 
-    def straight_line_integrals(
-        self, starts_au: object, ends_au: object, backend: Any
-    ) -> Any:
+    def straight_line_integrals(self, starts_au: object, ends_au: object, backend: Any) -> Any:
         return self.base.straight_line_integrals(
             starts_au, ends_au, backend
-        ) + self.scale * self.direction.straight_line_integrals(
-            starts_au, ends_au, backend
-        )
+        ) + self.scale * self.direction.straight_line_integrals(starts_au, ends_au, backend)
 
     def straight_line_integral_gradients(
         self, starts_au: object, ends_au: object, backend: Any
@@ -140,9 +136,7 @@ def test_weak_lower_matrix_is_complete_density_gradient_derivative(
         direction.conj(),
         optimize=True,
     )
-    analytic = np.einsum(
-        "ij,ji->", result.lower_xc_matrix, density_direction, optimize=True
-    ).real
+    analytic = np.einsum("ij,ji->", result.lower_xc_matrix, density_direction, optimize=True).real
 
     step = 1.0e-4
     plus = _coefficient_density(coefficients + step * direction, occupations)
@@ -195,12 +189,8 @@ def test_localized_fixed_history_source_derivative() -> None:
     assert result.source_energy_direction is not None
 
     step = 1.0e-4
-    plus = evaluator.evaluate(
-        density, PerturbedVectorPotential(gauge, direction, step)
-    )
-    minus = evaluator.evaluate(
-        density, PerturbedVectorPotential(gauge, direction, -step)
-    )
+    plus = evaluator.evaluate(density, PerturbedVectorPotential(gauge, direction, step))
+    minus = evaluator.evaluate(density, PerturbedVectorPotential(gauge, direction, -step))
     finite = (float(plus.energy) - float(minus.energy)) / (2.0 * step)
     np.testing.assert_allclose(
         finite,
@@ -224,9 +214,7 @@ def test_gauge_and_general_coefficient_frame_covariance() -> None:
             0.0,
         ),
     )
-    anchors = reference.core_operators.nuclei.coordinates_au[
-        reference.anchor_topology.ao_to_atom
-    ]
+    anchors = reference.core_operators.nuclei.coordinates_au[reference.anchor_topology.ao_to_atom]
     gauge_function = np.asarray(
         affine_gauge_difference_potential(
             landau,
@@ -247,9 +235,7 @@ def test_gauge_and_general_coefficient_frame_covariance() -> None:
     )
     np.testing.assert_allclose(
         landau_result.lower_xc_matrix,
-        unitary[:, None]
-        * np.asarray(symmetric_result.lower_xc_matrix)
-        * unitary.conj()[None, :],
+        unitary[:, None] * np.asarray(symmetric_result.lower_xc_matrix) * unitary.conj()[None, :],
         atol=5.0e-12,
         rtol=5.0e-12,
     )

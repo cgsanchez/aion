@@ -58,9 +58,7 @@ def test_gpu_workflow_and_artifact_match_cpu_without_fallback(
     assert loaded.result_id == gpu.result_id
     assert loaded.config.backend.kind is BackendKind.GPU
     assert transfer_count > len(gpu.matrices)
-    assert '"evaluator":"gpu4pyscf.dft.numint.eval_ao"' in (
-        loaded.ao_provenance_json
-    )
+    assert '"evaluator":"gpu4pyscf.dft.numint.eval_ao"' in (loaded.ao_provenance_json)
     for variable in (
         "OMP_NUM_THREADS",
         "MKL_NUM_THREADS",

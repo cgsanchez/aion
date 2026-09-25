@@ -394,6 +394,7 @@ def run_magnetic_benchmark(
     core: tuple[MagneticOneElectronResult, ...] = ()
     spatial: tuple[MagneticSpatialConnectionResult, ...] = ()
     local: tuple[LocalPotentialMagneticResult, ...] = ()
+
     def block_callback(stage: str) -> Callable[[int, int], None]:
         def report(completed: int, total: int) -> None:
             _emit(progress, stage, completed, total)
@@ -508,9 +509,7 @@ def inspect_magnetic_benchmark(result: MagneticBenchmarkResult) -> dict[str, obj
         "field_count": len(result.config.magnetic_fields),
         "matrix_count": len(result.matrices),
         "diagnostic_count": len(result.diagnostics),
-        "failed_diagnostics": [
-            value.name for value in result.diagnostics if value.passed is False
-        ],
+        "failed_diagnostics": [value.name for value in result.diagnostics if value.passed is False],
     }
 
 
@@ -935,10 +934,7 @@ def _field_reversal_diagnostics(
                     continue
                 values.append(
                     MagneticDiagnostic(
-                        name=(
-                            f"field_reversal/{positive_index:04d}_{negative_index:04d}/"
-                            f"{suffix}"
-                        ),
+                        name=(f"field_reversal/{positive_index:04d}_{negative_index:04d}/{suffix}"),
                         value=_host_relative(
                             negative_record.values,
                             positive_record.values.conj(),
@@ -956,9 +952,7 @@ def _host_relative(left: np.ndarray, right: np.ndarray) -> float:
 def _relative(left: Any, right: Any, backend: Any) -> float:
     left_host = backend.to_host(left)
     right_host = backend.to_host(right)
-    return float(
-        np.linalg.norm(left_host - right_host) / max(1.0, np.linalg.norm(right_host))
-    )
+    return float(np.linalg.norm(left_host - right_host) / max(1.0, np.linalg.norm(right_host)))
 
 
 def _adjoint_residual(value: Any, backend: Any, *, sign: float) -> float:

@@ -168,9 +168,7 @@ class WilsonGGAEvaluator:
                 pointwise_engine="pyscf.dft.numint.NumInt.eval_xc_eff",
                 libxc_version=str(libxc.libxc_version()),
                 pointwise_engine_backend="cpu",
-                reference_fingerprint_sha256=(
-                    self.quadrature.reference.fingerprint_sha256
-                ),
+                reference_fingerprint_sha256=(self.quadrature.reference.fingerprint_sha256),
                 grid_fingerprint_sha256=self.quadrature.grid.fingerprint_sha256,
             ),
         )
@@ -214,23 +212,15 @@ class WilsonGGAEvaluator:
         density_derivative = backend.zeros((npoint,), dtype=xp.float64)
         gradient_derivative = backend.zeros((3, npoint), dtype=xp.float64)
         source_density = (
-            None
-            if source_direction is None
-            else backend.zeros((npoint,), dtype=xp.float64)
+            None if source_direction is None else backend.zeros((npoint,), dtype=xp.float64)
         )
         source_gradient = (
-            None
-            if source_direction is None
-            else backend.zeros((3, npoint), dtype=xp.float64)
+            None if source_direction is None else backend.zeros((3, npoint), dtype=xp.float64)
         )
         lower = backend.zeros((nao, nao), dtype=xp.complex128)
         energy = backend.asarray(0.0, dtype=xp.float64)
         particle_number = backend.asarray(0.0, dtype=xp.float64)
-        source_energy = (
-            None
-            if source_direction is None
-            else backend.asarray(0.0, dtype=xp.float64)
-        )
+        source_energy = None if source_direction is None else backend.asarray(0.0, dtype=xp.float64)
 
         geometry = build_magnetic_pair_geometry(
             reference.core_operators.nuclei.coordinates_au,
@@ -243,9 +233,7 @@ class WilsonGGAEvaluator:
         gradient_imaginary_maximum = 0.0
         density_minimum = math.inf
         source_imaginary_maximum = 0.0 if source_direction is not None else None
-        source_gradient_imaginary_maximum = (
-            0.0 if source_direction is not None else None
-        )
+        source_gradient_imaginary_maximum = 0.0 if source_direction is not None else None
 
         for block in self.quadrature.blocks():
             line = vector_potential.straight_line_integrals(
@@ -262,9 +250,7 @@ class WilsonGGAEvaluator:
             frame = phase * block.values
             frame_gradient = phase[None, :, :] * (
                 block.gradients
-                + prefactor
-                * xp.moveaxis(line_gradient, -1, 0)
-                * block.values[None, :, :]
+                + prefactor * xp.moveaxis(line_gradient, -1, 0) * block.values[None, :, :]
             )
             if frame_change is not None:
                 frame = frame @ frame_change
@@ -290,9 +276,7 @@ class WilsonGGAEvaluator:
             )
             real_density = xp.real(complex_density)
             real_gradient = xp.real(complex_gradient)
-            block_imaginary = backend.scalar_to_float(
-                xp.max(xp.abs(xp.imag(complex_density)))
-            )
+            block_imaginary = backend.scalar_to_float(xp.max(xp.abs(xp.imag(complex_density))))
             block_gradient_imaginary = backend.scalar_to_float(
                 xp.max(xp.abs(xp.imag(complex_gradient)))
             )
@@ -304,13 +288,9 @@ class WilsonGGAEvaluator:
             )
             if block_imaginary > self.imaginary_relative_tolerance * block_real_scale:
                 raise FormulationError(
-                    "Wilson density has an unresolved imaginary component "
-                    f"{block_imaginary:.3e}"
+                    f"Wilson density has an unresolved imaginary component {block_imaginary:.3e}"
                 )
-            if (
-                block_gradient_imaginary
-                > self.imaginary_relative_tolerance * block_gradient_scale
-            ):
+            if block_gradient_imaginary > self.imaginary_relative_tolerance * block_gradient_scale:
                 raise FormulationError(
                     "Wilson density gradient has an unresolved imaginary component "
                     f"{block_gradient_imaginary:.3e}"
@@ -322,22 +302,16 @@ class WilsonGGAEvaluator:
                     f"{block_minimum:.3e}"
                 )
             density_imaginary_maximum = max(density_imaginary_maximum, block_imaginary)
-            gradient_imaginary_maximum = max(
-                gradient_imaginary_maximum, block_gradient_imaginary
-            )
+            gradient_imaginary_maximum = max(gradient_imaginary_maximum, block_gradient_imaginary)
             density_minimum = min(density_minimum, block_minimum)
 
-            exc_host, potential_host, gradient_potential_host = (
-                self._evaluate_pointwise(
-                    backend.to_host(real_density),
-                    backend.to_host(real_gradient),
-                )
+            exc_host, potential_host, gradient_potential_host = self._evaluate_pointwise(
+                backend.to_host(real_density),
+                backend.to_host(real_gradient),
             )
             exc = backend.asarray(exc_host, dtype=xp.float64)
             potential = backend.asarray(potential_host, dtype=xp.float64)
-            gradient_potential = backend.asarray(
-                gradient_potential_host, dtype=xp.float64
-            )
+            gradient_potential = backend.asarray(gradient_potential_host, dtype=xp.float64)
             for name, value in (
                 ("GGA energy per particle", exc),
                 ("GGA density derivative", potential),
@@ -350,12 +324,8 @@ class WilsonGGAEvaluator:
             energy_per_particle[block.start : block.stop] = exc
             density_derivative[block.start : block.stop] = potential
             gradient_derivative[:, block.start : block.stop] = gradient_potential
-            energy += xp.einsum(
-                "p,p,p->", block.weights_au, real_density, exc, optimize=True
-            )
-            particle_number += xp.einsum(
-                "p,p->", block.weights_au, real_density, optimize=True
-            )
+            energy += xp.einsum("p,p,p->", block.weights_au, real_density, exc, optimize=True)
+            particle_number += xp.einsum("p,p->", block.weights_au, real_density, optimize=True)
             lower += xp.einsum(
                 "p,p,pi,pj->ij",
                 block.weights_au,
@@ -386,18 +356,16 @@ class WilsonGGAEvaluator:
                     block.coordinates_au[:, None, :],
                     backend,
                 )
-                direction_line_gradient = (
-                    source_direction.straight_line_integral_gradients(
-                        anchors[None, :, :],
-                        block.coordinates_au[:, None, :],
-                        backend,
-                    )
+                direction_line_gradient = source_direction.straight_line_integral_gradients(
+                    anchors[None, :, :],
+                    block.coordinates_au[:, None, :],
+                    backend,
                 )
-                untransformed_direction = prefactor * direction_line * (
-                    phase * block.values
-                )
+                untransformed_direction = prefactor * direction_line * (phase * block.values)
                 untransformed_gradient_direction = (
-                    prefactor * direction_line[None, :, :] * (
+                    prefactor
+                    * direction_line[None, :, :]
+                    * (
                         phase[None, :, :]
                         * (
                             block.gradients
@@ -435,30 +403,35 @@ class WilsonGGAEvaluator:
                     frame_direction.conj(),
                     optimize=True,
                 )
-                complex_gradient_direction = xp.einsum(
-                    "mn,xpm,pn->xp",
-                    density_matrix,
-                    gradient_direction,
-                    frame.conj(),
-                    optimize=True,
-                ) + xp.einsum(
-                    "mn,xpm,pn->xp",
-                    density_matrix,
-                    frame_gradient,
-                    frame_direction.conj(),
-                    optimize=True,
-                ) + xp.einsum(
-                    "mn,pm,xpn->xp",
-                    density_matrix,
-                    frame_direction,
-                    frame_gradient.conj(),
-                    optimize=True,
-                ) + xp.einsum(
-                    "mn,pm,xpn->xp",
-                    density_matrix,
-                    frame,
-                    gradient_direction.conj(),
-                    optimize=True,
+                complex_gradient_direction = (
+                    xp.einsum(
+                        "mn,xpm,pn->xp",
+                        density_matrix,
+                        gradient_direction,
+                        frame.conj(),
+                        optimize=True,
+                    )
+                    + xp.einsum(
+                        "mn,xpm,pn->xp",
+                        density_matrix,
+                        frame_gradient,
+                        frame_direction.conj(),
+                        optimize=True,
+                    )
+                    + xp.einsum(
+                        "mn,pm,xpn->xp",
+                        density_matrix,
+                        frame_direction,
+                        frame_gradient.conj(),
+                        optimize=True,
+                    )
+                    + xp.einsum(
+                        "mn,pm,xpn->xp",
+                        density_matrix,
+                        frame,
+                        gradient_direction.conj(),
+                        optimize=True,
+                    )
                 )
                 real_direction = xp.real(complex_direction)
                 real_gradient_direction = xp.real(complex_gradient_direction)
@@ -472,14 +445,9 @@ class WilsonGGAEvaluator:
                     xp.maximum(xp.asarray(1.0), xp.max(xp.abs(real_direction)))
                 )
                 gradient_direction_scale = backend.scalar_to_float(
-                    xp.maximum(
-                        xp.asarray(1.0), xp.max(xp.abs(real_gradient_direction))
-                    )
+                    xp.maximum(xp.asarray(1.0), xp.max(xp.abs(real_gradient_direction)))
                 )
-                if (
-                    block_source_imaginary
-                    > self.imaginary_relative_tolerance * direction_scale
-                ):
+                if block_source_imaginary > self.imaginary_relative_tolerance * direction_scale:
                     raise FormulationError(
                         "Wilson source-density direction has an unresolved imaginary "
                         f"component {block_source_imaginary:.3e}"
@@ -494,9 +462,7 @@ class WilsonGGAEvaluator:
                     )
                 assert source_imaginary_maximum is not None
                 assert source_gradient_imaginary_maximum is not None
-                source_imaginary_maximum = max(
-                    source_imaginary_maximum, block_source_imaginary
-                )
+                source_imaginary_maximum = max(source_imaginary_maximum, block_source_imaginary)
                 source_gradient_imaginary_maximum = max(
                     source_gradient_imaginary_maximum,
                     block_source_gradient_imaginary,
@@ -542,9 +508,7 @@ class WilsonGGAEvaluator:
             density_gradient_imaginary_max_abs=gradient_imaginary_maximum,
             density_real_minimum=density_minimum,
             source_density_imaginary_max_abs=source_imaginary_maximum,
-            source_density_gradient_imaginary_max_abs=(
-                source_gradient_imaginary_maximum
-            ),
+            source_density_gradient_imaginary_max_abs=(source_gradient_imaginary_maximum),
             reference_fingerprint_sha256=reference.fingerprint_sha256,
             grid_fingerprint_sha256=self.quadrature.grid.fingerprint_sha256,
             backend=self.quadrature.backend_config.kind.value,
@@ -592,15 +556,12 @@ class WilsonGGAEvaluator:
         self.backend.assert_resident(density, name="contravariant coefficient density")
         if density.shape != (dimension, dimension):
             raise ConfigurationError(
-                f"coefficient_density has shape {density.shape}; expected "
-                f"{(dimension, dimension)}"
+                f"coefficient_density has shape {density.shape}; expected {(dimension, dimension)}"
             )
         if not _control_bool(xp.all(xp.isfinite(density)), self.backend):
             raise ConfigurationError("coefficient_density contains non-finite values")
         scale = xp.maximum(xp.asarray(1.0), xp.linalg.norm(density))
-        residual = self.backend.scalar_to_float(
-            xp.linalg.norm(density - density.conj().T) / scale
-        )
+        residual = self.backend.scalar_to_float(xp.linalg.norm(density - density.conj().T) / scale)
         if residual > 1.0e-11:
             raise ConfigurationError("coefficient_density must be Hermitian")
         return density
@@ -614,8 +575,7 @@ class WilsonGGAEvaluator:
         self.backend.assert_resident(frame, name="coefficient frame change")
         if frame.shape != (dimension, dimension):
             raise ConfigurationError(
-                f"coefficient_frame has shape {frame.shape}; expected "
-                f"{(dimension, dimension)}"
+                f"coefficient_frame has shape {frame.shape}; expected {(dimension, dimension)}"
             )
         if not _control_bool(xp.all(xp.isfinite(frame)), self.backend):
             raise ConfigurationError("coefficient_frame contains non-finite values")

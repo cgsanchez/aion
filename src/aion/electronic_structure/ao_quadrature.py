@@ -234,8 +234,7 @@ class CartesianMatrixQuadratureComparison:
         relative = absolute / max(1.0, float(np.linalg.norm(analytic)))
         components = np.asarray(
             [
-                np.linalg.norm(difference[axis])
-                / max(1.0, float(np.linalg.norm(analytic[axis])))
+                np.linalg.norm(difference[axis]) / max(1.0, float(np.linalg.norm(analytic[axis])))
                 for axis in range(3)
             ],
             dtype=np.float64,
@@ -243,8 +242,7 @@ class CartesianMatrixQuadratureComparison:
         components.setflags(write=False)
         adjoint = np.swapaxes(quadrature.conj(), -1, -2)
         hermiticity = float(
-            np.linalg.norm(quadrature - adjoint)
-            / max(1.0, float(np.linalg.norm(quadrature)))
+            np.linalg.norm(quadrature - adjoint) / max(1.0, float(np.linalg.norm(quadrature)))
         )
         object.__setattr__(self, "analytic", analytic)
         object.__setattr__(self, "quadrature", quadrature)
@@ -269,9 +267,7 @@ class AtomPairBlockResiduals:
     max_absolute_element: np.ndarray
 
     def __post_init__(self) -> None:
-        pairs = immutable_array(
-            self.pair_indices, dtype=np.int64, ndim=2, name="atom-pair indices"
-        )
+        pairs = immutable_array(self.pair_indices, dtype=np.int64, ndim=2, name="atom-pair indices")
         if pairs.shape[1] != 2:
             raise ReferencePreparationError("atom-pair indices must have shape (npair, 2)")
         for name in ("absolute_frobenius", "relative_frobenius", "max_absolute_element"):
@@ -356,9 +352,9 @@ class AOQuadrature:
         if self.block_size <= 0:
             raise ConfigurationError("AO quadrature block_size must be positive")
         if self.memory_budget_bytes is not None and (
-                isinstance(self.memory_budget_bytes, bool)
-                or not isinstance(self.memory_budget_bytes, int)
-                or self.memory_budget_bytes <= 0
+            isinstance(self.memory_budget_bytes, bool)
+            or not isinstance(self.memory_budget_bytes, int)
+            or self.memory_budget_bytes <= 0
         ):
             raise ConfigurationError("AO memory_budget_bytes must be a positive integer")
 
@@ -590,33 +586,30 @@ def evaluate_zero_field_one_electron(
             block.values,
             optimize=True,
         )
-        momentum += -1j * checked_hbar * xp.einsum(
-            "p,pm,xpn->xmn",
-            block.weights_au,
-            values_conjugate,
-            block.gradients,
-            optimize=True,
+        momentum += (
+            -1j
+            * checked_hbar
+            * xp.einsum(
+                "p,pm,xpn->xmn",
+                block.weights_au,
+                values_conjugate,
+                block.gradients,
+                optimize=True,
+            )
         )
     backend.synchronize()
     analytic_overlap = np.asarray(reference.core_operators.overlap)
     analytic_kinetic = (
-        checked_hbar
-        * checked_hbar
-        / checked_mass
-        * np.asarray(reference.core_operators.kinetic)
+        checked_hbar * checked_hbar / checked_mass * np.asarray(reference.core_operators.kinetic)
     )
     analytic_nuclear = np.asarray(reference.core_operators.nuclear_attraction)
-    analytic_momentum = checked_hbar * np.asarray(
-        reference.core_operators.canonical_momentum
-    )
+    analytic_momentum = checked_hbar * np.asarray(reference.core_operators.canonical_momentum)
     quadrature_overlap = backend.to_host(overlap)
     quadrature_kinetic = backend.to_host(kinetic)
     quadrature_nuclear = backend.to_host(nuclear)
     quadrature_momentum = backend.to_host(momentum)
     momentum_scale = max(1.0, float(np.linalg.norm(analytic_momentum)))
-    opposite_sign = float(
-        np.linalg.norm(-quadrature_momentum - analytic_momentum) / momentum_scale
-    )
+    opposite_sign = float(np.linalg.norm(-quadrature_momentum - analytic_momentum) / momentum_scale)
     return ZeroFieldOneElectronResult(
         reference_fingerprint_sha256=reference.fingerprint_sha256,
         grid_fingerprint_sha256=quadrature.grid.fingerprint_sha256,
@@ -656,9 +649,7 @@ def atom_pair_block_residuals(
 ) -> AtomPairBlockResiduals:
     """Measure every ordered atom-pair AO block without elementwise division."""
 
-    if not isinstance(
-        comparison, MatrixQuadratureComparison | CartesianMatrixQuadratureComparison
-    ):
+    if not isinstance(comparison, MatrixQuadratureComparison | CartesianMatrixQuadratureComparison):
         raise TypeError("comparison must be a scalar or Cartesian matrix comparison")
     anchors = np.asarray(ao_to_atom)
     nao = comparison.analytic.shape[-1]
@@ -694,13 +685,9 @@ def atom_pair_block_residuals(
             absolute_value = float(np.linalg.norm(difference_block))
             pairs.append((bra_atom, ket_atom))
             absolute.append(absolute_value)
-            relative.append(
-                absolute_value / max(1.0, float(np.linalg.norm(analytic_block)))
-            )
+            relative.append(absolute_value / max(1.0, float(np.linalg.norm(analytic_block))))
             maximum.append(
-                0.0
-                if difference_block.size == 0
-                else float(np.max(np.abs(difference_block)))
+                0.0 if difference_block.size == 0 else float(np.max(np.abs(difference_block)))
             )
     return AtomPairBlockResiduals(
         pair_indices=np.asarray(pairs, dtype=np.int64),
