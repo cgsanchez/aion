@@ -255,6 +255,8 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
     reference = _timed(stages, "prepare_reference", lambda: _co_reference(output, timestamp))
     accepted_energy = float(checkpoint["zero_field"]["pyscf_reference_energy_au"])
     energy_residual = abs(reference.ground_state.energy_total_au - accepted_energy)
+    accepted_electron_count = float(checkpoint["electrons"])
+    electron_count_residual = abs(reference.ground_state.electron_count - accepted_electron_count)
     expected_shape = (int(checkpoint["nao"]), int(checkpoint["nao"]))
     reconstruction_checks = {
         "scientific_configuration_id": reference.config.scientific_id,
@@ -266,7 +268,9 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
         "energy_absolute_residual_au": energy_residual,
         "energy_tolerance_au": 1.0e-10,
         "electron_count": reference.ground_state.electron_count,
-        "expected_electron_count": float(checkpoint["electrons"]),
+        "expected_electron_count": accepted_electron_count,
+        "electron_count_absolute_residual": electron_count_residual,
+        "electron_count_tolerance": 1.0e-10,
         "density_shape": list(reference.ground_state.density.shape),
         "accepted_state_shape": list(initial_coefficients.shape),
         "expected_ao_shape": list(expected_shape),
@@ -281,7 +285,7 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
     }
     if energy_residual > 1.0e-10:
         raise RuntimeError("reconstructed CO energy does not match accepted NQ8 input")
-    if reference.ground_state.electron_count != float(checkpoint["electrons"]):
+    if electron_count_residual > 1.0e-10:
         raise RuntimeError("reconstructed CO electron count does not match accepted NQ8 input")
     if reference.ground_state.density.shape != expected_shape:
         raise RuntimeError("reconstructed CO AO dimension does not match accepted NQ8 input")
