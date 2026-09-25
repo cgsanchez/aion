@@ -28,6 +28,7 @@ from aion.config.models import (
     FormulationConfig,
     FormulationKind,
     GaugeRepresentation,
+    GridPruning,
     IntegratorKind,
     KickEventConfig,
     MetadataConfig,
@@ -193,6 +194,7 @@ def _parse_reference(root: Mapping[str, object]) -> ReferenceConfig:
             "functional",
             "xc_family",
             "grid_level",
+            "grid_pruning",
             "density_fitting",
             "auxiliary_basis",
             "scf_energy_tolerance_au",
@@ -212,6 +214,11 @@ def _parse_reference(root: Mapping[str, object]) -> ReferenceConfig:
         ),
         grid_level=_integer(
             electronic_data.get("grid_level", 3), "electronic_structure.grid_level"
+        ),
+        grid_pruning=_enum(
+            GridPruning,
+            electronic_data.get("grid_pruning", GridPruning.PYSCF_DEFAULT.value),
+            "electronic_structure.grid_pruning",
         ),
         density_fitting=_boolean(
             electronic_data.get("density_fitting", False),

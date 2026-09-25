@@ -130,6 +130,12 @@ backend, output artifact, and metadata. The numerical realization fixes:
 - auxiliary basis and RI metric rank thresholds; and
 - optional maximum retained RI rank.
 
+Ordinary reference preparation also records its PySCF grid pruning policy.
+`pyscf_default` is omitted from normalized legacy-compatible identity;
+`grid_pruning = "none"` explicitly selects and fingerprints an unpruned grid.
+This permits ordinary and exact-Wilson realizations to share the same grid
+when a reduction comparison requires it.
+
 The exact action admits `hartree`, `kohn_sham_lda`, and `kohn_sham_gga`
 branches. The reduced action records a named `p0`, `strict_c1`, or
 `density_resummed_c1` level, but reusable reduced dynamics is rejected until

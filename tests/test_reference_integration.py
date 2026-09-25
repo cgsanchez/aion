@@ -14,6 +14,7 @@ from aion.config import (
     BackendConfig,
     ElectronicStructureConfig,
     FormulationKind,
+    GridPruning,
     MoleculeConfig,
     ReferenceConfig,
     ReferenceOutputConfig,
@@ -136,6 +137,22 @@ def test_density_fitted_reference_round_trip_reconstructs_the_declared_auxiliary
     assert model.with_df.auxbasis == "weigend"
     assert loaded.config.electronic_structure.density_fitting
     assert loaded.config.electronic_structure.auxiliary_basis == "weigend"
+
+
+def test_reference_preparation_honors_an_explicit_unpruned_grid() -> None:
+    base = molecular_config("h2")
+    reference = prepare_pyscf_reference(
+        replace(
+            base,
+            electronic_structure=replace(
+                base.electronic_structure,
+                grid_pruning=GridPruning.NONE,
+            ),
+        )
+    )
+    assert reference.grid.pruning == "none"
+    workspace = reference.create_workspace(BackendConfig())
+    assert workspace.electronic_model.grids.prune is None
 
 
 def test_declared_functional_family_and_hybrids_fail_before_scf() -> None:

@@ -16,6 +16,7 @@ from aion.config import (
     FormulationConfig,
     FormulationKind,
     GaugeRepresentation,
+    GridPruning,
     IntegratorKind,
     KickEventConfig,
     MetadataConfig,
@@ -91,6 +92,22 @@ def test_reference_resolved_toml_round_trip_is_identical() -> None:
     assert second.config == original
     assert second.normalized_toml == first.normalized_toml
     assert second.scientific_id == first.scientific_id
+
+
+def test_reference_grid_pruning_is_explicit_without_changing_the_default_identity() -> None:
+    default = reference_config()
+    assert "grid_pruning" not in dumps_config(default)
+    unpruned = replace(
+        default,
+        electronic_structure=replace(
+            default.electronic_structure,
+            grid_pruning=GridPruning.NONE,
+        ),
+    )
+    resolved = loads_config(dumps_config(unpruned))
+    assert resolved.config == unpruned
+    assert 'grid_pruning = "none"' in resolved.normalized_toml
+    assert resolved.scientific_id != default.scientific_id
 
 
 def test_density_fitting_requires_an_explicit_auxiliary_basis() -> None:

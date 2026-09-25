@@ -51,6 +51,11 @@ scientific identity and reconstruction contract because density fitting
 changes the approximated Coulomb functional; Aion never enables it merely as
 an unrecorded performance optimization.
 
+`ElectronicStructureConfig.grid_pruning` defaults to `pyscf_default`. Select
+`none` explicitly when an unpruned PySCF grid is part of the scientific
+realization; that choice enters the reference identity and is restored by
+live CPU/GPU reconstruction.
+
 An exact-Wilson calculation adds an immutable stationary-state stage:
 
 1. prepare an ordinary `ReferenceConfig`;

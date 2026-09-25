@@ -56,6 +56,11 @@ class XCFamily(StrEnum):
     GGA = "gga"
 
 
+class GridPruning(StrEnum):
+    PYSCF_DEFAULT = "pyscf_default"
+    NONE = "none"
+
+
 class FormulationKind(StrEnum):
     BARE_LENGTH_GAUGE = "bare_length_gauge"
     BARE_VELOCITY_GAUGE = "bare_velocity_gauge"
@@ -267,6 +272,7 @@ class ElectronicStructureConfig:
     functional: str
     xc_family: XCFamily
     grid_level: int = 3
+    grid_pruning: GridPruning = GridPruning.PYSCF_DEFAULT
     density_fitting: bool = False
     auxiliary_basis: str | None = None
     scf_energy_tolerance_au: float = 1.0e-10
@@ -277,6 +283,8 @@ class ElectronicStructureConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.xc_family, XCFamily):
             raise ConfigurationError("electronic_structure.xc_family is invalid")
+        if not isinstance(self.grid_pruning, GridPruning):
+            raise ConfigurationError("electronic_structure.grid_pruning is invalid")
         if not isinstance(self.spin_treatment, SpinTreatment):
             raise ConfigurationError("electronic_structure.spin_treatment is invalid")
         if not isinstance(self.nuclear_model, NuclearModel):
@@ -324,7 +332,7 @@ class ElectronicStructureConfig:
             )
 
     def as_mapping(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "basis": self.basis,
             "functional": self.functional,
             "xc_family": self.xc_family.value,
@@ -336,6 +344,9 @@ class ElectronicStructureConfig:
             "spin_treatment": self.spin_treatment.value,
             "nuclear_model": self.nuclear_model.value,
         }
+        if self.grid_pruning is not GridPruning.PYSCF_DEFAULT:
+            result["grid_pruning"] = self.grid_pruning.value
+        return result
 
 
 @dataclass(frozen=True, slots=True)

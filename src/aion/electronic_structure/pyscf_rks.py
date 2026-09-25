@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from aion.backends import ArrayBackend, Workspace, make_backend
-from aion.config import BackendConfig, BackendKind, ReferenceConfig, XCFamily
+from aion.config import BackendConfig, BackendKind, GridPruning, ReferenceConfig, XCFamily
 from aion.electronic_structure.data import (
     DependencyVersions,
     GroundState,
@@ -82,6 +82,8 @@ def _build_cpu_mean_field(config: ReferenceConfig, molecule: Any) -> Any:
         mean_field = mean_field.density_fit(auxbasis=auxiliary_basis)
     mean_field.xc = config.electronic_structure.functional
     mean_field.grids.level = config.electronic_structure.grid_level
+    if config.electronic_structure.grid_pruning is GridPruning.NONE:
+        mean_field.grids.prune = None
     mean_field.conv_tol = config.electronic_structure.scf_energy_tolerance_au
     mean_field.max_cycle = config.electronic_structure.scf_max_iterations
     return mean_field
