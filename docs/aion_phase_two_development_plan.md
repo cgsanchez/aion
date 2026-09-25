@@ -705,14 +705,14 @@ complete.
 ## 15. Current execution state and next work
 
 P2-0 is accepted in
-`docs/reviews/phase_two_p2_0_review_20260925.json`. P2-1 has completed its
+`docs/reviews/phase_two_p2_0_review_20260925.json`. P2-1 is accepted in
+`docs/reviews/phase_two_p2_1_review_20260925.json` after completing its
 implementation, full software gates, authenticated H3+/LDA NQ4/NQ6
 reproduction, driven direct-oracle parity, deterministic restart, and
 physical-GPU parity/residency campaign. Its review entry point is
-`docs/phase_two_p2_1_qualification.md`; the gate remains pending explicit user
-review and is not self-accepted by the implementation agent.
+`docs/phase_two_p2_1_qualification.md`.
 
-If P2-1 is accepted, the next gate is P2-2 in its existing bounded order:
+The active gate is P2-2 in its existing bounded order:
 
 1. reproduce the selected CO/cc-pVDZ/PBE accepted NQ8 short transfer result;
 2. construct the fixed `G_DZ` NH3/cc-pVDZ/PBE exact-action zero-field bridge;
@@ -744,4 +744,5 @@ basis/source matrix.
   user gates.
 - Completed the P2-0 baseline and recorded its user acceptance.
 - Implemented P2-1 through increments A--E and linked its executed,
-  pending-review H3+/LDA qualification entry point.
+  H3+/LDA qualification entry point.
+- Recorded the user's acceptance of P2-1 and opened bounded P2-2 execution.

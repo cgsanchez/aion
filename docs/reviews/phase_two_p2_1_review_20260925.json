@@ -1,0 +1,76 @@
+{
+  "schema": "aion.phase-two-gate-review",
+  "version": "1.0.0",
+  "gate": "P2-1",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-25T18:58:07Z",
+  "scope": {
+    "implemented_contract": "strict reusable exact/reduced Wilson configuration, portable stationary state, stateful contravariant-density propagation, action-owned observations, bounded streaming execution, density-native checkpoint/restart, schema-dispatched CLI, and CPU/physical-GPU execution",
+    "included": [
+      "strict exact/reduced Wilson Python and TOML contracts",
+      "analytic Maxwell-consistent affine electromagnetic source sampled at arbitrary endpoints and Gauss nodes",
+      "portable immutable stationary-state preparation and I/O",
+      "accepted self-consistent two-node fourth-order Gauss-Magnus propagation with Pade [2/2] links",
+      "bounded density-independent dynamic cache with no nonlinear action caching",
+      "action-owned dipole, source current, charge, energy, source power/work, Ward, weak-continuity, metric, and nonlinear diagnostics",
+      "streaming trajectory, status, cancellation, checkpoint, restart, inspection, CSV export, and load dispatch",
+      "fresh H3+/cc-pVDZ/LDA stationary reproduction of accepted NQ4",
+      "eight-step H3+ static-field reproduction of accepted NQ6",
+      "driven H3+ integrated-runtime parity with the retained batch oracle",
+      "H3+ uninterrupted/resumed bitwise final-density parity",
+      "H3+ CPU/physical-GPU parity and explicit device-residency assertions",
+      "complete format, lint, type, fast, integration, and physical-GPU gates"
+    ]
+  },
+  "effect": "P2-1 reusable exact-Wilson workflow integration is accepted and P2-2 bounded CO/PBE transfer followed by the fixed-geometry NH3 bridge is authorized. Acceptance does not qualify reduced-action dynamics, a general magnetic envelope, spatially nonuniform sources, or later production applications.",
+  "limitations": [
+    "The reusable numerical anchor is exact Kohn-Sham LDA H3+/cc-pVDZ on the unpruned level-4 grid with weigend auxiliary basis; exact GGA molecular transfer remains P2-2 work.",
+    "The first reusable affine schema supports zero or compact potential-first electric pulses and a magnetic field linear in time. It does not encode the accepted NQ6 direct-electric envelope or a general time-dependent magnetic envelope.",
+    "Reduced P0, strict-C1, and density-resummed-C1 configuration/state preparation exists, but reusable reduced dynamics is rejected until P2-6.",
+    "Pseudopotentials, nonlocal ionic operators, hybrids, moving nuclei, periodic boundaries, adaptive stepping, Maxwell backreaction, spatially nonuniform/EELS potentials, and magnetic-field Casida response remain out of scope.",
+    "The first qualification attempt is retained as failed-visible evidence after completing all static and restart work; the failure was a qualification-driver API-signature error at entry to the separate driven oracle. The successful continuation authenticates every reused artifact by SHA-256.",
+    "Qualification timings are machine-specific and are not production performance guarantees."
+  ],
+  "accepted_commit": "0b0b4ef7393e4ce21bd3896893c50b5ccf9a7ed8",
+  "executed_tests": {
+    "ruff_format": "passed",
+    "ruff_lint": "passed",
+    "mypy": "no issues in 96 source files",
+    "focused_wilson_integration": "7 passed",
+    "fast_suite": "90 passed",
+    "integration_suite": "189 passed, 148 deselected",
+    "physical_gpu_suite": "34 passed, 303 deselected, one expected CuPy contraction-engine warning",
+    "h3plus_qualification": "all 11 declared checks passed"
+  },
+  "evidence": {
+    "candidate_review": "docs/reviews/phase_two_p2_1_review_candidate_20260925.json",
+    "candidate_review_sha256": "845a9e4c3e324de2169ad8081b46a17b3993c60237b6f511e8baaf8a626f2b15",
+    "review_entry_point": "docs/phase_two_p2_1_qualification.md",
+    "review_entry_point_sha256": "196b650b131361fff0ae2d52761890f7afd400a5a26d2b82017e43e6f71646c8",
+    "api_schema_decision": "docs/phase_two_p2_1_api_schema_decision.md",
+    "api_schema_decision_sha256": "2dc61820af0fa4a30bcc72ef7b4ab619d2382fb71869e2d206dcb9fb5bc3c237",
+    "controlling_plan": "docs/aion_phase_two_development_plan.md",
+    "controlling_plan_sha256": "ebbc47e294349d542ecb9d2163ecc2834e5d263c5530e59ef06108498dce0e8a",
+    "failed_visible_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_1_qualification_20260925T180828Z_cadad8c",
+    "failed_visible_record_sha256": "369f81cf029d4bf8441b6db380fa7a4bfe9d20ae3092b3cb10ca43a7ae7d3d5d",
+    "successful_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_1_qualification_20260925T183313Z_cadad8c",
+    "result_sha256": "53fd19cf702624eb448bec19717fc4259056787a9b7bb7509bbf6586523d8238",
+    "provenance_sha256": "3ddec9835fce68d78911ad2b344b31838123c849a0570e28bb1ddf3e9e84db68"
+  },
+  "accepted_measurements": {
+    "stationary_density_relative_residual_to_nq4": 9.08849120424164e-13,
+    "stationary_energy_absolute_residual_to_nq4_au": 2.402522625288839e-13,
+    "nq6_final_mixed_density_relative_residual": 1.629202630585434e-12,
+    "nq6_final_energy_absolute_residual_au": 1.3855583347321954e-13,
+    "pulse_integrated_direct_density_relative_residual": 0.0,
+    "restart_density_bitwise_equal": true,
+    "restart_work_absolute_residual_au": 0.0,
+    "cpu_gpu_driven_density_relative_residual": 4.539462402099404e-14,
+    "driven_direct_batch_elapsed_seconds": 185.2623837449937,
+    "driven_integrated_cpu_elapsed_seconds": 63.84148101799656,
+    "driven_integrated_gpu_elapsed_seconds": 21.601041193003766,
+    "continuation_peak_rss_bytes": 1104629760
+  },
+  "raw_artifact_policy": "Both the failed-visible attempt and successful authenticated continuation remain immutable. The candidate remains as the pre-decision record; this separate review records the user's explicit acceptance."
+}
