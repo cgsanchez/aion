@@ -59,7 +59,7 @@ def main() -> int:
         "reconciliation",
         "quality",
         "benchmarks/h3plus",
-        "benchmarks/co",
+        "benchmarks/co_completed",
     )
     results: dict[str, dict[str, Any]] = {}
     authentication: dict[str, dict[str, str]] = {}
@@ -72,7 +72,7 @@ def main() -> int:
     nq9_verified = results["reconciliation"]["nq9_verification"]["status"] == ("verified_accepted")
     benchmarks_complete = all(
         results[name]["status"] == "executed_unreviewed"
-        for name in ("benchmarks/h3plus", "benchmarks/co")
+        for name in ("benchmarks/h3plus", "benchmarks/co_completed")
     )
     passed = quality_passed and nq9_verified and benchmarks_complete
     result = {
@@ -99,7 +99,7 @@ def main() -> int:
                 "stationary": results[name]["record"]["stationary"],
                 "dynamics": results[name]["record"]["dynamics"],
             }
-            for name in ("benchmarks/h3plus", "benchmarks/co")
+            for name in ("benchmarks/h3plus", "benchmarks/co_completed")
         },
         "inherited_wp7": results["reconciliation"]["wp7_reconciliation"],
         "limitations": [
@@ -110,6 +110,11 @@ def main() -> int:
             "aug-cc-pVTZ evidence remains explicit and Phase Two uses its own gates.",
             "Stationary baseline timings are warm-start timings from accepted states, "
             "not from-scratch convergence costs.",
+            "The first CO timing attempt is retained as failed-visible evidence. Its "
+            "bytewise reference-fingerprint equality check was invalid for a freshly "
+            "repeated SCF calculation; the completed retry uses explicit scientific "
+            "configuration, energy, electron-count, AO-dimension, and stationary "
+            "residual checks.",
             "P2-0 does not execute an NH3 exact-Wilson trajectory.",
         ],
     }

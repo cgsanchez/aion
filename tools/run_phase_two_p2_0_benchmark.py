@@ -253,8 +253,40 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
     arrays = np.load(arrays_path, allow_pickle=False)
     initial_coefficients = np.asarray(arrays["field_coefficients"])
     reference = _timed(stages, "prepare_reference", lambda: _co_reference(output, timestamp))
-    if reference.fingerprint_sha256 != checkpoint["reference_fingerprint_sha256"]:
-        raise RuntimeError("reconstructed CO reference does not match accepted NQ8 input")
+    accepted_energy = float(checkpoint["zero_field"]["pyscf_reference_energy_au"])
+    energy_residual = abs(reference.ground_state.energy_total_au - accepted_energy)
+    expected_shape = (int(checkpoint["nao"]), int(checkpoint["nao"]))
+    reconstruction_checks = {
+        "scientific_configuration_id": reference.config.scientific_id,
+        "accepted_reference_fingerprint_sha256": checkpoint["reference_fingerprint_sha256"],
+        "reconstructed_reference_fingerprint_sha256": reference.fingerprint_sha256,
+        "bytewise_fingerprint_equal": (
+            reference.fingerprint_sha256 == checkpoint["reference_fingerprint_sha256"]
+        ),
+        "energy_absolute_residual_au": energy_residual,
+        "energy_tolerance_au": 1.0e-10,
+        "electron_count": reference.ground_state.electron_count,
+        "expected_electron_count": float(checkpoint["electrons"]),
+        "density_shape": list(reference.ground_state.density.shape),
+        "accepted_state_shape": list(initial_coefficients.shape),
+        "expected_ao_shape": list(expected_shape),
+        "interpretation": (
+            "The prepared-reference fingerprint includes bytewise SCF orbital and "
+            "density arrays. A repeated converged PySCF calculation need not reproduce "
+            "that hash even when its scientific inputs and energy agree. Compatibility "
+            "is therefore established by the authenticated accepted checkpoint, fixed "
+            "scientific configuration, energy, electron count, AO dimensions, and the "
+            "subsequent stationary residuals."
+        ),
+    }
+    if energy_residual > 1.0e-10:
+        raise RuntimeError("reconstructed CO energy does not match accepted NQ8 input")
+    if reference.ground_state.electron_count != float(checkpoint["electrons"]):
+        raise RuntimeError("reconstructed CO electron count does not match accepted NQ8 input")
+    if reference.ground_state.density.shape != expected_shape:
+        raise RuntimeError("reconstructed CO AO dimension does not match accepted NQ8 input")
+    if initial_coefficients.shape != expected_shape:
+        raise RuntimeError("accepted CO warm-start state has an incompatible AO dimension")
     quadrature = _timed(
         stages,
         "prepare_quadrature",
@@ -352,6 +384,7 @@ def _co_benchmark(output: Path, stages: dict[str, float], timestamp: str) -> dic
             str(checkpoint_path): _sha256(checkpoint_path),
             str(arrays_path): _sha256(arrays_path),
         },
+        "reference_reconstruction": reconstruction_checks,
         "stationary": {
             "warm_started": True,
             "energy_molecular_total_au": _float(stationary.action.energy_molecular_total_au),
