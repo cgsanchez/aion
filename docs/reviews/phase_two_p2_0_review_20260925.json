@@ -1,0 +1,63 @@
+{
+  "schema": "aion.phase-two-gate-review",
+  "version": "1.0.0",
+  "gate": "P2-0",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-25T16:32:36Z",
+  "scope": {
+    "implemented_contract": "reconciled and authenticated executable baseline, bounded implementation matrix through P2-2, ammonia heritage boundary, complete CPU/GPU software-quality baseline, and H3+ LDA plus CO PBE exact-Wilson timing and memory baselines",
+    "included": [
+      "accepted-parent ancestry and accepted NQ9 manifest verification",
+      "managed-environment and eight-physical-core launch policy",
+      "format, lint, type, fast, integration, and physical-GPU gates",
+      "16-file ammonia geometry, Casida, pulse, kick, spectrum, and timing heritage manifest",
+      "Phase Two result, provenance, completion, failure, and review contracts",
+      "H3+/cc-pVDZ/LDA and CO/cc-pVDZ/PBE warm-start and one-step exact-Wilson CPU baselines",
+      "retained failed-visible CO reference-preflight attempts and corrected scientific compatibility checks",
+      "frozen P2-1 and P2-2 scope without selecting later production applications"
+    ]
+  },
+  "effect": "P2-0 is accepted and P2-1 reusable exact-runtime API/schema design and implementation are authorized. This acceptance does not accept P2-1 implementation before its required parity, restart, bounded-memory, and physical-GPU evidence is reviewed.",
+  "limitations": [
+    "the managed editable import resolves to this worktree and reports 0.2.0.dev7, while stale distribution metadata reports 0.2.0.dev1",
+    "the historical bounded refactor-WP7 6-31G analyzer summary is absent; the retained aug-cc-pVTZ evidence and ten completed trajectories remain inherited evidence only",
+    "the H3+ and CO stationary timings are accepted-state warm starts, not from-scratch stationary-solve costs",
+    "P2-0 does not execute an NH3 exact-Wilson trajectory",
+    "later basis, duration, source-amplitude, timestep, and production-application choices remain versioned decisions rather than defaults"
+  ],
+  "baseline_report_commit": "a2e0e1c1610da254d91e04a387f3487f655a7e3d",
+  "executed_tests": {
+    "ruff_lint": "passed",
+    "ruff_format": "passed",
+    "mypy": "no issues in 88 source files",
+    "fast_suite": "73 passed",
+    "integration_suite": "182 passed, 126 deselected",
+    "physical_gpu_suite": "31 passed, 277 deselected, one expected CuPy contraction-engine warning",
+    "nq9_verifier": "35 files authenticated",
+    "p2_0_synthesis": "all required checks passed except the explicitly bounded source/distribution metadata-label mismatch"
+  },
+  "evidence": {
+    "review_entry_point": "docs/phase_two_p2_0_baseline.md",
+    "review_entry_point_sha256": "e4e94ca68ff18e675e86bdedfef2e311bb4fbb780887deb953e1fa524c35523b",
+    "execution_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_0_baseline_20260925T160229Z_8aa56cbb43c8",
+    "accepted_analysis": "analysis_final/result.json",
+    "result_sha256": "bc2ec88e4d4ba98141c6542243bcaaf26ff7b9ed55e17615bee466adec425883",
+    "provenance_sha256": "09d85539e98dc385acd6d8d6e37eb4b269642dddeb8b8deddb8e79eb66a747b7",
+    "completed_sha256": "3a30fae36cc4023e666a26d8944e449a45f56bd9ff5abf7adc50d7eb6457e562",
+    "nq9_manifest_sha256": "11f956abdf6f4bdabc2324cb6e95fe3ba940d54ee0a5b072deb981aa6445ae84",
+    "ammonia_heritage_manifest_sha256": "273de82d853eaaa167885ec5a25f534f00cac0d1605f4d340db2bfcffccd6e75"
+  },
+  "accepted_measurements": {
+    "ammonia_heritage_artifact_count": 16,
+    "h3plus_total_elapsed_seconds": 50.45874425799411,
+    "h3plus_peak_rss_bytes": 225017856,
+    "co_total_elapsed_seconds": 815.6930045210029,
+    "co_peak_rss_bytes": 377028608,
+    "co_nonlinear_residual": 1.1853323277161017e-13,
+    "co_cross_metric_residual": 3.787273934993482e-16,
+    "co_occupation_spectrum_drift": 7.238726713336321e-16,
+    "co_power_identity_residual_au": 2.8583363974321596e-15
+  },
+  "raw_artifact_policy": "The original and final reconciliation and synthesis records, all successful benchmark records, and all failed-visible CO preflight attempts remain immutable. This separate review record carries the user's P2-0 acceptance decision."
+}
