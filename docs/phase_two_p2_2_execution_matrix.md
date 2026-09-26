@@ -66,4 +66,5 @@ not accept P2-2; acceptance remains a separate user decision.
 `tools/run_phase_two_p2_2_sequence.py` runs this order with one process and an
 explicit host-thread cap, invokes physical-GPU stages only through
 `tools/gpu-python`, and skips hashed completed stages when resuming an
-interrupted campaign. It does not poll a detached run.
+interrupted campaign. An advisory lock rejects concurrent sequence launchers
+for the same output root. It does not poll a detached run.
