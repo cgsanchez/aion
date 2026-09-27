@@ -99,10 +99,11 @@ caching.
 
 Selected first increment: lazy energy-only endpoint observation, using the
 existing action energy without unrequested current, power, charge, and dipole
-variations. Implementation and tests are in progress; the frozen P2-3B
-trajectory comparison is executed by
-`tools/run_phase_two_p2_3_lazy_energy_qualification.py`. This selection does
-not change mandatory Gauss-node work integration.
+variations. Implementation and physical-GPU qualification are complete;
+retention is proposed pending user review. The
+[P2-3C1 qualification](reviews/phase_two_p2_3c1_lazy_energy_qualification_20260927.md)
+records the bitwise frozen-trajectory comparison and measured cost. This
+increment does not change mandatory Gauss-node work integration.
 
 Optimizations are selected in descending measured cost. Each increment is
 independently reviewable and normally belongs to one of these exact classes:
