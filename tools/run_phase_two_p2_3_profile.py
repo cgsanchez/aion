@@ -231,8 +231,10 @@ class _TransferCounter:
         self.counts = {
             "to_host_calls": 0,
             "to_host_bytes": 0,
-            "to_device_calls": 0,
-            "to_device_bytes": 0,
+            "host_to_device_calls": 0,
+            "host_to_device_bytes": 0,
+            "resident_asarray_calls": 0,
+            "resident_asarray_bytes": 0,
             "scalar_to_host_calls": 0,
             "scalar_to_host_bytes": 0,
         }
@@ -254,9 +256,15 @@ class _TransferCounter:
 
         def asarray(value: object, *, dtype: Any | None = None) -> Any:
             assert self._original_asarray is not None
+            already_resident = self.backend.is_resident(value)
             result = self._original_asarray(value, dtype=dtype)
-            self.counts["to_device_calls"] += 1
-            self.counts["to_device_bytes"] += int(getattr(result, "nbytes", 0))
+            size = int(getattr(result, "nbytes", 0))
+            if already_resident:
+                self.counts["resident_asarray_calls"] += 1
+                self.counts["resident_asarray_bytes"] += size
+            else:
+                self.counts["host_to_device_calls"] += 1
+                self.counts["host_to_device_bytes"] += size
             return result
 
         def scalar_to_float(value: object) -> float:
