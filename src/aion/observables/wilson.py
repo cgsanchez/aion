@@ -70,6 +70,26 @@ class ExactWilsonEndpointObservation:
     identities: WilsonIdentityObservation | None
 
 
+def evaluate_exact_wilson_energy_observation(
+    evaluation: ExactWilsonDynamicEvaluation,
+) -> WilsonEnergyObservation:
+    """Package the energy of one fresh action without evaluating other observables."""
+
+    if not isinstance(evaluation, ExactWilsonDynamicEvaluation):
+        raise TypeError("evaluation must be an ExactWilsonDynamicEvaluation")
+    action = evaluation.action
+    return WilsonEnergyObservation(
+        kinetic_au=action.energy_kinetic_au,
+        electron_nuclear_au=action.energy_electron_nuclear_au,
+        one_electron_au=action.energy_one_electron_au,
+        hartree_au=action.energy_hartree_au,
+        exchange_correlation_au=action.energy_exchange_correlation_au,
+        nuclear_repulsion_au=action.energy_nuclear_repulsion_au,
+        electronic_au=action.energy_electronic_au,
+        molecular_total_au=action.energy_molecular_total_au,
+    )
+
+
 def evaluate_exact_wilson_endpoint_observation(
     evaluation: ExactWilsonDynamicEvaluation,
     coefficient_density: object,
@@ -134,21 +154,7 @@ def evaluate_exact_wilson_endpoint_observation(
         nuclear_charges,
         optimize=True,
     )
-    action = evaluation.action
-    energy = (
-        WilsonEnergyObservation(
-            kinetic_au=action.energy_kinetic_au,
-            electron_nuclear_au=action.energy_electron_nuclear_au,
-            one_electron_au=action.energy_one_electron_au,
-            hartree_au=action.energy_hartree_au,
-            exchange_correlation_au=action.energy_exchange_correlation_au,
-            nuclear_repulsion_au=action.energy_nuclear_repulsion_au,
-            electronic_au=action.energy_electronic_au,
-            molecular_total_au=action.energy_molecular_total_au,
-        )
-        if include_energy
-        else None
-    )
+    energy = evaluate_exact_wilson_energy_observation(evaluation) if include_energy else None
     identities = None
     if include_identities:
         identity_test = (

@@ -201,11 +201,15 @@ class _WilsonRunExecutor:
         need_energy = force or self._scheduled("energy", step)
         need_charge = force or self._scheduled("diagnostics", step)
         observation = None
-        if need_current or need_energy or need_charge:
+        energy = None
+        if need_current or need_charge:
             observation = self.simulation.observe_endpoint(
                 include_energy=need_energy,
                 include_identities=need_charge,
             )
+            energy = observation.energy
+        elif need_energy:
+            energy = self.simulation.observe_energy()
         if (
             need_current
             and step != self.last_recorded["dipole_current"]
@@ -283,8 +287,8 @@ class _WilsonRunExecutor:
             ):
                 self._append(name, value, unit="1", dimension="identity_residual")
             self.last_recorded["diagnostics"] = step
-        if need_energy and step != self.last_recorded["energy"] and observation is not None:
-            if observation.energy is None:
+        if need_energy and step != self.last_recorded["energy"]:
+            if energy is None:
                 raise RunnerError("scheduled Wilson energy was not evaluated")
             for name in (
                 "kinetic_au",
@@ -298,11 +302,11 @@ class _WilsonRunExecutor:
             ):
                 self._append(
                     "energy/" + name.removesuffix("_au"),
-                    getattr(observation.energy, name),
+                    getattr(energy, name),
                     unit="hartree",
                     dimension="energy",
                 )
-            molecular = _scalar(self.simulation, observation.energy.molecular_total_au)
+            molecular = _scalar(self.simulation, energy.molecular_total_au)
             absorbed = molecular - self.initial_energy
             residual = absorbed - self.accumulated_work
             self._append(

@@ -25,6 +25,22 @@ def test_exact_wilson_runtime_observables_and_step_remain_on_physical_gpu() -> N
 
     cpu_observation = cpu.observe_endpoint(include_energy=True)
     gpu_observation = gpu.observe_endpoint(include_energy=True)
+    assert cpu_observation.energy is not None
+    assert gpu_observation.energy is not None
+    cpu_energy_only = cpu.observe_energy()
+    gpu_energy_only = gpu.observe_energy()
+    gpu.quadrature.backend.assert_resident(
+        gpu_energy_only.molecular_total_au,
+        name="GPU Wilson energy-only observation",
+    )
+    np.testing.assert_array_equal(
+        gpu.quadrature.backend.to_host(gpu_energy_only.molecular_total_au),
+        gpu.quadrature.backend.to_host(gpu_observation.energy.molecular_total_au),
+    )
+    np.testing.assert_array_equal(
+        cpu_energy_only.molecular_total_au,
+        cpu_observation.energy.molecular_total_au,
+    )
     gpu.quadrature.backend.assert_resident(
         gpu_observation.uniform_source_current_au,
         name="GPU Wilson source current",

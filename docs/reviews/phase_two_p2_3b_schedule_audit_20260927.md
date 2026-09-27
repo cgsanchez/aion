@@ -1,6 +1,8 @@
 # P2-3B schedule and duplication audit: NH3 exact-Wilson GPU
 
-Status: executed and verified; interpretation proposed, not yet accepted by the user.
+Status: executed and verified. The user accepted lazy endpoint observation as
+the first P2-3C increment on 2026-09-27. The final P2-3 performance gate
+remains unreviewed.
 
 Campaign: `/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_3_schedule_audit_20260927T164247Z_85b7c8519553`
 

@@ -21,6 +21,7 @@ from aion.observables.wilson import (
     WilsonEnergyObservation,
     WilsonIdentityObservation,
     evaluate_exact_wilson_endpoint_observation,
+    evaluate_exact_wilson_energy_observation,
 )
 
 __all__ = [
@@ -39,5 +40,6 @@ __all__ = [
     "WilsonIdentityObservation",
     "build_observable_calculators",
     "evaluate_exact_wilson_endpoint_observation",
+    "evaluate_exact_wilson_energy_observation",
     "observable_definition_catalog",
 ]

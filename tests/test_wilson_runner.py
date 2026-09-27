@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from aion.cli import main
-from aion.config import FixedTimeGrid, WilsonStationaryStateLinkConfig, dumps_config
+from aion.config import FixedTimeGrid, StepSchedule, WilsonStationaryStateLinkConfig, dumps_config
 from aion.electromagnetism import build_affine_electromagnetic_source
 from aion.electronic_structure import save_wilson_stationary_state
 from aion.errors import RunCancelledError
@@ -86,6 +86,79 @@ def test_wilson_streaming_run_checkpoint_dispatch_and_bounded_cache(tmp_path: Pa
         final_checkpoint.contravariant_density,
         simulation.quadrature.backend.to_host(simulation.density),
     )
+
+
+def test_energy_only_schedule_skips_unrequested_endpoint_observations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, reference, state = _production_inputs(tmp_path, intervals=2)
+    each = StepSchedule(every=1)
+    off = StepSchedule(every=0, include_initial=False, include_final=False)
+    full_config = replace(
+        config,
+        output=replace(
+            config.output,
+            directory=tmp_path / "full",
+            schedules=replace(config.output.schedules, energy=each),
+        ),
+    )
+    full = build_simulation(full_config, reference, stationary_state=state)
+    full_trajectory = run(full)
+
+    energy_config = replace(
+        config,
+        output=replace(
+            config.output,
+            directory=tmp_path / "energy_only",
+            schedules=replace(
+                config.output.schedules,
+                dipole_current=off,
+                diagnostics=off,
+                energy=each,
+            ),
+        ),
+    )
+    energy_only = build_simulation(energy_config, reference, stationary_state=state)
+    endpoint_calls: list[int] = []
+    energy_calls: list[int] = []
+    original_endpoint = BuiltWilsonSimulation.observe_endpoint
+    original_energy = BuiltWilsonSimulation.observe_energy
+
+    def observe_endpoint_spy(
+        simulation: BuiltWilsonSimulation,
+        *,
+        include_energy: bool = False,
+        include_identities: bool = False,
+    ) -> object:
+        endpoint_calls.append(simulation.boundary_index)
+        return original_endpoint(
+            simulation,
+            include_energy=include_energy,
+            include_identities=include_identities,
+        )
+
+    def observe_energy_spy(simulation: BuiltWilsonSimulation) -> object:
+        energy_calls.append(simulation.boundary_index)
+        return original_energy(simulation)
+
+    monkeypatch.setattr(BuiltWilsonSimulation, "observe_endpoint", observe_endpoint_spy)
+    monkeypatch.setattr(BuiltWilsonSimulation, "observe_energy", observe_energy_spy)
+    energy_trajectory = run(energy_only)
+    assert endpoint_calls == [0]
+    assert energy_calls == [1, 2]
+    assert energy_trajectory.read_series("current/uniform_source").steps.tolist() == [0]
+    assert energy_trajectory.read_series("identity/ward_residual_abs").steps.tolist() == [0]
+    assert energy_trajectory.read_series("energy/molecular_total").steps.tolist() == [0, 1, 2]
+    np.testing.assert_array_equal(energy_only.density, full.density)
+    assert (
+        energy_trajectory.accumulated_source_work_au == full_trajectory.accumulated_source_work_au
+    )
+    for name in full_trajectory.series_names:
+        if name.startswith(("energy/", "work/")):
+            baseline = full_trajectory.read_series(name)
+            selected = energy_trajectory.read_series(name)
+            np.testing.assert_array_equal(selected.steps, baseline.steps)
+            np.testing.assert_array_equal(selected.values, baseline.values)
 
 
 def test_wilson_cancel_resume_matches_uninterrupted_boundary_exactly(tmp_path: Path) -> None:

@@ -67,8 +67,9 @@ will immediately change.
 
 ## 4. P2-3B: schedule and duplication audit
 
-Execution status: six-variant physical-GPU audit completed, hashes verified,
-interpretation pending user review. See the
+Execution status: six-variant physical-GPU audit completed, hashes verified.
+The user accepted its priority recommendation for the first P2-3C increment;
+the final P2-3 gate remains unreviewed. See the
 [P2-3B schedule audit](reviews/phase_two_p2_3b_schedule_audit_20260927.md)
 for authenticated measurements, bitwise comparisons, and the proposed P2-3C
 priority.
@@ -95,6 +96,13 @@ does not authorize frozen-density, stale-action, or cross-step nonlinear
 caching.
 
 ## 5. P2-3C: bounded implementation increments
+
+Selected first increment: lazy energy-only endpoint observation, using the
+existing action energy without unrequested current, power, charge, and dipole
+variations. Implementation and tests are in progress; the frozen P2-3B
+trajectory comparison is executed by
+`tools/run_phase_two_p2_3_lazy_energy_qualification.py`. This selection does
+not change mandatory Gauss-node work integration.
 
 Optimizations are selected in descending measured cost. Each increment is
 independently reviewable and normally belongs to one of these exact classes:

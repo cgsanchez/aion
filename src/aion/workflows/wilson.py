@@ -47,7 +47,9 @@ from aion.electronic_structure import (
 from aion.errors import FormulationError, UnsupportedConfigurationError, WilsonStateError
 from aion.observables import (
     ExactWilsonEndpointObservation,
+    WilsonEnergyObservation,
     evaluate_exact_wilson_endpoint_observation,
+    evaluate_exact_wilson_energy_observation,
 )
 from aion.propagation import (
     NonlinearContravariantDensityPropagator,
@@ -241,6 +243,11 @@ class BuiltWilsonSimulation:
             include_energy=include_energy,
             include_identities=include_identities,
         )
+
+    def observe_energy(self) -> WilsonEnergyObservation:
+        """Evaluate endpoint energy without current, power, charge, or identities."""
+
+        return evaluate_exact_wilson_energy_observation(self.evaluate())
 
     def step(self) -> NonlinearContravariantDensityStep[ExactWilsonDynamicEvaluation]:
         return self.propagator.step()
