@@ -63,6 +63,13 @@ Every completed stage has a hashed stage record. Failures remain visible and
 are never overwritten in place. The analyzer proposes a gate result but does
 not accept P2-2; acceptance remains a separate user decision.
 
+If the sole exact--bare current comparison misses its declared floor while
+the state, dipole, energy, identities and backend parity pass, the bounded
+follow-up is one GPU-only timestep halving implemented by
+`tools/run_phase_two_p2_2_current_refinement.py`. CPU/GPU parity is inherited
+from the base trajectory; this supplement diagnoses time discretization and
+does not replace the base evidence.
+
 `tools/run_phase_two_p2_2_sequence.py` runs this order with one process and an
 explicit host-thread cap, invokes physical-GPU stages only through
 `tools/gpu-python`, and skips hashed completed stages when resuming an

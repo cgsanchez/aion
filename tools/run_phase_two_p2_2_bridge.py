@@ -66,9 +66,12 @@ from aion.config import (
 )
 from aion.electromagnetism import Sin2VectorPotentialPulse
 from aion.electronic_structure import (
+    AOGridPolicy,
+    AOPruningKind,
     DependencyVersions,
     ExactWilsonDynamicEvaluation,
     load_wilson_stationary_state,
+    prepare_ao_quadrature,
 )
 from aion.io import load_wilson_checkpoint, load_wilson_trajectory
 from aion.io.checkpoint import load_checkpoint
@@ -766,6 +769,12 @@ def _analyze(output: Path, repo: Path) -> None:
 
     nh3_reference = load_reference(output / "nh3/reference.h5")
     nh3_state = load_wilson_stationary_state(output / "nh3/stationary.h5")
+    nh3_exact_grid = prepare_ao_quadrature(
+        nh3_reference,
+        BackendConfig(),
+        grid_policy=AOGridPolicy.qualification(4, pruning=AOPruningKind.NONE),
+        block_size=1024,
+    ).grid
     nh3_exact_cpu_checkpoint = load_wilson_checkpoint(
         output / f"nh3/exact_cpu/checkpoint_{_INTERVALS:08d}.h5"
     )
@@ -799,9 +808,21 @@ def _analyze(output: Path, repo: Path) -> None:
     pulse_start = pulse.sample(0.0)
     pulse_end = pulse.sample(_FINAL_TIME_AU)
     nh3_measurements = {
+        "reference_and_exact_grid_arrays_equal": bool(
+            np.array_equal(
+                nh3_reference.grid.coordinates_au,
+                nh3_exact_grid.coordinates_au,
+            )
+            and np.array_equal(
+                nh3_reference.grid.weights_au,
+                nh3_exact_grid.weights_au,
+            )
+        ),
         "reference_and_exact_grid_fingerprint_equal": (
             nh3_reference.grid.fingerprint_sha256 == nh3_state.grid_fingerprint_sha256
         ),
+        "reference_grid_points": int(nh3_reference.grid.coordinates_au.shape[0]),
+        "exact_grid_points": nh3_exact_grid.npoints,
         "stationary_density_relative_residual_to_bare_reference": _relative(
             nh3_state.contravariant_density,
             nh3_reference.ground_state.density,
@@ -887,7 +908,7 @@ def _analyze(output: Path, repo: Path) -> None:
             co_measurements["cpu_gpu_energy_maximum_absolute_residual_au"]
             <= thresholds["cpu_gpu_energy_absolute_au"]
         ),
-        "nh3_grids_match": nh3_measurements["reference_and_exact_grid_fingerprint_equal"],
+        "nh3_grids_match": nh3_measurements["reference_and_exact_grid_arrays_equal"],
         "nh3_stationary_density_reduces_to_bare": (
             nh3_measurements["stationary_density_relative_residual_to_bare_reference"]
             <= thresholds["nh3_stationary_density_relative"]
