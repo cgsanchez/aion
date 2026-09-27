@@ -712,23 +712,21 @@ reproduction, driven direct-oracle parity, deterministic restart, and
 physical-GPU parity/residency campaign. Its review entry point is
 `docs/phase_two_p2_1_qualification.md`.
 
-The active gate is P2-2 in its existing bounded order:
+P2-2 has completed its bounded CO/cc-pVDZ/PBE reproduction, fixed `G_DZ`
+NH3/cc-pVDZ/PBE exact--bare bridge, CPU/physical-GPU parity, and one
+predeclared GPU-only timestep halving. Its review entry point is
+`docs/phase_two_p2_2_qualification.md`; the gate remains pending explicit user
+review and is not self-accepted by the implementation agent.
 
-1. reproduce the selected CO/cc-pVDZ/PBE accepted NQ8 short transfer result;
-2. construct the fixed `G_DZ` NH3/cc-pVDZ/PBE exact-action zero-field bridge;
-3. compare that zero-field result with matching ordinary bare-length dynamics
-   as a reduction/integration check;
-4. apply the short smooth electric pulse along the NH3 C3 axis; and
-5. execute CPU followed by physical-GPU parity with the declared diagnostics.
+If P2-2 is accepted, the next gate is P2-3 performance and memory
+qualification. It begins from the measured exact-runtime cost breakdown and
+profiles Wilson AO/AO-pair construction, RI Hartree, PBE grid evaluation,
+one-electron samples, temporal/source work, nonlinear propagation,
+observations, host/device transfers, and HDF5 separately. No optimization may
+change the action or weaken an accepted scientific tolerance.
 
-This update does not select a later production application or expand the P2-2
-basis/source matrix.
-
-The pre-execution numerical matrix, explicit CO initial-source quench
-boundary, NH3 compact axial pulse, CPU/GPU stage order, diagnostics, and
-thresholded analysis contract are fixed in
-`docs/phase_two_p2_2_execution_matrix.md` and implemented by
-`tools/run_phase_two_p2_2_bridge.py`.
+This update does not select a later production application, expand the P2-2
+basis/source matrix, or authorize a long trajectory.
 
 ## 16. Change record
 
@@ -755,3 +753,14 @@ thresholded analysis contract are fixed in
 - Fixed and implemented the stagewise P2-2 CO/NH3 execution matrix, including
   explicit reference-grid pruning and the continuous-density source-quench
   boundary required by the accepted NQ8 CO initial condition.
+
+### 27 September 2026
+
+- Completed and authenticated the P2-2 CO/NH3 base campaign.
+- Corrected a semantic grid-fingerprint comparison after verifying bitwise
+  equality of the numerical grid arrays.
+- Resolved the sole remaining NH3 current check with the predeclared GPU-only
+  timestep halving; its 0.23693 residual ratio identifies the second-order
+  bare propagator's temporal error.
+- Linked the executed, pending-review P2-2 qualification entry point and
+  bounded the next work to P2-3 profiling if the user accepts the gate.
