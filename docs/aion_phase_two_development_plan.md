@@ -712,18 +712,18 @@ reproduction, driven direct-oracle parity, deterministic restart, and
 physical-GPU parity/residency campaign. Its review entry point is
 `docs/phase_two_p2_1_qualification.md`.
 
-P2-2 has completed its bounded CO/cc-pVDZ/PBE reproduction, fixed `G_DZ`
-NH3/cc-pVDZ/PBE exact--bare bridge, CPU/physical-GPU parity, and one
-predeclared GPU-only timestep halving. Its review entry point is
-`docs/phase_two_p2_2_qualification.md`; the gate remains pending explicit user
-review and is not self-accepted by the implementation agent.
+P2-2 is accepted in
+`docs/reviews/phase_two_p2_2_review_20260927.json` after completing its bounded
+CO/cc-pVDZ/PBE reproduction, fixed `G_DZ` NH3/cc-pVDZ/PBE exact--bare bridge,
+CPU/physical-GPU parity, and one predeclared GPU-only timestep halving. Its
+review entry point is `docs/phase_two_p2_2_qualification.md`.
 
-If P2-2 is accepted, the next gate is P2-3 performance and memory
-qualification. It begins from the measured exact-runtime cost breakdown and
-profiles Wilson AO/AO-pair construction, RI Hartree, PBE grid evaluation,
-one-electron samples, temporal/source work, nonlinear propagation,
-observations, host/device transfers, and HDF5 separately. No optimization may
-change the action or weaken an accepted scientific tolerance.
+The active gate is P2-3 performance and memory qualification. It begins from
+the measured exact-runtime cost breakdown and profiles Wilson AO/AO-pair
+construction, RI Hartree, PBE grid evaluation, one-electron samples,
+temporal/source work, nonlinear propagation, observations, host/device
+transfers, and HDF5 separately. No optimization may change the action or
+weaken an accepted scientific tolerance.
 
 This update does not select a later production application, expand the P2-2
 basis/source matrix, or authorize a long trajectory.
@@ -764,3 +764,5 @@ basis/source matrix, or authorize a long trajectory.
   bare propagator's temporal error.
 - Linked the executed, pending-review P2-2 qualification entry point and
   bounded the next work to P2-3 profiling if the user accepts the gate.
+- Recorded the user's acceptance of P2-2 and opened bounded P2-3 performance
+  and memory qualification.

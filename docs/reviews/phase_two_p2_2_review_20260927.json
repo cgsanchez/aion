@@ -1,0 +1,77 @@
+{
+  "schema": "aion.phase-two-gate-review",
+  "version": "1.0.0",
+  "gate": "P2-2",
+  "decision": "accepted",
+  "reviewed_by": "user",
+  "reviewed_at_utc": "2026-09-27T15:45:00Z",
+  "scope": {
+    "implemented_contract": "bounded exact-Wilson pure-GGA molecular transfer from the accepted H3+/LDA runtime to CO/PBE and fixed-geometry NH3/PBE, with ordinary bare-length reduction, CPU/physical-GPU parity, action identities, immutable evidence, and measured cost",
+    "included": [
+      "fresh CO/cc-pVDZ/PBE stationary and 0.2-au dynamic reproduction of the accepted NQ8 anchor",
+      "CO exact-action CPU/physical-GPU density and energy parity",
+      "fixed G_DZ NH3/cc-pVDZ/PBE exact-Wilson stationary preparation and short axial compact-pulse trajectory",
+      "matching ordinary bare-length NH3 reduction trajectory at zero magnetic field",
+      "bitwise equality of the reference and qualification numerical grid coordinates and weights",
+      "one predeclared GPU-only NH3 timestep halving that resolves the sole current-threshold miss",
+      "particle number, Ward, weak-continuity, power, work-energy, metric, density-shell, occupation, and nonlinear diagnostics",
+      "authenticated base and supplemental result, provenance, stage, configuration, trajectory, checkpoint, and status artifacts",
+      "measured CPU/GPU elapsed time, action-evaluation time, and process peak memory"
+    ]
+  },
+  "effect": "P2-2 exact-Wilson pure-GGA molecular transfer and the bounded NH3 integration bridge are accepted, authorizing P2-3 performance and memory qualification. Acceptance does not authorize a long trajectory, spectrum, larger basis, reduced-action production dynamics, or a physical application campaign.",
+  "limitations": [
+    "The immutable base analyzer proposed failure because it compared semantic grid fingerprints and because the coarse exact-bare current residual exceeded its threshold by 9.14%; the separate authenticated supplement corrects the grid comparison and resolves the current check without overwriting the base result.",
+    "One timestep halving identifies second-order bare-trajectory time error as the dominant current discrepancy, but it is not a multi-level convergence-order claim for either propagator.",
+    "The NH3 pulse is a short numerical bridge, not a resonant pulse, absorption calculation, kick, long-time trajectory, or spectrum.",
+    "The exact-bare reduction check is at zero magnetic field and does not establish interchangeability of distinct finite-field actions.",
+    "No diffuse or larger-basis ladder, grid ladder, auxiliary-basis ladder, reduced P0/E1 dynamics, general magnetic envelope, spatially nonuniform source, EELS potential, pseudopotential, hybrid functional, moving nucleus, or periodic system is qualified.",
+    "P2-3 may optimize only mathematically identical implementation paths and may not weaken any accepted physics or numerical tolerance.",
+    "Timings and peak memory are machine-specific qualification measurements, not production guarantees."
+  ],
+  "accepted_commit": "851c8c872f26c84cb7e0c3595978befe41b6f735",
+  "executed_tests": {
+    "ruff_format": "changed campaign tools formatted",
+    "ruff_lint": "passed",
+    "mypy": "no issues in the two changed campaign tools",
+    "fast_suite": "92 passed",
+    "physical_gpu_suite": "22 passed with one expected CuPy contraction-engine warning",
+    "base_campaign": "all 49 recorded hashes authenticated; 19 scientific checks passed directly, one grid check was a semantic-fingerprint false negative, and one current check required the bounded supplement",
+    "current_refinement": "all 25 composite checks passed and all 11 recorded supplement hashes authenticated"
+  },
+  "evidence": {
+    "candidate_review": "docs/reviews/phase_two_p2_2_review_candidate_20260927.json",
+    "candidate_review_sha256": "01f15e2aab840834a48e47aabc7fceb80c2cbe44828e0b6c67684aa5ba808d6b",
+    "review_entry_point": "docs/phase_two_p2_2_qualification.md",
+    "review_entry_point_sha256": "6f8e8025099983410fb945c08b47d7def1673ca13f8e51c5633a48cce795c92c",
+    "execution_matrix": "docs/phase_two_p2_2_execution_matrix.md",
+    "execution_matrix_sha256": "52add476a497fd197bc91f8279764f8429e183b2837868cf8c5533fb597e05be",
+    "controlling_plan": "docs/aion_phase_two_development_plan.md",
+    "controlling_plan_sha256": "4bcaae25efb9f30b19a782c9eba723e91f6525aa0512b8348706ed9cadf5c59a",
+    "base_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_2_bridge_20260926T112431Z_bb49799250d8",
+    "base_result_sha256": "8aa937c5334c01e66361cd857a5425be696b8be54a41dd70c9edd4466961fd5a",
+    "base_provenance_sha256": "2e3bf54bcc965e6750e40ba8f4977886f8d730fe6ba6b2f42992e77393bce8e8",
+    "base_completed_sha256": "f052225ba56e1a1b254d67e25483a32d6b59b77b98ad76ac9152c67c8f6e57b6",
+    "refinement_root": "/home/cgs/00_WORK/Projection_Code/CALCULATIONS/campaigns/aion_phase_two/p2_2_current_refinement_20260927T144524Z_1bb35525ff9d",
+    "refinement_result_sha256": "76174a4ad62fa328cee118203c69a91fc0447f2fbb0dc40bec290bee7bae75a3",
+    "refinement_provenance_sha256": "f01598ab948bcd34d1f8ab137c5c3f0a49b2602eea1f17ecc13bbb0540e667f8",
+    "refinement_completed_sha256": "bb5500053c3e5862c4c620e2e7a4e70e4167d419dc8e3c4df84e2eed57fcee70"
+  },
+  "accepted_measurements": {
+    "co_stationary_density_relative_residual_to_nq8": 1.862598097162927e-11,
+    "co_final_mixed_density_relative_residual_to_nq8": 1.6436395009387815e-11,
+    "co_cpu_gpu_final_density_relative_residual": 7.737013512428339e-13,
+    "nh3_coarse_exact_bare_current_maximum_absolute_residual_au": 5.4569198202317486e-05,
+    "nh3_refined_exact_bare_current_maximum_absolute_residual_au": 1.2928845828355539e-05,
+    "nh3_current_residual_refinement_ratio": 0.23692570633750795,
+    "nh3_refined_exact_bare_dipole_maximum_absolute_residual_au": 7.076885346762873e-07,
+    "nh3_refined_exact_bare_energy_maximum_absolute_residual_au": 2.8734116597206594e-07,
+    "nh3_refined_exact_bare_final_density_relative_residual": 8.47129990480521e-07,
+    "nh3_refined_maximum_ward_residual_abs": 1.0842021724855044e-19,
+    "nh3_refined_maximum_finite_region_continuity_residual_abs": 6.508744179744858e-13,
+    "nh3_refined_maximum_work_energy_residual_au": 2.8801985115622268e-11,
+    "nh3_refined_exact_gpu_elapsed_seconds": 671.404532200977,
+    "nh3_refined_process_peak_rss_bytes": 1159692288
+  },
+  "raw_artifact_policy": "The original base result and bounded refinement remain separate and immutable. The candidate remains as the pre-decision record; this separate review records the user's explicit acceptance."
+}
