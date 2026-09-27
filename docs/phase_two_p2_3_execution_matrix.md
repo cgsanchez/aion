@@ -67,6 +67,12 @@ will immediately change.
 
 ## 4. P2-3B: schedule and duplication audit
 
+Execution status: six-variant physical-GPU audit completed, hashes verified,
+interpretation pending user review. See the
+[P2-3B schedule audit](reviews/phase_two_p2_3b_schedule_audit_20260927.md)
+for authenticated measurements, bitwise comparisons, and the proposed P2-3C
+priority.
+
 The baseline is used to identify repeated exact work across propagation,
 Gauss-node work integration, endpoint observations, identities, and storage.
 The audit explicitly checks:
